@@ -1,0 +1,30 @@
+# 产物与重型文件
+node_modules/
+*.log
+*.sock
+runner.pid
+pylib/
+tickets.csv
+sample*.jsonl
+smoke*.jsonl
+resp*.json
+infer-input.json
+*-test.onnx
+multi-test.onnx
+
+# 模型与第三方
+laya-onnx-int8/
+laya-multilingual-int8/
+onnxruntime_c_api.h
+onnxruntime_c_types.h
+onnxruntime_ep_c_api.h
+
+# 二进制与构建产物
+runner
+bench
+bench86
+bench512
+bench512k3
+probe
+hdrtest
+runner.c.bak*
