@@ -11,12 +11,9 @@ resp*.json
 *-test.onnx
 multi-test.onnx
 
-# 模型与第三方
+# 模型与第三方(ORT 头文件已 vendor:第三方 Apache-2.0,本地已验证可编译)
 laya-onnx-int8/
 laya-multilingual-int8/
-onnxruntime_c_api.h
-onnxruntime_c_types.h
-onnxruntime_ep_c_api.h
 
 # 一次性调试/实验脚本
 dbg*.mjs

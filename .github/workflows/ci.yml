@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ORT_VERSION: 1.23.2
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: JS syntax check
+        run: |
+          for f in *.mjs; do
+            node --check "$f"
+          done
+          echo "all mjs files OK"
+
+      - name: Cache ORT + model
+        uses: actions/cache@v4
+        with:
+          path: |
+            ort
+            ci-model
+          key: ci-ort-${{ env.ORT_VERSION }}-model-v1
+
+      - name: Download onnxruntime (linux-x64)
+        run: |
+          if [ ! -f ort/lib/libonnxruntime.so ]; then
+            curl -sL -o ort.tgz \
+              "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-linux-x64-${ORT_VERSION}.tgz"
+            mkdir ort && tar xzf ort.tgz -C ort --strip-components=1
+            ls ort/lib ort/include
+          fi
+          echo "ORT_LIB=$PWD/ort/lib" >> "$GITHUB_ENV"
+
+      - name: Download multilingual int8 model
+        run: |
+          if [ ! -f ci-model/laya.onnx ]; then
+            mkdir -p ci-model/tokenizer
+            base="https://huggingface.co/Torim98/laya-multilingual-int8/resolve/main"
+            curl -sL --retry 3 -o ci-model/laya.onnx "$base/laya-multilingual.int8.onnx"
+            curl -sL --retry 3 -o ci-model/tokenizer/tokenizer.json "$base/tokenizer.json"
+            ls -la ci-model
+          fi
+
+      - name: Build C artifacts (gcc, glibc)
+        run: |
+          gcc -O2 -I. runner.c -L ort/lib -lonnxruntime -o runner
+          gcc -O2 -I. -DBATCH=1 -DSEQ=512 -DOPTS=4 bench.c -L ort/lib -lonnxruntime -o bench
+          ls -la runner bench
+
+      - name: Prepare model bundle
+        run: |
+          cat > ci-model/laya_config.json <<'EOF'
+          {
+            "max_len": 512,
+            "head_max_len": 256,
+            "fixed_seq_len": 512,
+            "temperature": [1.0, 1.0, 1.0],
+            "temperature_by_options": {},
+            "special_tokens": { "cls": "<s>", "sep": "<eos>", "mask": "<mask>", "pad": "<pad>" },
+            "batch1": true
+          }
+          EOF
+          echo '{}' > ci-model/tokenizer/tokenizer_config.json
+
+      - name: Install JS deps
+        run: npm install --no-save --force --ignore-scripts @receptron/laya@0.1.2 @huggingface/tokenizers@0.2.0
+
+      - name: Smoke test (real inference)
+        run: node ci-smoke.mjs
