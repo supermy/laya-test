@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-09-30 — v1.1.0:LiteRT GPU 后端(90x 提速)
+
+### LiteRT GPU 路径打通(本次核心)
+
+- 官方现成 tflite:`litert-community/Laya-Multilingual-LiteRT`(2026-09-29 发布,Apache-2.0);推荐集 679MB 存 `/sdcard/models/laya-litert/`(sha256 全验)
+- 图吃 embedding 行(非 token id):host 负责 tokenize(`laya_host.py` 同款序列格式)/fp16 查表/attention_mask/qtype_onehot;主图出 token_logits+pooled_cls,act 头独立小图;decode 用官方 `laya_ml_calibration.json` 温度
+- 新增 `litert-runner.c`:LiteRT 版常驻 runner,**与 runner.c 协议完全同款**(客户端零改动);fp16 查表 mmap→GPU 主图→marker gather→act 头(CPU);支持 `tcp:PORT` / `@abstract` / 文件 unix socket 三种监听
+- 新增 `laya-litert.mjs`:`loadLitert()` 经 adb shell 域拉起 daemon(raw connect 探针轮询)+ `stopLitert()`;modelDir 兼容目录 `laya-litert/`(symlink + 含官方温度的 laya_config.json)
+- **实测天玑 9500 Mali GPU fp32(窗口 256):纯推理 17-19ms/问**,3 问端到端 438ms;vs multi ONNX int8 1.67s/问 = **11x**(被动散热热节流时 ~140ms/问,仍 12x)
+- 输出与 CPU XNNPACK 逐位一致(token_logits/act_logits 4 位小数);与 multi ONNX argmax 语义全同(parity.mjs)
+- 工具链:libLiteRt.so 提取自 AAR `com.google.ai.edge.litert:litert:2.2.0`;Lrt* GPU options 帮助函数未导出 → SDK 的 3 个 .cc 随程序编译;编译宏 `-DLITERT_DISABLE_OPENGL_SUPPORT` 等走 stub 分支(无需 GL 头)
+
+### 排除的死路(实测定论)
+
+- **NNAPI EP**:termux ORT 1.23 带 NNAPI(legacy 符号手动 extern 可用),但 int8/fp32 都 **0/1841 节点**被接管(ModernBERT 图整体不支持),性能与纯 CPU 持平
+- **XNNPACK EP**:分区边界 bug(注意力块 4D→2D reshape 链被改坏,输出少 84 倍数据),ORT_DISABLE_ALL 也不影响;救它需 ONNX 图手术且 MatMulNBits 本就不被 XNNPACK 支持,收益≈0
+- **ORT WebGPU/Vulkan**:termux 构建未编译(dawn/vulkan 0 命中)
+- **GPU 热节流台阶**:满载后 22ms→140ms 确定性跳变(6x);wait_type/kernel_batch/priority/命令缓冲步数全部无效;根因是 SoC 积累热状态触发 MTK 温控——强冷立即消除、静置自然恢复;静谧调频模式无影响
+
+### 运维与工具
+
+- adb 自连复通:android-tools 降级 35.0.2-7(本地版与 protobuf 符号不兼容)+ 重新配对;**shell 域可加载 app 域加载不了的 APEX/vendor 库**(NNAPI/GPU 都靠这个)
+- `litert-bench.c`:LiteRT GPU 基准(6 旋钮 + 输出一致性校验),已入库
+- 修复 `loadWithDaemon` 贵重试:重试循环先做 raw connect 探测,再 full load(旧逻辑每次重试解析 34MB tokenizer,最多假死十几分钟)
+
 ## 2026-09-29
 
 ### 多语言 checkpoint 接入(最新)
