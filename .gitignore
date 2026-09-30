@@ -32,3 +32,10 @@ bench512k3
 probe
 hdrtest
 runner.c.bak*
+
+# LiteRT 本地产物与二进制
+litert-bench
+litert-runner
+bench86n
+*.o
+laya-litert/

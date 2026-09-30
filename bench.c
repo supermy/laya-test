@@ -26,6 +26,14 @@ static double now_ms(void) {
   return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
 }
 
+// legacy export, still present in libonnxruntime.so (removed from public headers)
+#define NNAPI_FLAG_USE_NONE 0x000u
+#define NNAPI_FLAG_USE_FP16 0x001u
+#define NNAPI_FLAG_USE_NCHW 0x002u
+#define NNAPI_FLAG_FORBID_NNAPI_CPU 0x004u
+#define NNAPI_FLAG_CPU_ONLY 0x008u
+static OrtStatus* append_nnapi_ep(OrtSessionOptions* sso, uint32_t flags);
+
 #define CHECK(expr) do { OrtStatus* s = (expr); if (s) { const char* m = g_ort->GetErrorMessage(s); fprintf(stderr, "ORT error @%s: %s\n", #expr, m); g_ort->ReleaseStatus(s); return 1; } } while (0)
 
 int main(int argc, char** argv) {
@@ -44,9 +52,25 @@ int main(int argc, char** argv) {
   CHECK(g_ort->CreateSessionOptions(&sso));
   CHECK(g_ort->SetIntraOpNumThreads(sso, threads));
   CHECK(g_ort->SetInterOpNumThreads(sso, 1));
-  if (strcmp(ep, "cpu") != 0) {
-    OrtStatus* s = g_ort->SessionOptionsAppendExecutionProvider(sso, ep, NULL, NULL, 0);
-    if (s) { fprintf(stderr, "EP '%s' not available: %s\n", ep, g_ort->GetErrorMessage(s)); g_ort->ReleaseStatus(s); return 3; }
+  if (strstr(ep, "noopt")) {
+    CHECK(g_ort->SetSessionGraphOptimizationLevel(sso, ORT_DISABLE_ALL));
+  } else if (strstr(ep, "optbasic")) {
+    CHECK(g_ort->SetSessionGraphOptimizationLevel(sso, ORT_ENABLE_BASIC));
+  }
+  if (strncmp(ep, "nnapi", 5) == 0) {
+    uint32_t flags = NNAPI_FLAG_USE_NONE;
+    if (strstr(ep, "fp16")) flags |= NNAPI_FLAG_USE_FP16;
+    if (strstr(ep, "nocpu")) flags |= NNAPI_FLAG_FORBID_NNAPI_CPU;
+    if (strstr(ep, "cpuonly")) flags |= NNAPI_FLAG_CPU_ONLY;
+    OrtStatus* s = append_nnapi_ep(sso, flags);
+    if (s) { fprintf(stderr, "NNAPI EP not available: %s\n", g_ort->GetErrorMessage(s)); g_ort->ReleaseStatus(s); return 3; }
+  } else if (strcmp(ep, "cpu") != 0) {
+    char epname[64];
+    size_t el = strcspn(ep, "_");
+    if (el >= sizeof(epname)) el = sizeof(epname) - 1;
+    memcpy(epname, ep, el); epname[el] = 0;
+    OrtStatus* s = g_ort->SessionOptionsAppendExecutionProvider(sso, epname, NULL, NULL, 0);
+    if (s) { fprintf(stderr, "EP '%s' not available: %s\n", epname, g_ort->GetErrorMessage(s)); g_ort->ReleaseStatus(s); return 3; }
   }
 
   double t0 = now_ms();
@@ -107,4 +131,10 @@ int main(int argc, char** argv) {
   printf("run (batch=%d seq=%d opts=%d): avg %.0f ms | best %.0f ms (10 runs)\n", B, L, K, total / 10, best);
   for (size_t i = 0; i < n_outs; i++) g_ort->AllocatorFree(alloc, (void*)out_names[i]);
   return 0;
+}
+
+// resolved at link time from libonnxruntime.so
+static OrtStatus* append_nnapi_ep(OrtSessionOptions* sso, uint32_t flags) {
+  extern OrtStatus* OrtSessionOptionsAppendExecutionProvider_Nnapi(OrtSessionOptions*, uint32_t);
+  return OrtSessionOptionsAppendExecutionProvider_Nnapi(sso, flags);
 }
