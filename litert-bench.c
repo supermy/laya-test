@@ -2,6 +2,7 @@
 // usage: litert-bench <main.tflite> <act.tflite> [gpu|cpu] [runs]
 #include "litert/c/litert_common.h"
 #include "litert/c/litert_environment.h"
+#include "litert/c/litert_environment_options.h"
 #include "litert/c/litert_model.h"
 #include "litert/c/litert_compiled_model.h"
 #include "litert/c/litert_tensor_buffer.h"
@@ -87,6 +88,7 @@ static LiteRtTensorBuffer make_buf2(LiteRtEnvironment env, LiteRtCompiledModel c
 int main(int argc, char** argv) {
   if (argc < 3) { fprintf(stderr, "usage: %s <main.tflite> <act.tflite> [gpu|cpu] [runs] [waittype 0-3] [kbatch] [prio 0-3]\n", argv[0]); return 2; }
   int use_gpu = argc > 3 && strcmp(argv[3], "gpu") == 0;
+  int use_npu = argc > 3 && strcmp(argv[3], "npu") == 0;
   int runs = argc > 4 ? atoi(argv[4]) : 10;
   int waittype = argc > 5 ? atoi(argv[5]) : -1;  // 0=default 1=passive 2=active 3=donotwait
   int kbatch = argc > 6 ? atoi(argv[6]) : -1;    // kernel batch size for one flush
@@ -97,11 +99,22 @@ int main(int argc, char** argv) {
   int kams = argc > 11 ? atoi(argv[11]) : 0;     // keep-alive: GPU act-head invoke every N ms (0=off)
 
   LiteRtEnvironment env;
-  CHECK(LiteRtCreateEnvironment(0, NULL, &env));
+  if (use_npu) {
+    // NPU: dispatch library dir 必须指向 libLiteRtDispatch_MediaTek.so 所在目录
+    static const char* disp_dir = "/data/local/tmp/litert";
+    LiteRtEnvOption eopts[1] = {
+        {kLiteRtEnvOptionTagDispatchLibraryDir,
+         {kLiteRtAnyTypeString, {.str_value = disp_dir}}}};
+    CHECK(LiteRtCreateEnvironment(1, eopts, &env));
+  } else {
+    CHECK(LiteRtCreateEnvironment(0, NULL, &env));
+  }
 
   LiteRtOptions opts;
   CHECK(LiteRtCreateOptions(&opts));
-  CHECK(LiteRtSetOptionsHardwareAccelerators(opts, use_gpu ? kLiteRtHwAcceleratorGpu : kLiteRtHwAcceleratorCpu));
+  CHECK(LiteRtSetOptionsHardwareAccelerators(opts, use_npu ? (kLiteRtHwAcceleratorNpu | kLiteRtHwAcceleratorCpu)
+                                          : use_gpu ? kLiteRtHwAcceleratorGpu
+                                                    : kLiteRtHwAcceleratorCpu));
   if (use_gpu) {
     LrtGpuOptions* gpu;
     CHECK(LrtCreateGpuOptions(&gpu));
@@ -130,7 +143,13 @@ int main(int argc, char** argv) {
   t0 = now_ms();
   LiteRtCompiledModel cm_main, cm_act;
   CHECK(LiteRtCreateCompiledModel(env, main_m, opts, &cm_main));
-  if (use_gpu) {
+  if (use_npu) {
+    // act head 走 CPU（主图才是延迟大头）
+    LiteRtOptions opts2;
+    CHECK(LiteRtCreateOptions(&opts2));
+    CHECK(LiteRtSetOptionsHardwareAccelerators(opts2, kLiteRtHwAcceleratorCpu));
+    CHECK(LiteRtCreateCompiledModel(env, act_m, opts2, &cm_act));
+  } else if (use_gpu) {
     // act head: same accelerator class, fresh options
     LiteRtOptions opts2;
     CHECK(LiteRtCreateOptions(&opts2));
@@ -205,14 +224,14 @@ int main(int argc, char** argv) {
   static float prev_logits[WINDOW];
   for (int r = 0; r < runs; r++) {
     if (sleepms > 0) usleep(sleepms * 1000);
-    double a = now_ms();
+    double a = now_ms(); double dt;
     CHECK(LiteRtRunCompiledModel(cm_main, 0, 3, mains_in, 2, mains_out));
-    double dt = now_ms() - a;
-    total += dt; if (dt < best) best = dt;
-    // verify compute actually happens: outputs must be identical every run (same inputs)
+    // 计时必须包含输出回读同步:invoke 是异步提交,真实执行发生在 lock 时
     void* pv; float sum = 0;
     if (LiteRtLockTensorBuffer(out0, &pv, kLiteRtTensorBufferLockModeRead) == kLiteRtStatusOk) {
       const float* lg = (const float*)pv;
+      dt = now_ms() - a;
+      total += dt; if (dt < best) best = dt;
       for (int i = 0; i < WINDOW; i++) sum += lg[i];
       if (r == 0) memcpy(prev_logits, lg, sizeof(float) * WINDOW);
       else {
@@ -245,6 +264,25 @@ int main(int argc, char** argv) {
   const float* logits = (const float*)p;
   printf("token_logits[0..3] = %.4f %.4f %.4f %.4f | [32] = %.4f\n",
          logits[0], logits[1], logits[2], logits[3], logits[32]);
+  { // hexdump 前 8 个 float 的位模式 + 全 256 里的统计
+    unsigned total = 0, infs = 0, zeros = 0;
+    for (int i = 0; i < 256; i++) {
+      unsigned u; memcpy(&u, &logits[i], 4);
+      total++;
+      if ((u & 0x7f800000u) == 0x7f800000u) infs++;
+      else if (u == 0) zeros++;
+    }
+    printf("hex[0..7] = %08x %08x %08x %08x %08x %08x %08x %08x | total=%u inf=%u zero=%u\n",
+           ({ unsigned u; memcpy(&u, &logits[0], 4); u; }),
+           ({ unsigned u; memcpy(&u, &logits[1], 4); u; }),
+           ({ unsigned u; memcpy(&u, &logits[2], 4); u; }),
+           ({ unsigned u; memcpy(&u, &logits[3], 4); u; }),
+           ({ unsigned u; memcpy(&u, &logits[4], 4); u; }),
+           ({ unsigned u; memcpy(&u, &logits[5], 4); u; }),
+           ({ unsigned u; memcpy(&u, &logits[6], 4); u; }),
+           ({ unsigned u; memcpy(&u, &logits[7], 4); u; }),
+           total, infs, zeros);
+  }
   LiteRtUnlockTensorBuffer(out0);
   void* q;
   CHECKM(LiteRtLockTensorBuffer(aout0, &q, kLiteRtTensorBufferLockModeRead));

@@ -1,0 +1,8 @@
+{
+  "state_key": "news",
+  "questions": [
+    {"qid": "q0", "type": "choice", "instructions": "这条新闻的倾向", "criteria": ["利好", "利空", "中性"], "from": "choice"},
+    {"qid": "q1", "type": "score", "instructions": "该新闻对股价影响的重要性1-5", "criteria": ["无关紧要", "轻微", "一般", "较大", "重大"], "from": "score"},
+    {"qid": "q2", "type": "noul", "instructions": "是否包含重大风险警示(如立案调查、减持、业绩爆雷)", "from": "risk"}
+  ]
+}

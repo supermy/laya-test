@@ -1,0 +1,49 @@
+{
+  "model": "laya-ticket-litert-gpu(手机)",
+  "n": 100,
+  "choice": {
+    "acc": 0.69,
+    "macro_f1": 0.5686,
+    "per_class": {
+      "技术支持": {
+        "precision": 0.7188,
+        "recall": 0.9583,
+        "f1": 0.8214
+      },
+      "账单计费": {
+        "precision": 1,
+        "recall": 0.7,
+        "f1": 0.8235
+      },
+      "销售咨询": {
+        "precision": 1,
+        "recall": 0.2222,
+        "f1": 0.3636
+      },
+      "退换货": {
+        "precision": 1,
+        "recall": 0.1333,
+        "f1": 0.2353
+      },
+      "故障维护": {
+        "precision": 1,
+        "recall": 0.5455,
+        "f1": 0.7059
+      },
+      "其他": {
+        "precision": 0.3158,
+        "recall": 0.8571,
+        "f1": 0.4615
+      }
+    }
+  },
+  "score": {
+    "mae": 1.085,
+    "within_1": 0.45
+  },
+  "latency_ms": {
+    "p50": 476.4,
+    "avg": 484.1,
+    "p95": 551
+  }
+}

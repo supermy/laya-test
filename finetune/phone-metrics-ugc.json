@@ -1,0 +1,166 @@
+{
+  "model": "laya-ugc-int8(手机)",
+  "n": 150,
+  "rows": 150,
+  "choice": {
+    "acc": 1,
+    "macro_f1": 1,
+    "per_class": {
+      "正常": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "广告导流": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "辱骂攻击": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "色情低俗": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "诈骗引流": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      }
+    }
+  },
+  "score": {
+    "mae": 1.32,
+    "within_1": 0.5133
+  },
+  "noul": {
+    "threshold": 0.5,
+    "precision": 1,
+    "recall": 0.7273,
+    "f1": 0.8421,
+    "ece": 0.3023
+  },
+  "latency_ms": {
+    "p50": 254,
+    "avg": 257.3
+  },
+  "vs_5060_ckpt": {
+    "choice": {
+      "acc": {
+        "ckpt": 1,
+        "phone_int8": 1
+      },
+      "macro_f1": {
+        "ckpt": 1,
+        "phone_int8": 1
+      },
+      "per_class": {
+        "ckpt": {
+          "正常": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "support": 210
+          },
+          "广告导流": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "support": 180
+          },
+          "辱骂攻击": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "support": 150
+          },
+          "色情低俗": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "support": 150
+          },
+          "诈骗引流": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "support": 150
+          }
+        },
+        "phone_int8": {
+          "正常": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1
+          },
+          "广告导流": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1
+          },
+          "辱骂攻击": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1
+          },
+          "色情低俗": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1
+          },
+          "诈骗引流": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1
+          }
+        }
+      }
+    },
+    "score": {
+      "mae": {
+        "ckpt": 0.968,
+        "phone_int8": 1.32
+      },
+      "within_1": {
+        "ckpt": 0.6607,
+        "phone_int8": 0.5133
+      }
+    },
+    "noul": {
+      "threshold": {
+        "ckpt": 0.5,
+        "phone_int8": 0.5
+      },
+      "precision": {
+        "ckpt": 1,
+        "phone_int8": 1
+      },
+      "recall": {
+        "ckpt": 0.5641,
+        "phone_int8": 0.7273
+      },
+      "f1": {
+        "ckpt": 0.7213,
+        "phone_int8": 0.8421
+      },
+      "ece": {
+        "ckpt": 0.0389,
+        "phone_int8": 0.3023
+      }
+    },
+    "latency_ms": {
+      "ckpt_5060_gpu": {
+        "p50": 9.6,
+        "avg": 9.6
+      },
+      "phone_ort_cpu": {
+        "p50": 254,
+        "avg": 257.3
+      }
+    }
+  }
+}

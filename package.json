@@ -10,6 +10,9 @@
   "type": "commonjs",
   "dependencies": {
     "@receptron/laya": "^0.1.2",
+    "imapflow": "^2.2.1",
+    "mqtt": "^5.16.0",
+    "nodemailer": "^10.0.13",
     "onnxruntime-web": "^1.30.0"
   }
 }

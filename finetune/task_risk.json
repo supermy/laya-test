@@ -1,0 +1,8 @@
+{
+  "state_key": "application",
+  "questions": [
+    {"qid": "q0", "type": "score", "instructions": "风险信号强度1-5", "criteria": ["无信号", "弱", "中", "强", "极强"], "from": "risk_level"},
+    {"qid": "q1", "type": "choice", "instructions": "主要风险类型", "criteria": ["无风险信号", "信用风险", "欺诈风险", "合规风险"], "from": "risk_type"},
+    {"qid": "q2", "type": "noul", "instructions": "是否命中强风控信号建议人工复核", "from": "review"}
+  ]
+}

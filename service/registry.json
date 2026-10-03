@@ -1,0 +1,16 @@
+{
+  "comment": "业务注册表——业务自适配入口。tasks 为手工覆盖项;autoScan=true 时 server 启动会扫描 /sdcard/models/laya-*-int8 并合并新业务(默认启用:启用:true,backend:cpu)",
+  "autoScan": true,
+  "defaults": {
+    "backend": "cpu",
+    "enabled": true
+  },
+  "tasks": {
+    "ticket": { "label": "客服工单分流", "port": 0 },
+    "ugc": { "label": "UGC 内容审核", "port": 0 },
+    "agent": { "label": "Agent 工作流路由", "port": 0 },
+    "risk": { "label": "金融风控前置", "port": 0 },
+    "sms": { "label": "垃圾短信判别", "port": 0 },
+    "stock": { "label": "股票资讯三问", "port": 0 }
+  }
+}

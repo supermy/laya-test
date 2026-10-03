@@ -1,0 +1,51 @@
+{
+  "model": "laya-agent-litert-gpu(手机)",
+  "n": 100,
+  "choice": {
+    "acc": 1,
+    "macro_f1": 1,
+    "per_class": {
+      "直接回答": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "检索问答": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "工具调用": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "多步规划": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "转人工": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      }
+    }
+  },
+  "score": {
+    "mae": 1.001,
+    "within_1": 0.48
+  },
+  "noul": {
+    "threshold": 0.5,
+    "precision": 1,
+    "recall": 0.8261,
+    "f1": 0.9048,
+    "ece": 0.0412
+  },
+  "latency_ms": {
+    "p50": 458.1,
+    "avg": 458.1,
+    "p95": 475.1
+  }
+}

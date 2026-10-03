@@ -1,0 +1,153 @@
+{
+  "model": "laya-ticket-int8(手机)",
+  "n": 150,
+  "rows": 150,
+  "choice": {
+    "acc": 0.6133,
+    "macro_f1": 0.5188,
+    "per_class": {
+      "技术支持": {
+        "precision": 0.6629,
+        "recall": 0.8194,
+        "f1": 0.7329
+      },
+      "账单计费": {
+        "precision": 0.9,
+        "recall": 0.5625,
+        "f1": 0.6923
+      },
+      "销售咨询": {
+        "precision": 0.6,
+        "recall": 0.2308,
+        "f1": 0.3333
+      },
+      "退换货": {
+        "precision": 0.8,
+        "recall": 0.2,
+        "f1": 0.32
+      },
+      "故障维护": {
+        "precision": 0.875,
+        "recall": 0.4667,
+        "f1": 0.6087
+      },
+      "其他": {
+        "precision": 0.303,
+        "recall": 0.7143,
+        "f1": 0.4255
+      }
+    }
+  },
+  "score": {
+    "mae": 1.096,
+    "within_1": 0.54
+  },
+  "latency_ms": {
+    "p50": 347.3,
+    "avg": 349.8
+  },
+  "vs_5060_ckpt": {
+    "choice": {
+      "acc": {
+        "ckpt": 0.6735,
+        "phone_int8": 0.6133
+      },
+      "macro_f1": {
+        "ckpt": 0.5995,
+        "phone_int8": 0.5188
+      },
+      "per_class": {
+        "ckpt": {
+          "技术支持": {
+            "precision": 0.6846,
+            "recall": 0.8944,
+            "f1": 0.7756,
+            "support": 852
+          },
+          "账单计费": {
+            "precision": 0.7653,
+            "recall": 0.75,
+            "f1": 0.7576,
+            "support": 200
+          },
+          "销售咨询": {
+            "precision": 0.8696,
+            "recall": 0.3,
+            "f1": 0.4461,
+            "support": 200
+          },
+          "退换货": {
+            "precision": 0.7079,
+            "recall": 0.315,
+            "f1": 0.436,
+            "support": 200
+          },
+          "故障维护": {
+            "precision": 0.9407,
+            "recall": 0.555,
+            "f1": 0.6981,
+            "support": 200
+          },
+          "其他": {
+            "precision": 0.4347,
+            "recall": 0.5458,
+            "f1": 0.4839,
+            "support": 262
+          }
+        },
+        "phone_int8": {
+          "技术支持": {
+            "precision": 0.6629,
+            "recall": 0.8194,
+            "f1": 0.7329
+          },
+          "账单计费": {
+            "precision": 0.9,
+            "recall": 0.5625,
+            "f1": 0.6923
+          },
+          "销售咨询": {
+            "precision": 0.6,
+            "recall": 0.2308,
+            "f1": 0.3333
+          },
+          "退换货": {
+            "precision": 0.8,
+            "recall": 0.2,
+            "f1": 0.32
+          },
+          "故障维护": {
+            "precision": 0.875,
+            "recall": 0.4667,
+            "f1": 0.6087
+          },
+          "其他": {
+            "precision": 0.303,
+            "recall": 0.7143,
+            "f1": 0.4255
+          }
+        }
+      }
+    },
+    "score": {
+      "mae": {
+        "ckpt": 1.051,
+        "phone_int8": 1.096
+      },
+      "within_1": {
+        "ckpt": 0.4781,
+        "phone_int8": 0.54
+      }
+    },
+    "latency_ms": {
+      "ckpt_5060_gpu": {
+        "p50": 9.7,
+        "avg": 9.9
+      },
+      "phone_ort_cpu": {
+        "p50": 347.3,
+        "avg": 349.8
+      }
+    }
+  }
+}

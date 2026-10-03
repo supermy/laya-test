@@ -4,6 +4,7 @@
 // 用法:
 //   laya infer            从 stdin 读 {state, questions},输出 {answers, usage, latencyMs}
 //   laya serve [--port N] HTTP 常驻服务,POST /system-one,GET /health(默认 8787)
+//                         sms 模型另有 POST /sms {"text":"..."}
 //   laya status           daemon 存活检查
 //   laya stop             停掉常驻 daemon
 //
@@ -17,11 +18,16 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-// LAYA_MODEL=en|multi (默认 en;multi = mmBERT 多语言 checkpoint,中文/德文更强)
-const MODEL = process.env.LAYA_MODEL === "en" ? "en" : "multi"; // 默认 multi(中文/多语言更强)
+// LAYA_MODEL=en|multi|sms (默认 multi;multi = mmBERT 多语言;sms = 微调垃圾短信 checkpoint)
+const MODELS = {
+  en: { dir: "laya-onnx-int8", onnx: "/sdcard/models/laya-onnx-int8/model.onnx" },
+  multi: { dir: "laya-multilingual-int8", onnx: "/sdcard/models/laya-multilingual-int8/laya-multilingual.int8.onnx" },
+  sms: { dir: "laya-sms-int8", onnx: "/sdcard/models/laya-sms-int8/laya-sms.int8.onnx" },
+};
+const MODEL = process.env.LAYA_MODEL === "en" ? "en" : process.env.LAYA_MODEL === "sms" ? "sms" : "multi";
 const SOCKET = path.join(HERE, `laya-${MODEL}.sock`);
-const MODEL_DIR = MODEL === "multi" ? path.join(HERE, "laya-multilingual-int8") : path.join(HERE, "laya-onnx-int8");
-const MODEL_PATH = MODEL === "multi" ? "/sdcard/models/laya-multilingual-int8/laya-multilingual.int8.onnx" : "/sdcard/models/laya-onnx-int8/model.onnx";
+const MODEL_DIR = path.join(HERE, MODELS[MODEL].dir);
+const MODEL_PATH = MODELS[MODEL].onnx;
 const RUNNER = path.join(HERE, "runner");
 const THREADS = 6;
 const ORTDIR = "/data/data/com.termux/files/usr/lib/python3.12/site-packages/onnxruntime/capi";
@@ -48,6 +54,18 @@ async function inferSafe(state, questions) {
     try {
       const laya = await getNative();
       return await laya.systemOne(state, questions);
+    } catch (e) {
+      if (_native) { try { _native.sock.destroy(); } catch {} _native = null; }
+      if (i === 1) throw e;
+    }
+  }
+}
+
+async function smsSafe(text) {
+  for (let i = 0; i < 2; i++) {
+    try {
+      const laya = await getNative();
+      return await laya.smsInfer(text);
     } catch (e) {
       if (_native) { try { _native.sock.destroy(); } catch {} _native = null; }
       if (i === 1) throw e;
@@ -84,6 +102,24 @@ function cmdServe(port) {
       const alive = await LayaNative.ping(SOCKET);
       return json(200, { ok: true, daemon: alive, socket: SOCKET });
     }
+    if (req.method === "POST" && req.url === "/sms") {
+      // 仅 sms 模型:{"text": "..."} -> {verdict:{label,probabilities,spamByChoice,spamProb,isSpam}, latencyMs}
+      const chunks = [];
+      let size = 0;
+      for await (const c of req) {
+        size += c.length;
+        if (size > 1024 * 1024) { res.writeHead(413); return res.end('{"error":"body too large"}'); }
+        chunks.push(c);
+      }
+      try {
+        const obj = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        if (!obj || typeof obj.text !== "string" || !obj.text.trim()) return json(400, { error: '需要 {"text": "短信正文"}' });
+        const r = await smsSafe(obj.text);
+        return json(200, { verdict: r.verdict, answers: r.answers, latencyMs: Math.round(r._inferMs) });
+      } catch (e) {
+        return json(500, { error: String(e.message ?? e) });
+      }
+    }
     if (req.method === "POST" && (req.url === "/system-one" || req.url === "/")) {
       const chunks = [];
       let size = 0;
@@ -105,6 +141,7 @@ function cmdServe(port) {
   });
   server.listen(port, "127.0.0.1", () => {
     console.log(`laya serve [${MODEL}]: http://127.0.0.1:${port}/system-one (POST {state,questions})`);
+    if (MODEL === "sms") console.log(`  sms 判别: POST /sms {"text":"..."} -> {verdict,latencyMs}`);
     console.log(`daemon socket: ${SOCKET}`);
     getNative()
       .then(() => console.log("daemon prewarmed"))

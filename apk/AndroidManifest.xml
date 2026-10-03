@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.selfhost.layatest"
+    android:versionCode="1" android:versionName="0.1">
+  <uses-sdk android:minSdkVersion="31" android:targetSdkVersion="28"/>
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+  <application android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar" android:largeHeap="true" android:debuggable="true" android:label="业务决策台" android:usesCleartextTraffic="true">
+    <!-- vendor OpenCL:LiteRT GPU 加速需要;required=false 兼容无 CL 设备 -->
+    <uses-native-library android:name="libOpenCL.so" android:required="false" />
+    <uses-native-library android:name="libOpenCL_mtk.so" android:required="false" />
+    <activity android:name=".MainActivity" android:launchMode="singleTop" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity>
+    <service android:name="com.laya.GatewayService" android:exported="false"/>
+    <receiver android:name="com.laya.BootReceiver" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED"/>
+      </intent-filter>
+    </receiver>
+  </application>
+</manifest>

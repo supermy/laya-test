@@ -1,0 +1,46 @@
+{
+  "model": "laya-risk-litert-gpu(手机)",
+  "n": 100,
+  "choice": {
+    "acc": 1,
+    "macro_f1": 1,
+    "per_class": {
+      "无风险信号": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "信用风险": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "欺诈风险": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "合规风险": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      }
+    }
+  },
+  "score": {
+    "mae": 0.981,
+    "within_1": 0.63
+  },
+  "noul": {
+    "threshold": 0.5,
+    "precision": 0.931,
+    "recall": 0.6429,
+    "f1": 0.7606,
+    "ece": 0.0568
+  },
+  "latency_ms": {
+    "p50": 454.5,
+    "avg": 453.8,
+    "p95": 466.9
+  }
+}

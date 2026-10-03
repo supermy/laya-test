@@ -1,0 +1,150 @@
+{
+  "model": "laya-risk-int8(手机)",
+  "n": 150,
+  "rows": 150,
+  "choice": {
+    "acc": 1,
+    "macro_f1": 1,
+    "per_class": {
+      "无风险信号": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "信用风险": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "欺诈风险": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "合规风险": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      }
+    }
+  },
+  "score": {
+    "mae": 1.216,
+    "within_1": 0.6267
+  },
+  "noul": {
+    "threshold": 0.5,
+    "precision": 0.9412,
+    "recall": 0.6038,
+    "f1": 0.7356,
+    "ece": 0.2302
+  },
+  "latency_ms": {
+    "p50": 286.4,
+    "avg": 288.4
+  },
+  "vs_5060_ckpt": {
+    "choice": {
+      "acc": {
+        "ckpt": 1,
+        "phone_int8": 1
+      },
+      "macro_f1": {
+        "ckpt": 1,
+        "phone_int8": 1
+      },
+      "per_class": {
+        "ckpt": {
+          "无风险信号": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "support": 165
+          },
+          "信用风险": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "support": 80
+          },
+          "欺诈风险": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "support": 80
+          },
+          "合规风险": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "support": 80
+          }
+        },
+        "phone_int8": {
+          "无风险信号": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1
+          },
+          "信用风险": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1
+          },
+          "欺诈风险": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1
+          },
+          "合规风险": {
+            "precision": 1,
+            "recall": 1,
+            "f1": 1
+          }
+        }
+      }
+    },
+    "score": {
+      "mae": {
+        "ckpt": 0.929,
+        "phone_int8": 1.216
+      },
+      "within_1": {
+        "ckpt": 0.716,
+        "phone_int8": 0.6267
+      }
+    },
+    "noul": {
+      "threshold": {
+        "ckpt": 0.5,
+        "phone_int8": 0.5
+      },
+      "precision": {
+        "ckpt": 0.9,
+        "phone_int8": 0.9412
+      },
+      "recall": {
+        "ckpt": 0.6818,
+        "phone_int8": 0.6038
+      },
+      "f1": {
+        "ckpt": 0.7759,
+        "phone_int8": 0.7356
+      },
+      "ece": {
+        "ckpt": 0.0454,
+        "phone_int8": 0.2302
+      }
+    },
+    "latency_ms": {
+      "ckpt_5060_gpu": {
+        "p50": 9.6,
+        "avg": 9.5
+      },
+      "phone_ort_cpu": {
+        "p50": 286.4,
+        "avg": 288.4
+      }
+    }
+  }
+}

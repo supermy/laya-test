@@ -1,0 +1,8 @@
+{
+  "state_key": "ticket",
+  "questions": [
+    {"qid": "q0", "type": "choice", "instructions": "分诊到售后部门", "criteria": ["账单计费", "技术支持", "销售咨询", "其他"], "from": "label"},
+    {"qid": "q1", "type": "score", "instructions": "客户紧急度1-5", "criteria": ["可忽略", "低", "中", "高", "紧急"], "from": "urgency"},
+    {"qid": "q2", "type": "noul", "instructions": "是否必须转人工处理(自动回复无法解决)", "from": "escalate"}
+  ]
+}

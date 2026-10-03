@@ -36,6 +36,30 @@ runner.c.bak*
 # LiteRT 本地产物与二进制
 litert-bench
 litert-runner
+litert-bench2
+litert-runner2
 bench86n
 *.o
 laya-litert/
+laya-sms-int8
+
+# 新增目录(2026-10-03)
+__pycache__/
+parity.err
+stage30.jsonl
+
+# service:本地日志与凭据配置
+service/logs/
+service/config/
+
+# apk:构建产物与二进制依赖(源码 src/ 与 build.sh 入库)
+apk/out/
+apk/*.apk
+apk/*.apk.idsig
+apk/jniExec/
+
+# finetune:数据/模型包/云端产物(脚本与任务定义、metrics 入库)
+finetune/data/
+finetune/laya-*-int8/
+finetune/*.tar.gz
+finetune/__pycache__/

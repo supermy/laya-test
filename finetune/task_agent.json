@@ -1,0 +1,8 @@
+{
+  "state_key": "request",
+  "questions": [
+    {"qid": "q0", "type": "choice", "instructions": "路由到工作流", "criteria": ["直接回答", "检索问答", "工具调用", "多步规划", "转人工"], "from": "label"},
+    {"qid": "q1", "type": "score", "instructions": "任务复杂度1-5", "criteria": ["一句话", "简单", "中等", "复杂", "极复杂"], "from": "complexity"},
+    {"qid": "q2", "type": "noul", "instructions": "是否涉及多实体或多约束需要任务拆解", "from": "multi_step"}
+  ]
+}

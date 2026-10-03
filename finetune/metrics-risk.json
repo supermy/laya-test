@@ -1,0 +1,49 @@
+{
+  "model": "laya-risk-ft",
+  "n": 405,
+  "choice": {
+    "acc": 1.0,
+    "macro_f1": 1.0,
+    "per_class": {
+      "无风险信号": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 165
+      },
+      "信用风险": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 80
+      },
+      "欺诈风险": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 80
+      },
+      "合规风险": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 80
+      }
+    }
+  },
+  "score": {
+    "mae": 0.929,
+    "within_1": 0.716
+  },
+  "noul": {
+    "threshold": 0.5,
+    "precision": 0.9,
+    "recall": 0.6818,
+    "f1": 0.7759,
+    "ece": 0.0454
+  },
+  "latency_ms": {
+    "p50": 9.6,
+    "avg": 9.5
+  }
+}

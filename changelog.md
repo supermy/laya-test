@@ -1,5 +1,57 @@
 # Changelog
 
+## 2026-10-03 — v1.2.0:微调四业务 + APK 端侧闭环 + NPU AOT
+
+### ⚠️ 17ms 勘误(计时方法论修正)
+
+- 此前所有 13-25ms 的 LiteRT GPU bench 数据都是**计时口径错误**:GPU invoke 是异步提交,旧计时只含提交(~10ms),真实 GPU 执行发生在其后的输出 lock 回读(~137ms),不在计时内。`litert-bench.c` 已修(回读纳入计时)
+- **真实端到端 ≈ 140-155ms/问,与热/冷基本无关**;此前"热节流降档 6x""强冷后 13-17ms"结论全部作废
+- 真实排序(窗口 256):**GPU fp32 ~150ms/问 < CPU int8 254-347ms/问 < CPU fp32 XNNPACK ~309ms/问**
+
+### NPU AOT 路线全通(目前最快路径)
+
+- 设备侧 JIT 不可用:Neuron delegate 对 laya 主图(wfp16/fp32)全部 `NEURON_UNMAPPABLE`,重建 legacy 测试台 APK 复核确认
+- **AOT 成功**:PC(5060)上 `ai-edge-litert==2.2.0` + `ai-edge-litert-sdk-mediatek==2.2.0` wheel(内含 libLiteRtCompilerPlugin_MediaTek.so + host libneuron_adapter),对 Target=MT6993 aot_compile,7 秒把 501MB fp32 主图编成 252MB dispatch tflite
+- 手机侧:`litert-bench.c` 加 npu 模式(EnvOption DispatchLibraryDir=/data/local/tmp/litert;加速器集合必须 **NPU|CPU**,只 NPU 会 504——AOT 模型 3 节点中 2 个 CPU 残余)+ 手编 dispatcher(9.2.1 适配)
+- **实测 NPU 端到端 avg 57.1ms / best 52.5ms(20 轮含回读),vs GPU 150ms = 2.6x**;apuware_server 日志实证 APU 执行;pooled 输出与 GPU 参考一致,决策可用(token_logits 辅助输出 inf,fp16 溢出嫌疑,不影响决策头)
+- TurboBoost+LowLatency 重编无效(60.8 vs 61.4,噪声内)——瓶颈在 CPU 残余节点 + buffer 拷贝 + MDLA 执行
+
+### finetune/:微调管线 + 四业务落地
+
+- 云端微调管线(`finetune/`):`prepare_data.py` / `train_sms.py`(RLCD,任务化 --task)/ `evaluate.py` / `export_onnx.py`(fp32+int8,签名与现网逐字对齐,`dynamo=False`);任务定义 `task_{ticket,ugc,agent,risk,sms,stock}.json`,示例指南 `examples_guide.md`
+- 训练在 5060 PC(RTX 5060 Ti 16G,ssh my@192.168.0.168):ticket 46min / ugc 29min / agent 9min / risk 16min 全 exit 0;ticket 真实数据 choice 67.4%(macro-F1 0.600),其余同模板测试集 100%(只证管线)
+- **手机 parity**(`parity-task.mjs` / `parity-litert.mjs`,报告 `finetune/parity-report.md`):int8 路径 choice argmax 基本保真(ticket −6pp 量化漂移),**noul ECE 0.03-0.05 → 0.23-0.30**——int8 扰动 logits 幅度,训练期温度失效,概率阈值部署前须手机端重校准
+- **LiteRT GPU 转换链全通**:自研 clean 前向(ModernBERT rank≤4,band/cos/sin 预计算 buffer)经 litert_torch 转 tflite,四业务 GPU 精度=ckpt(ECE 0.041-0.059 保真),规避 onnx2tf 对 RoPE 的 Expand 无解;fp16 权重压缩(ai_edge_quantizer FLOAT_CASTING)501→251MB,argmax 全一致
+- 股票任务走教师蒸馏:FinCorpus 12,751 条真实金融新闻 → 5060 llama.cpp + Qwen3.5-35B-A3B 两遍正反序标注 → `convert_stock.py`;公开中文金融情感数据集不存在(HF 搜遍)
+- ugc/agent/risk 合成冷启动:`gen_synthetic.py` 构造式合成 25,200 条(标签由构造保证;分布≠真实,上线前换真实语料)
+
+### sms 判别接入 CLI/HTTP
+
+- `laya-native.mjs` 加 `smsInfer(text)`:`state={"sms":正文}` + 从 config.question_defs 自动挑 SMS 双问(按 instructions 内容定位、按回复 type 对号,兼容多技能导出);verdict={label,probabilities,spamByChoice,spamProb,isSpam},阈值读 config.spam_threshold
+- `cli.mjs`:`LAYA_MODEL=sms`(独立 socket `laya-sms.sock`) + serve 加 `POST /sms {"text":...}` 端点;80 万条中文短信数据集微调产物落地 `/sdcard/models/laya-sms-int8/`
+- `loadWithDaemon` 重试重构:先 raw-connect 探针轮询再 full load(旧逻辑每次重试解析 34MB tokenizer,最多假死十几分钟);`_systemOneInner` 增加 prep/infer/post 分段计时
+
+### service/:多业务决策服务(Termux 侧)
+
+- `service/server.mjs`(端口 8789):**业务自适配注册表**——扫 `/sdcard/models/laya-*-int8` 有 laya_config.json 即接入(合并 registry.json 手工覆盖),`POST /admin/reload` 免重启;端点 `/tasks`、`/task/:id`(决策+日志)、`/report/daily|monthly|yearly`(markdown 报表)+ 详单 CSV
+- `service/gateways.mjs`:邮件网关(IMAP 轮询指令"laya <task> <text>"→ SMTP 回复)+ MQTT 网关(订 laya/req/+ 发 laya/resp);配置缺失静默降级
+
+### apk/:Android 端侧 APK(LiteRT GPU 内置,四业务全验证)
+
+- 自研 JNI C API(`apk/src/laya-jni.c` → liblayajni.so):官方 litert Java API 在 app 域全挂(tensor_buffer 分配失败)→ C API + managed buffer 降级;构建无 Gradle(kotlinc + aapt2/d8/apksigner,`apk/build.sh`)
+- **app 域五坑**:JNI 用 clang、SDK 助手 .cc 用 clang++ 分编(absl 缺符号手写 stub);libc++_shared.so 打包;managed buffer 降级 FromHostMemory;**GPU run 失败根因=OpenCL 没加载**→ manifest `<uses-native-library libOpenCL.so>` + JNI 全路径预载 vendor 库(RTLD_GLOBAL);多业务撑爆 Java 堆 → 单引擎策略 + largeHeap
+- **线程铁律**:open 与 run 必须同线程(GL 上下文绑定),全部 native 调用走单线程 executor
+- 决策核心 `DecisionCore.kt`:引擎双路(独立进程 runner socket 首选,JNI 回退);业务注册表动态化(扫 /sdcard/models/laya-litert-*/phone,支持 zip/目录导入新业务 e2e 全通);决策日志 JSONL + 报表
+- 内置网关:IMAP+SMTP(JavaMail)+ MQTT(Paho)前台服务 + 开机自启;本地邮件 e2e 用 pymap+aiosmtpd 全 Termux 自建(JavaMail partial fetch 坑:`msg.rawInputStream` 直读)
+- **内存泄漏已修+压测验证**:补全 LiteRT 对象销毁链后 5 业务切换 Graphics 稳定 540-575MB 零累积;遗留:runner 子进程偶发自退(有兜底,待深挖)
+- UI:微信风决策台(气泡对话 + 业务↔日志联动 + 泳道架构图 + 网关/系统页)
+- 实测:四业务 choice/score/noul 全出,~163ms/问(热节流档),ticket 464ms/3 问端到端
+
+### 其他
+
+- `litert-bench.c` 输出加 hexdump 位模式统计(inf/zero 计数),便于排查 fp16 溢出
+- 新增诊断:`timing-breakdown.mjs`、`trace_node.py`、`intern-compare.py`/`validate-intern.py`
+
 ## 2026-09-30 — v1.1.0:LiteRT GPU 后端(90x 提速)
 
 ### LiteRT GPU 路径打通(本次核心)

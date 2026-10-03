@@ -1,0 +1,31 @@
+{
+ "department": {
+  "type": "choice",
+  "instructions": "Which team should handle this ticket?",
+  "criteria": {
+   "billing": "a payment the user already made is wrong: duplicate charge, invoice error, refund",
+   "technical": "the product does not work: bugs, crashes, errors, outage",
+   "sales": "the user wants to become a customer: pricing quote, plans, trial, contract before buying",
+   "other": "general questions or how-to, not covered above"
+  }
+ },
+ "urgency": {
+  "type": "score",
+  "instructions": "How urgent is this ticket?",
+  "criteria": [
+   "not urgent",
+   "somewhat urgent",
+   "urgent",
+   "critical"
+  ]
+ },
+ "intent": {
+  "type": "choice",
+  "instructions": "What does the user mainly ask for in this ticket? Base the answer on what the user wants to happen next.",
+  "criteria": {
+   "refund": "be given money back for a payment that was already made",
+   "fix": "have a technical problem repaired so they can keep using the product",
+   "info": "receive information, pricing or a general answer"
+  }
+ }
+}

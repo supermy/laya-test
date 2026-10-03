@@ -1,0 +1,7 @@
+{
+  "state_key": "sms",
+  "questions": [
+    {"qid": "q0", "type": "choice", "instructions": "这条短信的类别", "from": "label"},
+    {"qid": "q1", "type": "noul", "instructions": "这是垃圾或骚扰短信吗", "from": "label", "derive": "not_normal"}
+  ]
+}

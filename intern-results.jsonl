@@ -1,0 +1,20 @@
+{"queue": "Billing and Payments", "gt": "billing", "pred": "technical", "lang": "de", "ms": 8529.525995254517}
+{"queue": "Billing and Payments", "gt": "billing", "pred": "technical", "lang": "de", "ms": 7955.715656280518}
+{"queue": "Billing and Payments", "gt": "billing", "pred": "billing", "lang": "de", "ms": 8953.58920097351}
+{"queue": "Billing and Payments", "gt": "billing", "pred": "other", "lang": "de", "ms": 8749.856233596802}
+{"queue": "Billing and Payments", "gt": "billing", "pred": "billing", "lang": "de", "ms": 9292.55723953247}
+{"queue": "Billing and Payments", "gt": "billing", "pred": "sales", "lang": "de", "ms": 10778.048038482666}
+{"queue": "Billing and Payments", "gt": "billing", "pred": "billing", "lang": "en", "ms": 8466.986417770386}
+{"queue": "Billing and Payments", "gt": "billing", "pred": "billing", "lang": "en", "ms": 8170.5162525177}
+{"queue": "Billing and Payments", "gt": "billing", "pred": "sales", "lang": "en", "ms": 9128.748655319214}
+{"queue": "Billing and Payments", "gt": "billing", "pred": "technical", "lang": "en", "ms": 11307.434558868408}
+{"queue": "Billing and Payments", "gt": "billing", "pred": "other", "lang": "en", "ms": 9476.475715637207}
+{"queue": "Billing and Payments", "gt": "billing", "pred": "other", "lang": "en", "ms": 12451.870441436768}
+{"queue": "Customer Service", "gt": "other", "pred": "technical", "lang": "de", "ms": 13436.588525772095}
+{"queue": "Customer Service", "gt": "other", "pred": "other", "lang": "de", "ms": 11301.067590713501}
+{"queue": "Customer Service", "gt": "other", "pred": "sales", "lang": "de", "ms": 13339.622020721436}
+{"queue": "Customer Service", "gt": "other", "pred": "other", "lang": "de", "ms": 204556.7343235016}
+{"queue": "Customer Service", "gt": "other", "pred": "other", "lang": "de", "ms": 92312.251329422}
+{"queue": "Customer Service", "gt": "other", "pred": "sales", "lang": "de", "ms": 92081.99501037598}
+{"queue": "Customer Service", "gt": "other", "pred": "other", "lang": "en", "ms": 86731.2171459198}
+{"queue": "Customer Service", "gt": "other", "pred": "other", "lang": "en", "ms": 87104.44498062134}

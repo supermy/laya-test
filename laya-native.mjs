@@ -68,34 +68,36 @@ export class LayaNative {
 
   /** Spawn the C daemon (if not already up) and return a connected client. */
   static async loadWithDaemon({ modelDir, modelPath, socketPath, threads = 6, runnerBin, env }) {
-    try {
-      return await LayaNative.load({ modelDir, socketPath });
-    } catch (e) {
-      if (e.code !== "E_NO_DAEMON") throw e;
-    }
-    // a daemon may be mid-load; give it up to 3s before spawning another
-    for (let i = 0; i < 15; i++) {
-      try { return await LayaNative.load({ modelDir, socketPath }); } catch (e) {
-        if (e.code !== "E_NO_DAEMON") throw e;
+    // cheap raw-connect probe first: LayaNative.load parses a 30MB+ tokenizer, so
+    // retrying with full loads costs seconds per attempt
+    let up = await LayaNative.ping(socketPath);
+    if (!up) {
+      // a daemon may be mid-load; give it up to 3s before spawning another
+      for (let i = 0; i < 15 && !up; i++) {
         await new Promise((r) => setTimeout(r, 200));
+        up = await LayaNative.ping(socketPath);
+      }
+      if (!up) {
+        const bin = runnerBin ?? new URL("./runner", import.meta.url).pathname;
+        const child = spawn(bin, [modelPath, socketPath, String(threads)], {
+          stdio: ["ignore", "ignore", "inherit"],
+          detached: true, // survive the CLI process; stop via `cmd 2` / laya stop
+          env: env ?? process.env,
+        });
+        child.unref();
+        await new Promise((res, rej) => {
+          child.once("spawn", res);
+          child.once("error", rej);
+          child.once("exit", (c) => rej(new Error(`runner exited early (${c})`)));
+        });
+        for (let i = 0; i < 300 && !up; i++) {
+          await new Promise((r) => setTimeout(r, 100));
+          up = await LayaNative.ping(socketPath);
+        }
+        if (!up) throw new Error("daemon did not come up in 30s");
       }
     }
-    const bin = runnerBin ?? new URL("./runner", import.meta.url).pathname;
-    const child = spawn(bin, [modelPath, socketPath, String(threads)], {
-      stdio: ["ignore", "ignore", "inherit"],
-      detached: true, // survive the CLI process; stop via `cmd 2` / laya stop
-      env: env ?? process.env,
-    });
-    child.unref();
-    await new Promise((res, rej) => {
-      child.once("spawn", res);
-      child.once("error", rej);
-      child.once("exit", (c) => rej(new Error(`runner exited early (${c})`)));
-    });
-    for (let i = 0; i < 300; i++) {
-      try { return await LayaNative.load({ modelDir, socketPath }); } catch { await new Promise((r) => setTimeout(r, 100)); }
-    }
-    throw new Error("daemon did not come up in 30s");
+    return LayaNative.load({ modelDir, socketPath });
   }
 
   async infer(items) {
@@ -180,6 +182,52 @@ export class LayaNative {
     return p;
   }
 
+  /**
+   * 从 config.question_defs 里挑出 SMS 判别所需的两问(choice 含"短信" + noul 含"垃圾/骚扰")。
+   * 兼容两种产物:微调 checkpoint(2 条 qdefs)与多技能导出(stock+sms 共 5 条)。
+   */
+  smsQuestionsFromConfig() {
+    const qdefs = this.config.question_defs;
+    if (!Array.isArray(qdefs) || qdefs.length < 2) {
+      throw new Error("config.question_defs 缺失:该模型没有内置问题定义");
+    }
+    const choiceQ = qdefs.find((q) => q.type === "choice" && /短信/.test(q.instructions || ""));
+    const noulQ = qdefs.find((q) => q.type === "noul" && /垃圾|骚扰/.test(q.instructions || ""));
+    if (!choiceQ || !noulQ) throw new Error("question_defs 里没有 SMS 判别问题(choice短信/noul垃圾)");
+    return { s0: choiceQ, s1: noulQ };
+  }
+
+  /**
+   * 垃圾短信判别。state={"sms":text} + 固定双问(choice 类别 + noul 垃圾)。
+   * 返回 verdict: {label, probabilities, spamProb, isSpam, spamByChoice}。
+   * questions 可覆盖(如用现有 multi 模型跑 SMS 形状输入做管路测试)。
+   */
+  async smsInfer(text, questions) {
+    const qs = questions ?? this.smsQuestionsFromConfig();
+    const r = await this.systemOne({ sms: text }, qs);
+    const keys = Object.keys(r.answers).sort();
+    const a0 = r.answers[keys[0]], a1 = r.answers[keys[1]];
+    // 回复按问题类型对号,不按 qid 顺序(多技能导出时 qid 不再是 q0/q1)
+    const choiceAns = a0.type === "choice" ? a0 : a1;
+    const noulAns = a0.type === "choice" ? a1 : a0;
+    const normal = this.config.normal_label;
+    const threshold = this.config.spam_threshold ?? 0.5;
+    const spamProb = noulAns?.noul ?? 0;
+    const spamByChoice = normal !== undefined && choiceAns.choice !== normal;
+    return {
+      answers: r.answers,
+      verdict: {
+        label: choiceAns.choice,
+        probabilities: choiceAns.probabilities,
+        spamByChoice,
+        spamProb,
+        isSpam: spamByChoice && spamProb >= threshold,
+      },
+      usage: r.usage,
+      _inferMs: r._inferMs,
+    };
+  }
+
   async _systemOneInner(state, questions) {
     const qids = Object.keys(questions);
     if (this.config.batch1 && qids.length > 1) {
@@ -193,15 +241,18 @@ export class LayaNative {
       }
       return { answers, usage: { input_tokens: tokens }, _inferMs: ms };
     }
+    const _tPrep0 = performance.now();
     const items = qids.map((qid) => {
       const q = toInternal(questions[qid]);
       const { ids, markers } = buildSequence(this.encode.bind(this), this.ids, state, q, this.config.max_len, this.config.head_max_len);
       if (markers.length !== renderOptions(q).length) throw new Error(`question ${qid}: options do not fit in head_max_len`);
       return { qid, q, ids, markers, qtype: QTYPES[q.t] };
     });
+    const prepMs = performance.now() - _tPrep0;
     const t0 = performance.now();
     const { logits, actRaw, actDim, n, K } = await this.infer(items);
     const inferMs = performance.now() - t0;
+    const _tPost0 = performance.now();
 
     const answers = {};
     items.forEach((it, r) => {
@@ -221,7 +272,7 @@ export class LayaNative {
         answers[it.qid] = { type: "noul", noul: round4(p[1] ?? 0), rl_agent: { act_probability: act_probability } };
       }
     });
-    return { answers, usage: { input_tokens: items.reduce((s, it) => s + it.ids.length, 0) }, _inferMs: inferMs };
+    return { answers, usage: { input_tokens: items.reduce((s, it) => s + it.ids.length, 0) }, _inferMs: inferMs, _prepMs: prepMs, _postMs: performance.now() - _tPost0 };
   }
 
   async shutdown() {

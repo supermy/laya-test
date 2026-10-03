@@ -1,0 +1,9 @@
+{
+  "question_defs": [
+    {"type": "choice", "instructions": "这条新闻的倾向", "criteria": ["利好", "利空", "中性"]},
+    {"type": "score", "instructions": "该新闻对股价影响的重要性1-5", "criteria": ["无关紧要", "轻微", "一般", "较大", "重大"]},
+    {"type": "noul", "instructions": "是否包含重大风险警示(如立案调查、减持、业绩爆雷)"},
+    {"type": "choice", "instructions": "这条短信的类别", "criteria": ["正常", "垃圾短信"]},
+    {"type": "noul", "instructions": "这是垃圾或骚扰短信吗"}
+  ]
+}

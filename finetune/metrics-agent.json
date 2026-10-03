@@ -1,0 +1,55 @@
+{
+  "model": "laya-agent-ft",
+  "n": 300,
+  "choice": {
+    "acc": 1.0,
+    "macro_f1": 1.0,
+    "per_class": {
+      "直接回答": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      },
+      "检索问答": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      },
+      "工具调用": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      },
+      "多步规划": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      },
+      "转人工": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      }
+    }
+  },
+  "score": {
+    "mae": 0.962,
+    "within_1": 0.52
+  },
+  "noul": {
+    "threshold": 0.5,
+    "precision": 1.0,
+    "recall": 0.8,
+    "f1": 0.8889,
+    "ece": 0.029
+  },
+  "latency_ms": {
+    "p50": 9.6,
+    "avg": 9.6
+  }
+}

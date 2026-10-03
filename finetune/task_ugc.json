@@ -1,0 +1,8 @@
+{
+  "state_key": "comment",
+  "questions": [
+    {"qid": "q0", "type": "choice", "instructions": "审核判定", "criteria": ["正常", "广告导流", "辱骂攻击", "色情低俗", "诈骗引流"], "from": "label"},
+    {"qid": "q1", "type": "score", "instructions": "违规严重度1-5", "criteria": ["无违规", "轻微", "一般", "较重", "严重"], "from": "severity"},
+    {"qid": "q2", "type": "noul", "instructions": "是否需要人工复核(机器置信不足或处置风险高)", "from": "review"}
+  ]
+}
