@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English (system locale en-*);default is Chinese -->
+<resources>
+    <string name="app_title">Laya Decision Console</string>
+    <string name="tab_decision">Decide</string>
+    <string name="tab_report">Reports</string>
+    <string name="tab_gateway">Gateway</string>
+    <string name="tab_system">System</string>
+    <string name="btn_decide">Decide</string>
+    <string name="current_biz_hint">Current: %1$s · switch via left rail tabs (☰ to show/hide)</string>
+    <string name="input_hint">Enter %1$s text</string>
+    <string name="ready_msg">Laya decision console ready.\n%1$s\nOn-device LiteRT GPU inference; report/email/MQTT gateway built-in.\nNew business: drop model pack at /sdcard/models/laya-litert-&lt;name&gt;/phone/, rescan in System tab.</string>
+    <string name="history_header">\"%1$s\" recent decisions (local log, last 20):</string>
+    <string name="history_empty">(no history yet — type text or wait for gateway commands)</string>
+    <string name="report_hint">Reports come from local decision logs; switch via left tabs</string>
+    <string name="no_data">(no decision data)</string>
+    <string name="decision_result_header">== %1$s decision result ==</string>
+    <string name="label_score">Score</string>
+    <string name="label_verdict">Verdict</string>
+    <string name="label_latency">Latency</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+</resources>

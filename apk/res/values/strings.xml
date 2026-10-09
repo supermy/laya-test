@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 默认文案 = 中文;英文见 values-en/strings.xml -->
+<resources>
+    <string name="app_title">智能决策业务台</string>
+    <string name="tab_decision">决策</string>
+    <string name="tab_report">报表</string>
+    <string name="tab_gateway">网关</string>
+    <string name="tab_system">系统</string>
+    <string name="btn_decide">决策</string>
+    <string name="current_biz_hint">当前业务:%1$s · 左侧竖排 tab 切换业务(标题栏 ☰ 显隐)</string>
+    <string name="input_hint">输入%1$s文本</string>
+    <string name="ready_msg">Laya 业务决策台已就绪。\n%1$s\n端侧 LiteRT GPU 推理;报表/邮件/MQTT 网关内置。\n新业务:模型包放 /sdcard/models/laya-litert-&lt;名&gt;/phone/,系统页重扫即加载。</string>
+    <string name="history_header">「%1$s」历史决策(本机日志,最近 20 条):</string>
+    <string name="history_empty">(暂无历史,输入文本或等网关指令)</string>
+    <string name="report_hint">报表来自本机决策日志,左侧 tab 切换</string>
+    <string name="no_data">(暂无决策数据)</string>
+    <string name="decision_result_header">== %1$s 决策结果 ==</string>
+    <string name="label_score">评分</string>
+    <string name="label_verdict">判定</string>
+    <string name="label_latency">耗时</string>
+    <string name="yes">是</string>
+    <string name="no">否</string>
+</resources>

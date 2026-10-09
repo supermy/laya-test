@@ -50,8 +50,14 @@ $KOTLINC -jvm-target 11 -cp "$SDK:$OUT/aar/classes-rt.jar:$OUT/aar/classes-api.j
   -d "$OUT/classes" $(find "$HERE/src" -name '*.kt')
 
 echo "== [2/6] javac =="
+# 资源(res/values*):aapt2 编译 + link 生成 R.java,随源码一起编译
+mkdir -p "$OUT/gen"
+if [ -d "$HERE/res" ]; then
+  aapt2 compile --dir "$HERE/res" -o "$OUT/res.zip"
+  aapt2 link -o "$OUT/res.apk" -I "$SDK" --manifest "$MANIFEST" --java "$OUT/gen" "$OUT/res.zip"
+fi
 javac --release 11 -cp "$SDK:$OUT/classes:$OUT/aar/classes-rt.jar:$OUT/aar/classes-api.jar:$GWJARS/android-mail-1.6.7.jar:$GWJARS/android-activation-1.6.7.jar:$GWJARS/paho-mqttv3-1.2.5.jar:$NANOJAR:$STDLIB" \
-  -d "$OUT/classes" $(find "$HERE/src" -name '*.java')
+  -d "$OUT/classes" $(find "$HERE/src" -name '*.java') $(find "$OUT/gen" -name '*.java' 2>/dev/null)
 
 echo "== [3/6] d8 =="
 jar cf "$OUT/classes.jar" -C "$OUT/classes" .
@@ -59,8 +65,10 @@ d8 --min-api 31 --lib "$SDK" --lib "$OUT/aar/classes-rt.jar" --lib "$OUT/aar/cla
   --output "$OUT/dex" "$OUT/classes.jar" "$OUT/aar/classes-rt.jar" "$OUT/aar/classes-api.jar" "$GWJARS/android-mail-1.6.7.jar" "$GWJARS/android-activation-1.6.7.jar" "$GWJARS/paho-mqttv3-1.2.5.jar" "$NANOJAR" "$STDLIB"
 
 echo "== [4/6] aapt2 link =="
+RES_ARG=""
+[ -f "$OUT/res.zip" ] && RES_ARG="$OUT/res.zip"
 aapt2 link -o "$OUT/base.apk" -I "$SDK" --manifest "$MANIFEST" \
-  --min-sdk-version 31 --target-sdk-version 28
+  --min-sdk-version 31 --target-sdk-version 28 $RES_ARG
 
 echo "== [5/6] pack dex + jniLibs =="
 cd "$OUT" && zip -qj base.apk dex/classes.dex

@@ -4,17 +4,17 @@
 
 ## 下载 APK
 
-**[v1.3.0 — NPU 决策全链路打通](https://github.com/supermy/laya-test/releases/tag/v1.3.0)**(内置 MTK NPU 后端 + 5 业务,天玑 9500 自动启用 NPU,其他机型自动落 GPU/CPU):
+**[v1.4.0 — 决策 tab 整词旋转 90° + ☰ 显隐 + 中英双语 UI](https://github.com/supermy/laya-test/releases/tag/v1.4.0)**(内置 MTK NPU 后端 + 5 业务,天玑 9500 自动启用 NPU,其他机型自动落 GPU/CPU):
 
 ```
-https://github.com/supermy/laya-test/releases/download/v1.3.0/layaoffice-1514.apk
+https://github.com/supermy/laya-test/releases/download/v1.4.0/layaoffice-0315.apk
 ```
 
 国内网络直连 GitHub 卡顿时,任选一个镜像前缀拼同一链接:
 
 ```
-https://ghproxy.net/https://github.com/supermy/laya-test/releases/download/v1.3.0/layaoffice-1514.apk
-https://gh-proxy.com/https://github.com/supermy/laya-test/releases/download/v1.3.0/layaoffice-1514.apk
+https://ghproxy.net/https://github.com/supermy/laya-test/releases/download/v1.4.0/layaoffice-0315.apk
+https://gh-proxy.com/https://github.com/supermy/laya-test/releases/download/v1.4.0/layaoffice-0315.apk
 ```
 
 安装后需在系统页安装模型包(`/sdcard/models/laya-litert*/`,zip 内含 NPU 主图 `laya_ml_s256_embeds_npu.tflite` + `laya_ml_scorer.bin` 时 MTK 机型自动走 NPU)。
@@ -153,7 +153,7 @@ node sms-e2e-test.mjs           # SMS 判别管路测试(multi 模型+覆盖问�
 | `cli.mjs` → `~/bin/laya` | CLI:`infer` / `serve` / `status` / `stop` |
 | `service/` | 多业务决策服务:自适配注册表 + 决策日志报表 + 邮件/MQTT 网关(端口 8789;`GET /report/page` 详单页:业务×决策等级×日期,可下钻) |
 | `finetune/` | 微调管线:数据准备/RLCD 训练/评估/导出 + 任务定义 + parity 报告 |
-| `apk/` | Android APK(智能决策业务台):LiteRT NPU/GPU 内置推理(MTK SoC 自动选 NPU,引擎链 NPU→GPU→CPU)+ 动态业务 + 网关 + 微信风 UI;系统页四个子标签(系统/架构图/流程图/数据流,`DiagramView` 零依赖自绘);报表页含「下钻详单」:业务×决策等级×日期矩阵,点数字下钻明细;网关页含 LLM 设置×3(升级通道可选,OpenAI 兼容) |
+| `apk/` | Android APK(智能决策业务台):LiteRT NPU/GPU 内置推理(MTK SoC 自动选 NPU,引擎链 NPU→GPU→CPU)+ 动态业务 + 网关 + 微信风 UI;决策页业务 tab 英文单词整词旋转 90°、标题栏 ☰ 显隐左栏(与报表页一致,显隐跨重建保持);UI 中英双语(res/values + values-en,跟随系统语言);系统页四个子标签(系统/架构图/流程图/数据流,`DiagramView` 零依赖自绘);报表页含「下钻详单」:业务×决策等级×日期矩阵,点数字下钻明细;网关页含 LLM 设置×3(升级通道可选,OpenAI 兼容) |
 | `figs.py` / `figs/` | 公众号/README 配图生成脚本与产物(性能对比 / 分层架构 / 延迟台阶 / 业务流程 / 决策泳道图) |
 | `bench.c` / `bench86` | 原生推理基准(SEQ/BATCH/OPTS 可编译期配置,nnapi/xnnpack EP) |
 | `triage-test.mjs` | 工单分流 E2E 回归 |

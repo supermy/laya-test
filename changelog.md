@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-10-10 — v1.4.0:决策 tab 整词旋转 90° + ☰ 显隐 + UI 国际化(zh/en)
+
+### 决策页 tab 改版(与报表页统一)
+
+- 业务 tab 由"逐字竖排"改为**英文单词整词旋转 90°**(`setRotation(90)` + FrameLayout slot 容器,slot 尺寸按 `Paint.measureText` 量化词长,chip 长度自适应)
+- tab 显隐与报表页一致:**标题栏 ☰ 切换左栏**;显隐状态记入字段 `railHidden`,**跨页面重建保持**——修复网关轮询触发 `handleIntent`/`refreshTasks` 重建决策页时显隐状态被重置的问题
+- tab 动态增减:左栏按 `taskIds` 循环构建,系统页重扫注册新业务后进入决策页自动出现新 tab(已有机制,本次验证)
+- 移除旧弹窗式业务菜单(showTaskMenu/PopupWindow),顶部改为"当前业务:X · 左侧竖排 tab 切换业务(标题栏 ☰ 显隐)"提示
+- 真机验证:5 业务 tab(ticket/ugc/agent/risk/multi)旋转展示 ✓、☰ 隐藏/恢复 ✓、聊天区随显隐自适应 ✓
+
+### APK UI 国际化第一层(zh 默认 + en)
+
+- 新增 `apk/res/values/strings.xml`(中文默认)+ `res/values-en/strings.xml`;build.sh 接入 aapt2 compile/link + R.java 生成管线
+- 首批接入:应用标题、四个底部 tab、决策页(当前业务提示/输入提示/决策按钮/就绪消息/历史 header/暂无历史)、决策结果格式(分类 header/评分/判定/耗时/是否)、报表提示/暂无数据
+- 报表/网关/系统三页的深层文案(表头/表单/报表文本)尚未抽取,**后续版本完成**
+- 已知限制:APK `targetSdk=28`,HyperOS 上 `cmd locale set-app-locales` 对旧应用不注入运行时 locale(en 资源已确认打入 APK,系统语言为英文时正常回退生效;后续升 targetSdk + `android:localeConfig` 后支持应用内切换)
+
+### 补记:v1.3.0 期间 multi 模型状态更新(10-09 当日已完成)
+
+- multi(torch ckpt 缺失的结论已过时):从 HF `convaiinnovations/laya-multilingual` 经 hf-mirror 补齐 ckpt → `split_negfix` 重导出 → AOT,**bench 54.3ms(5 模型全场最快)**,5/5 模型 NPU 全覆盖
+- multi 已接入 APK(DecisionCore BUILTIN + scanTasks 特例 + 路径映射),真机英文输入决策通过(故障维护 1.87/5,NPU 后端 76ms/问)
+
 ## 2026-10-09 — v1.3.0:NPU 决策全链路打通(NEG 根因修复)+ APK NPU 后端
 
 ### ⚠️ 10-03 NPU 结论勘误(v1.2.0 的 NPU 段落作废)

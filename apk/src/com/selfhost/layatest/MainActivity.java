@@ -18,7 +18,6 @@ import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.FrameLayout;
-import android.widget.PopupWindow;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
@@ -100,7 +99,7 @@ public class MainActivity extends Activity {
       startForegroundService(new Intent(this, com.laya.GatewayService.class));
       com.laya.Gateway.autoStart(this);
     }
-    bot("Laya 业务决策台已就绪。\n" + taskLabels + "\n端侧 LiteRT GPU 推理;报表/邮件/MQTT 网关内置。\n新业务:模型包放 /sdcard/models/laya-litert-<名>/phone/,系统页重扫即加载。");
+    bot(getString(R.string.ready_msg, taskLabels));
     handleIntent(getIntent() != null ? getIntent() : null);
   }
 
@@ -142,7 +141,7 @@ public class MainActivity extends Activity {
     titleBar.setBackgroundColor(0xFFEDEDED);
     FrameLayout titleHolder = new FrameLayout(this);
     TextView title = new TextView(this);
-    title.setText("智能决策业务台");
+    title.setText(getString(R.string.app_title));
     title.setTextSize(17); title.setTypeface(Typeface.DEFAULT_BOLD); title.setGravity(Gravity.CENTER);
     title.setTextColor(0xFF1A1A1A);
     title.setPadding(0, dp(10), 0, dp(10));
@@ -170,7 +169,7 @@ public class MainActivity extends Activity {
     View topDiv = new View(this);
     topDiv.setBackgroundColor(0xFFE5E5E5);
     root.addView(topDiv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)));
-    String[] names = {"决策", "报表", "网关", "系统"};
+    String[] names = {getString(R.string.tab_decision), getString(R.string.tab_report), getString(R.string.tab_gateway), getString(R.string.tab_system)};
     for (int i = 0; i < 4; i++) {
       final int k = i;
       TextView t = new TextView(this);
@@ -253,79 +252,51 @@ public class MainActivity extends Activity {
   }
 
   // ================= ① 决策 =================
-  private TextView taskMenuBtn;
-
-  /** 左侧浮动弹出:业务二级菜单 */
-  private void showTaskMenu(View anchor) {
-    LinearLayout menu = new LinearLayout(this);
-    menu.setOrientation(LinearLayout.VERTICAL);
-    menu.setBackground(pill(Color.WHITE, dp(14)));
-    menu.setPadding(dp(6), dp(6), dp(6), dp(6));
-    for (int i = 0; i < taskIds.size(); i++) {
-      final int k = i;
-      TextView it = new TextView(this);
-      it.setText(taskLabels.get(i)); it.setTextSize(14);
-      it.setPadding(dp(18), dp(12), dp(18), dp(12));
-      it.setOnClickListener(v -> { taskIdx = k; paintChips(); dismissTaskMenu(); loadHistory(taskIds.get(k)); });
-      LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-      lp.leftMargin = dp(2); lp.rightMargin = dp(2);
-      it.setLayoutParams(lp);
-      menu.addView(it);
-    }
-    PopupWindow pw = new PopupWindow(menu, dp(150), LinearLayout.LayoutParams.WRAP_CONTENT, true);
-    pw.setBackgroundDrawable(pill(Color.WHITE, dp(14)));
-    pw.setElevation(dp(6));
-    taskMenuBtn.setTag(pw);
-    pw.showAsDropDown(anchor, 0, dp(4));
-  }
-
-  private void dismissTaskMenu() {
-    if (taskMenuBtn != null && taskMenuBtn.getTag() instanceof PopupWindow) {
-      ((PopupWindow) taskMenuBtn.getTag()).dismiss();
-    }
-  }
+  private TextView curBizLabel;
+  private boolean railHidden = false; // 左栏显隐跨重建保持(网关轮询会触发页面重建)
 
   private void buildDecisionTab() {
-    // 左侧浮动业务菜单按钮
+    // 顶部当前业务提示(业务切换由左侧竖排 tab 完成,标题栏 ☰ 控制左栏显隐,与报表页一致)
     LinearLayout row = new LinearLayout(this);
     row.setPadding(dp(12), dp(8), dp(12), dp(4));
     row.setGravity(Gravity.CENTER_VERTICAL);
-    taskMenuBtn = new TextView(this);
-    taskMenuBtn.setText("☰ " + taskLabels.get(taskIdx));
-    taskMenuBtn.setTextSize(13); taskMenuBtn.setTextColor(Color.WHITE);
-    taskMenuBtn.setPadding(dp(14), dp(8), dp(14), dp(8));
-    taskMenuBtn.setBackground(pill(PRIMARY, dp(18)));
-    taskMenuBtn.setOnClickListener(v -> showTaskMenu(v));
-    row.addView(taskMenuBtn);
-    TextView cur = new TextView(this);
-    cur.setText("当前业务:" + taskLabels.get(taskIdx)); cur.setTextSize(12); cur.setTextColor(0xFF66707E);
-    cur.setPadding(dp(10), 0, 0, 0);
-    row.addView(cur);
+    curBizLabel = new TextView(this);
+    curBizLabel.setTextSize(12); curBizLabel.setTextColor(0xFF66707E);
+    curBizLabel.setPadding(dp(2), 0, 0, 0);
+    row.addView(curBizLabel);
     body.addView(row);
     paintChips();
 
     // 左侧业务 tab 菜单(竖排,可上下滑动):点 chip 切业务并载入该业务历史
     final LinearLayout rail = new LinearLayout(this);
     rail.setOrientation(LinearLayout.VERTICAL);
+    rail.setPadding(dp(2), dp(2), dp(2), dp(2));
     final Button[] bizChips = new Button[taskIds.size()];
     for (int i = 0; i < taskIds.size(); i++) {
       final int k = i;
+      // 英文单词整词旋转 90°(顺时针,自上而下读)
       Button c = new Button(this);
-      c.setText(taskIds.get(i)); c.setAllCaps(false); c.setTextSize(11); // 简化名:业务短 ID(ticket/ugc/...)
+      String name = taskIds.get(i);
+      c.setText(name); c.setAllCaps(false); c.setTextSize(12);
       c.setMinHeight(0); c.setMinimumWidth(0); c.setMinimumHeight(0);
-      c.setPadding(dp(6), dp(8), dp(6), dp(8));
+      c.setPadding(0, dp(10), 0, dp(10)); // 旋转后成为左右内边距
       c.setTextColor(k == taskIdx ? Color.WHITE : 0xFF1A2B4C);
-      c.setBackground(pill(k == taskIdx ? PRIMARY : 0xFFE7EAF2, dp(12)));
-      LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-      clp.bottomMargin = dp(4); c.setLayoutParams(clp);
+      c.setBackground(pill(k == taskIdx ? PRIMARY : 0xFFE7EAF2, dp(10)));
+      int visW = dp(40);                                  // 旋转后视觉宽 = 按钮自身高
+      int visH = (int) c.getPaint().measureText(name) + dp(28); // 旋转后视觉高 = 按钮自身宽
+      c.setRotation(90);
+      FrameLayout slot = new FrameLayout(this);
+      slot.addView(c, new FrameLayout.LayoutParams(visH, visW, Gravity.CENTER));
+      LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(visW, visH);
+      slp.bottomMargin = dp(6);
       c.setOnClickListener(v -> {
         taskIdx = k; paintChips(); loadHistory(taskIds.get(k));
         for (int j = 0; j < bizChips.length; j++) {
           bizChips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
-          bizChips[j].setBackground(pill(j == k ? PRIMARY : 0xFFE7EAF2, dp(12)));
+          bizChips[j].setBackground(pill(j == k ? PRIMARY : 0xFFE7EAF2, dp(10)));
         }
       });
-      bizChips[i] = c; rail.addView(c);
+      bizChips[i] = c; rail.addView(slot, slp);
     }
     final LinearLayout leftCol = new LinearLayout(this);
     leftCol.setOrientation(LinearLayout.VERTICAL);
@@ -336,6 +307,7 @@ public class MainActivity extends Activity {
     LinearLayout.LayoutParams lclp = new LinearLayout.LayoutParams(dp(64), LinearLayout.LayoutParams.MATCH_PARENT);
     lclp.rightMargin = dp(2);
     leftCol.setLayoutParams(lclp);
+    leftCol.setVisibility(railHidden ? View.GONE : View.VISIBLE);
 
     LinearLayout top = new LinearLayout(this);
     top.setOrientation(LinearLayout.HORIZONTAL);
@@ -366,7 +338,7 @@ public class MainActivity extends Activity {
     input.setPadding(dp(14), dp(10), dp(14), dp(10));
     bottom.addView(input, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
     Button send = new Button(this);
-    send.setText("决策"); send.setTextColor(Color.WHITE); send.setAllCaps(false);
+    send.setText(getString(R.string.btn_decide)); send.setTextColor(Color.WHITE); send.setAllCaps(false);
     send.setBackground(pill(PRIMARY, dp(22)));
     LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
     slp.leftMargin = dp(8); send.setLayoutParams(slp);
@@ -374,16 +346,20 @@ public class MainActivity extends Activity {
     bottom.addView(send);
     chatCol.addView(bottom);
     body.addView(top, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
-    loadHistory(taskIds.get(taskIdx));
+    // 标题栏 ☰ 切换本页左栏(与报表页一致);状态记入字段,重建后不丢
+    menuBtn.setOnClickListener(v -> {
+      railHidden = leftCol.getVisibility() != View.GONE;
+      leftCol.setVisibility(railHidden ? View.GONE : View.VISIBLE);
+    });
   }
 
   /** 业务↔日志联动:切换业务时,聊天区载入该业务的历史决策 */
   private void loadHistory(String task) {
     if (msgList == null) return;
     msgList.removeAllViews();
-    bot("「" + taskLabels.get(taskIds.indexOf(task)) + "」历史决策(本机日志,最近 20 条):");
+    bot(getString(R.string.history_header, taskLabels.get(taskIds.indexOf(task))));
     java.util.List<org.json.JSONObject> hs = com.laya.DecisionCore.history(this, task, 20);
-    if (hs.isEmpty()) bot("(暂无历史,输入文本或等网关指令)");
+    if (hs.isEmpty()) bot(getString(R.string.history_empty));
     java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.US);
     for (org.json.JSONObject h : hs) {
       bubble(h.optString("state"), true);
@@ -403,8 +379,8 @@ public class MainActivity extends Activity {
   }
 
   private void paintChips() {
-    if (taskMenuBtn != null) taskMenuBtn.setText("☰ " + taskLabels.get(taskIdx));
-    if (input != null) input.setHint("输入" + taskLabels.get(taskIdx) + "文本");
+    if (curBizLabel != null) curBizLabel.setText(getString(R.string.current_biz_hint, taskLabels.get(taskIdx)));
+    if (input != null) input.setHint(getString(R.string.input_hint, taskLabels.get(taskIdx)));
   }
 
   private void sendDecision(String raw) {
@@ -430,17 +406,17 @@ public class MainActivity extends Activity {
   }
 
   private String fmtAnswers(String task, org.json.JSONObject decoded, int ms) {
-    StringBuilder sb = new StringBuilder("== ").append(taskLabels.get(taskIds.indexOf(task))).append(" 决策结果 ==\n");
+    StringBuilder sb = new StringBuilder(getString(R.string.decision_result_header, taskLabels.get(taskIds.indexOf(task)))).append("\n");
     java.util.Iterator<String> it = decoded.keys();
     while (it.hasNext()) {
       org.json.JSONObject a = decoded.optJSONObject(it.next());
       if (a == null) continue;
       String type = a.optString("type");
       if ("choice".equals(type)) sb.append("• ").append(a.optString("choice")).append("\n");
-      else if ("score".equals(type)) sb.append("• 评分: ").append(String.format("%.2f", a.optDouble("score"))).append("/5\n");
-      else if ("noul".equals(type)) sb.append("• 判定: ").append(a.optDouble("noul") >= 0.5 ? "是" : "否").append("\n");
+      else if ("score".equals(type)) sb.append("• ").append(getString(R.string.label_score)).append(": ").append(String.format("%.2f", a.optDouble("score"))).append("/5\n");
+      else if ("noul".equals(type)) sb.append("• ").append(getString(R.string.label_verdict)).append(": ").append(a.optDouble("noul") >= 0.5 ? getString(R.string.yes) : getString(R.string.no)).append("\n");
     }
-    sb.append("\n耗时: ").append(ms).append("ms");
+    sb.append("\n").append(getString(R.string.label_latency)).append(": ").append(ms).append("ms");
     return sb.toString();
   }
 
@@ -461,7 +437,7 @@ public class MainActivity extends Activity {
     l.setOrientation(LinearLayout.VERTICAL);
     l.setPadding(dp(12), dp(8), dp(12), dp(8));
     TextView cur = new TextView(this);
-    cur.setText("报表来自本机决策日志,左侧 tab 切换"); cur.setTextSize(12); cur.setTextColor(0xFF66707E);
+    cur.setText(getString(R.string.report_hint)); cur.setTextSize(12); cur.setTextColor(0xFF66707E);
     cur.setPadding(dp(2), 0, 0, 0);
     l.addView(cur);
 
@@ -792,7 +768,7 @@ public class MainActivity extends Activity {
           if (fin.isEmpty()) {
             reportList.removeAllViews();
             TextView empty = new TextView(act);
-            empty.setText("(暂无决策数据)"); empty.setTextSize(12); empty.setTextColor(0xFF66707E);
+            empty.setText(getString(R.string.no_data)); empty.setTextSize(12); empty.setTextColor(0xFF66707E);
             reportList.addView(empty);
           } else {
             String[] heads2 = new String[heads.length];
