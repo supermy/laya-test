@@ -1122,7 +1122,7 @@ public class MainActivity extends Activity {
     LinearLayout sh = new LinearLayout(this);
     sh.setOrientation(LinearLayout.HORIZONTAL);
     sh.setGravity(Gravity.CENTER_VERTICAL);
-    TextView sht = hint("业务数据流(泳道):三条通道由 DecisionCore 串行化");
+    TextView sht = hint("业务泳道图:三条通道由 DecisionCore 串行化(NPU ~0.23s/3问)");
     sht.setPadding(0, 0, 0, 0);
     LinearLayout.LayoutParams shlp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
     sht.setLayoutParams(shlp);
@@ -1158,7 +1158,7 @@ public class MainActivity extends Activity {
     p2.addView(hint("业务流程:决策完成 → 本端自动处理 / LLM 进一步处理(重要+紧急)→ 日志回流 → 微调闭环(与 README fig4 同构)"));
     p2.addView(new DiagramView(this, 3));
 
-    String[] subNames = {"系统", "架构图", "流程图", "数据流"};
+    String[] subNames = {"系统", "架构图", "流程图", "泳道图"};
     String[] subVert = {"系\n统", "架\n构\n图", "流\n程\n图", "数\n据\n流"}; // 竖排文字
     LinearLayout[] subPanels = {l, p1, p2, p3};
     final ScrollView[] subScrolls = new ScrollView[4];

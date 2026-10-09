@@ -24,13 +24,13 @@ public class DiagramView extends View {
   private static final int PURPLE_BG = 0xFFF5F0FF;
 
   // ---- 泳道图数据(5 泳道,LLM 决策后处理独立泳道) ----
-  private static final String[] LANES = {"发起方", "网关(app)", "DecisionCore", "LiteRT GPU", "LLM 后处理"};
+  private static final String[] LANES = {"发起方", "网关(app)", "DecisionCore", "runner 独立进程", "LLM 后处理"};
   private static final int[] LANE_BG = {0xFFEAF1FF, 0xFFE9F7EE, 0xFFFFF3E0, 0xFFF5F0FF, 0xFFFAE8F0};
   /** 每条流 = 依序的步骤(lane, 标题, 副行);行5 为日志→报表。竖向=横向布局放大行距 */
   private static final Object[][][] FLOWS = {
-    { {0, "输入文本", null}, {2, "三问编排", "choice/score/noul"}, {3, "GPU 3问", "~0.45s 端到端"} },
-    { {0, "指令邮件", "laya+业务+文本"}, {1, "IMAP 取件", "取件→转发决策→SMTP回复"}, {2, "三问编排", null}, {3, "GPU 3问", null} },
-    { {0, "laya/req", "{task,text}"}, {1, "MQTT 网关", "publish laya/resp"}, {2, "三问编排", null}, {3, "GPU 3问", null} },
+    { {0, "输入文本", null}, {2, "三问编排", "choice/score/noul"}, {3, "NPU 3问", "~0.23s 端到端"} },
+    { {0, "指令邮件", "laya+业务+文本"}, {1, "IMAP 取件", "取件→转发决策→SMTP回复"}, {2, "三问编排", null}, {3, "NPU 3问", null} },
+    { {0, "laya/req", "{task,text}"}, {1, "MQTT 网关", "publish laya/resp"}, {2, "三问编排", null}, {3, "NPU 3问", null} },
     { {2, "决策分流", "高/中/低·39.1% 升级"}, {4, "重要+紧急", "决策后进一步处理"} },
     { {2, "决策日志", "JSONL"}, {1, "日报/月报/年报+详单", "邮件推送/页面下钻"} },
   };
@@ -138,11 +138,12 @@ public class DiagramView extends View {
     arrow(c, 180, 226, 180, 244, null);
     box(c, 10, 246, 340, 68, "决策核心 DecisionCore(分流)", new String[]{"单引擎 · 三问编排 · 决策日志 JSONL", "常规问题 → 决策后本端自动处理 60.9%", "重要+紧急 → 决策后交 LLM 进一步处理"}, GREEN_BG);
     arrow(c, 180, 314, 180, 332, null);
-    box(c, 10, 334, 340, 68, "推理层 引擎自动降级(装机探测)", new String[]{
-        "NPU:高通SoC+QNN 库才启用(HTP 进程内)",
-        "GPU:runner 独立进程 → JNI C API(OpenCL)",
-        "CPU 兜底 · 天玑9500 APU 走 vendor 通道(litertlm 类)"}, ORANGE_BG);
-    box(c, 10, 420, 162, 54, "模型三件套", new String[]{"wfp16 主图", "act头+词表+校准"}, PURPLE_BG);
+    box(c, 10, 334, 340, 68, "推理层 引擎链自动降级(SoC 探测)", new String[]{
+        "NPU:MTK 天玑9500 SoC 探测 → dispatch runner(MDLA)",
+        "NPU split:主图 54-59ms/问 + scorer 头 C 实现 <1ms",
+        "GPU 兜底:runner 独立进程 → JNI C API(OpenCL)~150ms",
+        "CPU 兜底:ORT int8;引擎链 NPU→GPU→CPU 逐级"}, ORANGE_BG);
+    box(c, 10, 420, 162, 54, "模型三件套", new String[]{"wfp16 主图 + NPU dispatch", "scorer bin+act头+词表+校准"}, PURPLE_BG);
     box(c, 188, 420, 162, 54, "输出/存储", new String[]{"UI · SMTP · MQTT resp", "JSONL → 报表"}, PURPLE_BG);
     arrow(c, 120, 402, 91, 420, "加载");
     arrow(c, 240, 402, 269, 420, "写日志");
@@ -158,7 +159,7 @@ public class DiagramView extends View {
     c.drawColor(Color.WHITE);
     box(c, 105, 10, 150, 44, "业务输入", new String[]{"工单/短信/UGC/风控"}, BLUE_BG);
     arrow(c, 180, 54, 180, 72, null);
-    box(c, 70, 74, 220, 68, "Laya 决策(单次前向 ~0.17s)", new String[]{"department / urgency / intent", "微调后 choice acc 67.4%"}, BLUE_BG);
+    box(c, 70, 74, 220, 68, "Laya 决策(三问逐次前向)", new String[]{"NPU ~0.08s/问 · GPU ~0.15s/问", "微调后 choice acc 67.4%"}, BLUE_BG);
     arrow(c, 140, 142, 90, 162, null);
     arrow(c, 220, 142, 270, 162, null);
     box(c, 10, 164, 160, 68, "本端自动处理 60.9%", new String[]{"决策后:常规 → 模板回复", "智能路由 · 判别即拦截", "~0.2s · <1J/单"}, GREEN_BG);
@@ -167,7 +168,7 @@ public class DiagramView extends View {
     arrow(c, 270, 232, 220, 252, null);
     box(c, 70, 254, 220, 48, "处理结果 + 决策日志", new String[]{"数据回流:质量标注→训练语料"}, 0xFFF7F8FA);
     arrow(c, 180, 302, 180, 320, null);
-    box(c, 10, 322, 340, 60, "新业务微调闭环(finetune/ 四脚本)", new String[]{"prepare→RLCD→evaluate→export", "新业务冷启动:合成数据先行"}, BLUE_BG);
+    box(c, 10, 322, 340, 60, "新业务上线流水线(finetune/ + litert-conv)", new String[]{"prepare→RLCD→evaluate→split_negfix", "GPU wfp16 / NPU dispatch+scorer 双格式"}, BLUE_BG);
     // 微调 → 决策模型 回路(右侧上行)
     Paint loop = new Paint(Paint.ANTI_ALIAS_FLAG);
     loop.setColor(0xFF2A9D8F);
