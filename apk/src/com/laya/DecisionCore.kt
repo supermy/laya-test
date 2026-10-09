@@ -327,6 +327,8 @@ object DecisionCore {
     }
     val ms = (System.nanoTime() - t0) / 1_000_000
     appendLog(ctx, task, text, answers, ms)
+    // 决策分流:等级"高"(重要+紧急)→ 决策后升级,异步拉 LLM 生成处理建议(独立 llm 日志行,不阻塞本次决策)
+    llmFollowUp(ctx, task, text, answers)
     return Result(answers, ms)
   }
 
@@ -350,7 +352,56 @@ object DecisionCore {
     } catch (_: Exception) {}
   }
 
-  /** 某业务的历史决策(当前月日志,按时间正序,最多 limit 条) */
+  /**
+   * 决策后 LLM 升级通道:等级"高"(重要+紧急)且配置了 LLM 槽位时,
+   * 异步调 OpenAI 兼容 /chat/completions 生成处理建议,追加独立日志行 {"type":"llm",...}。
+   * 不阻塞本次决策返回;LLM 失败只记 error 字段,不影响决策主流程。
+   */
+  private fun llmFollowUp(ctx: Context, task: String, text: String, answers: JSONObject) {
+    try {
+      if (levelOf(JSONObject().put("decoded", answers)).optString("level") != "高") return
+      val slot = Gateway.llmActive(ctx) ?: return
+      val base = slot.optString("baseURL").trim().trimEnd('/')
+      val model = slot.optString("model").trim()
+      if (base.isEmpty() || model.isEmpty()) return
+      Thread {
+        val out = JSONObject()
+        var err: String? = null
+        val t0 = System.currentTimeMillis()
+        try {
+          val prompt = "业务「$task」决策模型输出:\n${fmt(task, answers)}\n\n原始输入:${text.take(400)}\n\n" +
+              "该单已被分流为重要+紧急,升级到 LLM 做决策后处理。请给出:1) 风险/影响判断 2) 建议处理动作 3) 是否需人工介入。中文,200 字内。"
+          val c = (java.net.URL(base + "/chat/completions").openConnection() as java.net.HttpURLConnection)
+          c.requestMethod = "POST"; c.connectTimeout = 8000; c.readTimeout = 240_000
+          c.doOutput = true; c.setRequestProperty("Content-Type", "application/json")
+          val key = slot.optString("apiKey")
+          if (key.isNotEmpty()) c.setRequestProperty("Authorization", "Bearer $key")
+          c.outputStream.use { os ->
+            os.write(JSONObject().put("model", model).put("max_tokens", 700)
+              .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
+              .toString().toByteArray())
+          }
+          val code = c.responseCode
+          val body = (if (code < 400) c.inputStream else c.errorStream).readBytes().toString(Charsets.UTF_8)
+          check(code < 400) { "HTTP $code: ${body.take(150)}" }
+          val msg = JSONObject(body).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")
+          var content = msg?.optString("content")?.trim() ?: ""
+          if (content.isEmpty()) content = msg?.optString("reasoning_content")?.trim() ?: "" // 思考型模型正文兜底
+          out.put("model", model).put("content", content)
+        } catch (t: Throwable) {
+          err = (t.message ?: t.toString()).take(200)
+        }
+        try {
+          val o = JSONObject().put("ts", System.currentTimeMillis()).put("type", "llm").put("task", task)
+            .put("latencyMs", System.currentTimeMillis() - t0)
+          if (err != null) o.put("error", err) else o.put("llm", out)
+          java.io.FileOutputStream(logFile(ctx), true).use { it.write((o.toString() + "\n").toByteArray()) }
+        } catch (_: Exception) {}
+      }.apply { isDaemon = true; name = "LlmFollowUp"; start() }
+    } catch (_: Throwable) {}
+  }
+
+  /** 某业务的历史决策(当前月日志,按时间正序,最多 limit 条;type=llm 行跳过) */
   @JvmStatic
   fun history(ctx: Context, task: String, limit: Int = 30): List<JSONObject> {
     val out = ArrayList<JSONObject>()
@@ -358,7 +409,7 @@ object DecisionCore {
     if (!f.isFile) return out
     for (line in java.nio.file.Files.readAllBytes(f.toPath()).toString(Charsets.UTF_8).split("\n")) {
       if (line.isBlank()) continue
-      try { val o = JSONObject(line); if (o.optString("task") == task) out.add(o) } catch (_: Exception) {}
+      try { val o = JSONObject(line); if (o.optString("type") == "llm") continue; if (o.optString("task") == task) out.add(o) } catch (_: Exception) {}
     }
     return if (out.size > limit) out.subList(out.size - limit, out.size) else out
   }
@@ -374,11 +425,12 @@ object DecisionCore {
         try { all.add(JSONObject(line)) } catch (_: Exception) {}
       }
     }
-    val pages = Math.max(1, Math.ceil(all.size / pageSize.toDouble()).toInt())
+    val all2 = all.filter { it.optString("type") != "llm" }
+    val pages = Math.max(1, Math.ceil(all2.size / pageSize.toDouble()).toInt())
     val p = page.coerceIn(0, pages - 1)
-    val slice = all.drop(p * pageSize).take(pageSize)
+    val slice = all2.drop(p * pageSize).take(pageSize)
     val df = SimpleDateFormat("MM-dd HH:mm:ss", Locale.US)
-    val sb = StringBuilder("== 详单(共 ").append(all.size).append(" 条 · 第 ").append(p + 1).append("/").append(pages).append(" 页)==\n\n")
+    val sb = StringBuilder("== 详单(共 ").append(all2.size).append(" 条 · 第 ").append(p + 1).append("/").append(pages).append(" 页)==\n\n")
     if (slice.isEmpty()) sb.append("(本页无数据)\n")
     for (e in slice) {
       val st = e.optString("state")
@@ -529,7 +581,7 @@ object DecisionCore {
       if (line.isBlank()) continue
       try { out.add(JSONObject(line)) } catch (_: Exception) {}
     }
-    return out
+    return out.filter { it.optString("type") != "llm" }
   }
 
   /** 聚合行:date × task × level → {count, avgLatency};rangeDays ≤0 表示全部 */
