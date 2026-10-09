@@ -1085,6 +1085,29 @@ public class MainActivity extends Activity {
     return b >= 1048576L ? (b / 1048576L) + "MB" : (b / 1024L) + "KB";
   }
 
+  /** 目录内全部文件打包为 zip(文件位于 zip 根,importPackage 可直接校验导入);ZIP 根含 label.txt 等附加文件也一并带上 */
+  private static void zipDir(File dir, File dst) throws Exception {
+    File[] files = dir.listFiles();
+    if (files == null || files.length == 0) throw new IllegalStateException("源包为空或不存在: " + dir);
+    java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(
+        new java.io.BufferedOutputStream(new FileOutputStream(dst)));
+    zos.setLevel(java.util.zip.Deflater.BEST_SPEED); // 650MB 级模型包,速度优先
+    try {
+      byte[] buf = new byte[256 * 1024];
+      for (File f : files) {
+        if (!f.isFile()) continue;
+        zos.putNextEntry(new java.util.zip.ZipEntry(f.getName()));
+        try (InputStream in = new FileInputStream(f)) {
+          int n;
+          while ((n = in.read(buf)) > 0) zos.write(buf, 0, n);
+        }
+        zos.closeEntry();
+      }
+    } finally {
+      zos.close();
+    }
+  }
+
   private String modelDetail(String task) {
     File src = srcDir(task);
     File inst = new File(getFilesDir(), "laya-" + task);
@@ -1214,22 +1237,29 @@ public class MainActivity extends Activity {
       });
       card.addView(toggle);
 
-      // 模型详情(展开/收起)+ 删除业务
+      // 模型详情(展开/收起)+ 导出 zip + 删除业务
       LinearLayout row2 = new LinearLayout(this);
       row2.setOrientation(LinearLayout.HORIZONTAL);
       Button detailBtn = new Button(this);
       detailBtn.setText("模型详情"); detailBtn.setAllCaps(false); detailBtn.setTextSize(12);
       detailBtn.setTextColor(0xFF444A55); detailBtn.setBackground(pill(CHIP_OFF, dp(14)));
-      detailBtn.setPadding(dp(8), dp(6), dp(8), dp(6));
+      detailBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
+      Button expBtn = new Button(this);
+      expBtn.setText("导出 zip"); expBtn.setAllCaps(false); expBtn.setTextSize(12);
+      expBtn.setTextColor(0xFF444A55); expBtn.setBackground(pill(CHIP_OFF, dp(14)));
+      expBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
       Button delBtn = new Button(this);
       delBtn.setText("删除业务"); delBtn.setAllCaps(false); delBtn.setTextSize(12);
       delBtn.setTextColor(0xFFB3261E); delBtn.setBackground(pill(0xFFFCEAEA, dp(14)));
-      delBtn.setPadding(dp(8), dp(6), dp(8), dp(6));
-      LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-      half.rightMargin = dp(6);
-      detailBtn.setLayoutParams(half);
+      delBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
+      LinearLayout.LayoutParams half1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+      half1.rightMargin = dp(6);
+      detailBtn.setLayoutParams(half1);
+      LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+      half2.rightMargin = dp(6);
+      expBtn.setLayoutParams(half2);
       delBtn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-      row2.addView(detailBtn); row2.addView(delBtn);
+      row2.addView(detailBtn); row2.addView(expBtn); row2.addView(delBtn);
       row2.setPadding(0, dp(6), 0, 0);
       card.addView(row2);
 
@@ -1245,6 +1275,31 @@ public class MainActivity extends Activity {
       card.addView(detail);
       detailBtn.setOnClickListener(v ->
           detail.setVisibility(detail.getVisibility() == View.GONE ? View.VISIBLE : View.GONE));
+
+      expBtn.setOnClickListener(v -> {
+        final File dst = new File("/sdcard/Download", "laya-litert-" + task + ".zip");
+        expBtn.setText("打包中…"); expBtn.setEnabled(false);
+        new Thread(() -> {
+          String err = null;
+          try {
+            dst.getParentFile().mkdirs();
+            zipDir(srcDir(task), dst);
+          } catch (Throwable e) {
+            err = e.getMessage() != null ? e.getMessage() : e.toString();
+            dst.delete();
+          }
+          final String ferr = err;
+          runOnUiThread(() -> {
+            expBtn.setText("导出 zip"); expBtn.setEnabled(true);
+            if (ferr == null)
+              new AlertDialog.Builder(this).setTitle("导出完成")
+                  .setMessage(dst.getAbsolutePath() + "\n大小 " + human(dst.length()) + "\n可在系统页「上传并注册」重新导入,或传到其他设备")
+                  .setPositiveButton("好", null).show();
+            else
+              new AlertDialog.Builder(this).setTitle("导出失败").setMessage(ferr).setPositiveButton("好", null).show();
+          });
+        }).start();
+      });
 
       delBtn.setOnClickListener(v -> {
         String srcPath = srcDir(task).getAbsolutePath();
