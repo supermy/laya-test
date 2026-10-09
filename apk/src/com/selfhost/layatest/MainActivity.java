@@ -304,12 +304,54 @@ public class MainActivity extends Activity {
     body.addView(row);
     paintChips();
 
+    // 左侧业务 tab 菜单(竖排,可上下滑动):点 chip 切业务并载入该业务历史
+    final LinearLayout rail = new LinearLayout(this);
+    rail.setOrientation(LinearLayout.VERTICAL);
+    final Button[] bizChips = new Button[taskIds.size()];
+    for (int i = 0; i < taskIds.size(); i++) {
+      final int k = i;
+      Button c = new Button(this);
+      c.setText(taskIds.get(i)); c.setAllCaps(false); c.setTextSize(11); // 简化名:业务短 ID(ticket/ugc/...)
+      c.setMinHeight(0); c.setMinimumWidth(0); c.setMinimumHeight(0);
+      c.setPadding(dp(6), dp(8), dp(6), dp(8));
+      c.setTextColor(k == taskIdx ? Color.WHITE : 0xFF1A2B4C);
+      c.setBackground(pill(k == taskIdx ? PRIMARY : 0xFFE7EAF2, dp(12)));
+      LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+      clp.bottomMargin = dp(4); c.setLayoutParams(clp);
+      c.setOnClickListener(v -> {
+        taskIdx = k; paintChips(); loadHistory(taskIds.get(k));
+        for (int j = 0; j < bizChips.length; j++) {
+          bizChips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
+          bizChips[j].setBackground(pill(j == k ? PRIMARY : 0xFFE7EAF2, dp(12)));
+        }
+      });
+      bizChips[i] = c; rail.addView(c);
+    }
+    final LinearLayout leftCol = new LinearLayout(this);
+    leftCol.setOrientation(LinearLayout.VERTICAL);
+    leftCol.setPadding(dp(4), dp(4), dp(0), dp(0));
+    ScrollView railScroll = new ScrollView(this);
+    railScroll.addView(rail); // 业务 tab 菜单可上下滑动
+    leftCol.addView(railScroll);
+    LinearLayout.LayoutParams lclp = new LinearLayout.LayoutParams(dp(64), LinearLayout.LayoutParams.MATCH_PARENT);
+    lclp.rightMargin = dp(2);
+    leftCol.setLayoutParams(lclp);
+
+    LinearLayout top = new LinearLayout(this);
+    top.setOrientation(LinearLayout.HORIZONTAL);
+    top.addView(leftCol);
+
+    LinearLayout chatCol = new LinearLayout(this);
+    chatCol.setOrientation(LinearLayout.VERTICAL);
+    chatCol.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+    top.addView(chatCol);
+
     msgList = new LinearLayout(this);
     msgList.setOrientation(LinearLayout.VERTICAL);
     msgList.setPadding(dp(12), dp(6), dp(12), dp(6));
     scroller = new ScrollView(this);
     scroller.addView(msgList);
-    body.addView(scroller, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+    chatCol.addView(scroller, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
     loadHistory(taskIds.get(taskIdx));
 
 
@@ -330,7 +372,8 @@ public class MainActivity extends Activity {
     slp.leftMargin = dp(8); send.setLayoutParams(slp);
     send.setOnClickListener(v -> sendDecision(input.getText().toString()));
     bottom.addView(send);
-    body.addView(bottom);
+    chatCol.addView(bottom);
+    body.addView(top, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
     loadHistory(taskIds.get(taskIdx));
   }
 
@@ -519,7 +562,9 @@ public class MainActivity extends Activity {
     final LinearLayout leftCol = new LinearLayout(this);
     leftCol.setOrientation(LinearLayout.VERTICAL);
     leftCol.setPadding(dp(4), dp(4), dp(0), dp(0));
-    leftCol.addView(rail);
+    ScrollView railScroll = new ScrollView(this);
+    railScroll.addView(rail); // 左侧 tab 菜单可上下滑动(小屏防截断)
+    leftCol.addView(railScroll);
     LinearLayout.LayoutParams lclp = new LinearLayout.LayoutParams(dp(40), LinearLayout.LayoutParams.MATCH_PARENT);
     lclp.rightMargin = dp(2);
     leftCol.setLayoutParams(lclp);
@@ -1462,7 +1507,9 @@ public class MainActivity extends Activity {
     final LinearLayout leftCol = new LinearLayout(this);
     leftCol.setOrientation(LinearLayout.VERTICAL);
     leftCol.setPadding(dp(4), dp(4), dp(0), dp(0));
-    leftCol.addView(rail);
+    ScrollView railScroll = new ScrollView(this);
+    railScroll.addView(rail); // 左侧 tab 菜单可上下滑动(小屏防截断)
+    leftCol.addView(railScroll);
     LinearLayout.LayoutParams lclp = new LinearLayout.LayoutParams(dp(40), LinearLayout.LayoutParams.MATCH_PARENT);
     lclp.rightMargin = dp(2);
     leftCol.setLayoutParams(lclp);

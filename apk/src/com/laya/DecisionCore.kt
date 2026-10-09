@@ -455,6 +455,8 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
     val slice = all2.drop(p * pageSize).take(pageSize)
     val df = SimpleDateFormat("MM-dd HH:mm:ss", Locale.US)
     val rows = JSONArray()
+    // llm 升级行按业务分组,匹配决策行之后 10 分钟内的首条(type=llm)
+    val llmByTask = all.filter { it.optString("type") == "llm" }.groupBy { it.optString("task") }
     for (e in slice) {
       val st = e.optString("state")
       val parts = ArrayList<String>()
@@ -473,6 +475,17 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
           }
         }
       }
+      var llmTxt = ""
+      val cands = llmByTask[e.optString("task")]
+      if (cands != null) for (l in cands) {
+        if (l.optLong("ts") >= e.optLong("ts") && l.optLong("ts") - e.optLong("ts") < 600_000L) {
+          val lo = l.optJSONObject("llm")
+          llmTxt = if (lo != null) lo.optString("content") else "失败: " + l.optString("error")
+          break
+        }
+      }
+      val content = st.let { if (it.length > 60) it.substring(0, 60) + "…" else it } +
+        if (llmTxt.isEmpty()) "" else "\n🤖 " + (if (llmTxt.length > 100) llmTxt.substring(0, 100) + "…" else llmTxt)
       rows.put(JSONObject()
         .put("time", df.format(Date(e.optLong("ts"))))
         .put("task", e.optString("task"))
@@ -482,7 +495,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
         .put("level", levelOf(e).optString("level"))
         .put("latencyMs", e.optLong("latencyMs"))
         .put("summary", parts.joinToString(" | "))
-        .put("state", if (st.length > 60) st.substring(0, 60) + "…" else st))
+        .put("state", content))
     }
     val o = JSONObject()
     o.put("rows", rows)
@@ -501,7 +514,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
         try { all.add(JSONObject(line)) } catch (_: Exception) {}
       }
     }
-    val df = if (kind == 2) SimpleDateFormat("yyyy", Locale.US) else SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val df = when (kind) { 2 -> SimpleDateFormat("yyyy", Locale.US); 1 -> SimpleDateFormat("yyyy-MM", Locale.US); else -> SimpleDateFormat("yyyy-MM-dd", Locale.US) }
     val buckets = LinkedHashMap<String, MutableList<JSONObject>>()
     for (e in all) {
       val c = Calendar.getInstance().apply {
@@ -568,7 +581,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
       }
     }
     val names = arrayOf("日报", "月报", "年报", "详单")
-    val df = if (kind == 2) SimpleDateFormat("yyyy", Locale.US) else SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val df = when (kind) { 2 -> SimpleDateFormat("yyyy", Locale.US); 1 -> SimpleDateFormat("yyyy-MM", Locale.US); else -> SimpleDateFormat("yyyy-MM-dd", Locale.US) }
     val buckets = LinkedHashMap<String, MutableList<JSONObject>>()
     for (e in all) {
       val c = Calendar.getInstance().apply {
