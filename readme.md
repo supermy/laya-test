@@ -8,21 +8,25 @@
 应用(Node/HTTP 客户端 / Android APK)
   │  tokenize + 拼序列(@huggingface/tokenizers + sequence.js,~2ms)
   ▼
-TCP 127.0.0.1(GPU)/ Unix socket(长度前缀分帧协议,两端同款)
+TCP 127.0.0.1 / Unix socket(长度前缀分帧协议,两端同款)
   ▼
-┌─ LiteRT 路径(默认,推荐)────────────────────────────┐
-│ litert-runner(C 守护进程,须在 adb shell 域运行)     │
-│   └─ LiteRT 2.2.0 GPU delegate(fp32,Mali 天玑9500)  │
-│      ~150ms/问(异步提交+回读同步)+ act 头(CPU)       │
-├─ NPU AOT 路径(最快)─────────────────────────────────┤
-│ PC 上 MTK 编译插件 aot_compile → dispatch tflite      │
-│   └─ litert-bench npu 模式:NPU|CPU,~57ms/问          │
+┌─ LiteRT NPU 路径(最快,5/5 模型)─────────────────────┐
+│ litert-runner(LAYA_BACKEND=npu,app 域可直接跑)        │
+│   ├─ 主图:AOT dispatch(MT6993 MDLA)54-59ms/问        │
+│   │  split 架构:NEG=-1e4 fp16 修复,输出 hidden states │
+│   └─ scorer 头 C 实现(LN→FC→GELU→FC,<1ms)             │
+├─ LiteRT GPU 路径(兜底)───────────────────────────────┤
+│ litert-runner + GPU delegate(fp16,Mali 天玑9500)      │
+│   ~150ms/问(异步提交+回读同步)+ act 头(CPU)           │
+├─ onnxruntime 路径(CPU 兜底)──────────────────────────┤
+│ runner(C 守护进程)→ onnxruntime 1.23 int8 量化模型    │
 └───────────────────────────────────────────────────────┘
-┌─ onnxruntime 路径 ────────────────────────────────────┐
-│ runner(C 守护进程)                                    │
-│   └─ 原生 onnxruntime 1.23(MLAS)→ int8 量化模型      │
-└───────────────────────────────────────────────────────┘
+APK 内:引擎链按 SoC 自动选 NPU → GPU → CPU 逐级兜底
 ```
+
+- 三条路径**协议完全同款**,客户端(`laya-native.mjs`)零改动复用;JS 侧负责 tokenize/查表/温度校准/解码
+- 模型在 `/sdcard/models/`,全程无 Python 依赖
+- 单张工单(3 问)端到端:LiteRT **NPU ~0.23s** / GPU ~0.45s / multi int8 ORT ~1.2s
 
 - 两条路径**协议完全同款**,客户端(`laya-native.mjs`)零改动复用;JS 侧负责 tokenize/查表/温度校准/解码
 - 模型在 `/sdcard/models/`,全程无 Python 依赖
@@ -34,21 +38,39 @@ TCP 127.0.0.1(GPU)/ Unix socket(长度前缀分帧协议,两端同款)
 
 ![业务流程图](figs/fig4_flow.png)
 
+![决策请求泳道图](figs/fig5_swimlane.png)
+
 ## 模型
 
 | 模型 | 大小 | 语言 | 强项 | 切换 |
 |---|---|---|---|---|
-| **litert**(GPU,推荐) | 251MB wfp16 tflite + 393MB embedding 表 | 100+ 语言(mmBERT) | 官方 LiteRT 转换,GPU,概率带官方温度校准 | `loadLitert()` |
+| **litert**(NPU/GPU,推荐) | 251MB wfp16 tflite + 393MB embedding 表(NPU 版另含 251MB dispatch + 2.4MB scorer) | 100+ 语言(mmBERT) | 官方 LiteRT 转换,MTK 天玑 9500 上 NPU ~57ms/问 / GPU ~150ms/问,概率带官方温度校准 | `loadLitert()` |
 | **multi**(ORT 默认) | 326MB int8 | 100+ 语言 | 中文/德文置信度高,sales/other recall 好 | 默认 |
 | en | 606MB int8 + 606MB data | 英文训练 | billing/technical recall 好,urgency 有官方温度校准 | `LAYA_MODEL=en laya serve` |
 | **sms**(微调) | int8 | 中文 | 垃圾短信/骚扰判别(80 万条真实短信微调) | `LAYA_MODEL=sms laya serve` |
 | ticket / ugc / agent / risk / stock(微调) | int8 | 中文 | 四+一业务微调模型,`/sdcard/models/laya-*-int8/` | service 自动发现 |
 
-LiteRT 模型集(litert-community/Laya-Multilingual-LiteRT,sha256 已验)放 `/sdcard/models/laya-litert/`;微调业务 LiteRT 版放 `/sdcard/models/laya-litert-{task}/`(5060 上自研转换链产出,精度=ckpt)。
+LiteRT 模型集(litert-community/Laya-Multilingual-LiteRT,sha256 已验)放 `/sdcard/models/laya-litert/`;微调业务 LiteRT 版放 `/sdcard/models/laya-litert-{task}/`(5060 上自研转换链产出,精度=ckpt)。NPU 部署(2026-10-09 起 5/5 模型):各业务 `phone/` 目录含 `laya_ml_s256_embeds_npu.tflite`(AOT dispatch)+ `laya_ml_scorer.bin`(拆图 scorer 权重),multi 在无后缀的 `laya-litert/phone/`。
 
 ## 微调(云端 GPU)
 
 `finetune/` 四脚本:`prepare_data.py`(数据切分)→ `train_sms.py`(RLCD,`--task` 任务化)→ `evaluate.py`(choice acc/F1 + noul P/R/F1/ECE)→ `export_onnx.py`(fp32+int8,签名与现网对齐)。训练在 5060 PC(RTX 5060 Ti),详见 `finetune/parity-report.md` 与 `examples_guide.md`。注意:int8 导出会使 noul 温度校准失效(ECE 0.03→0.23-0.30),概率阈值部署前须手机端重校准;LiteRT fp32/wfp16 路径无此问题。
+
+**新业务上线流水线**(微调 → GPU/NPU 双格式适配):
+
+```mermaid
+flowchart TD
+    A[新业务输入<br/>领域数据 + 标注] --> B[微调决策引擎<br/>multi 基座 ckpt<br/>train_sms.py → laya-biz-ft]
+    B --> C[导出转换<br/>split_negfix.py<br/>NEG=-1e4 fp16 修复 + scorer 拆图]
+    C --> D1[GPU 适配<br/>wfp16 tflite<br/>~150ms/问]
+    C --> D2[NPU 适配<br/>AOT aot_compile MT6993<br/>→ dispatch 模型 + scorer bin<br/>~57ms/问]
+    D1 --> E[部署 laya-litert-biz/phone/]
+    D2 --> E
+    E --> F[APK 引擎链<br/>NPU → GPU → CPU 逐级兜底]
+    F --> G[三问决策<br/>choice / score / noul<br/>低置信度 → 升级 LLM]
+```
+
+要点:微调只产出 torch ckpt(encoder+head+scorer 权重),是 GPU/NPU 两条线的共同源头;NPU 必须走 `split_negfix.py`(掩码常量焊死在成品图里改不了)+ PC 端 AOT 编译,产物为 dispatch 主图 + scorer bin;运行期由 APK 引擎链按 SoC 探测自动选择,业务代码无感知。
 
 ## 快速开始
 
@@ -105,8 +127,8 @@ node sms-e2e-test.mjs           # SMS 判别管路测试(multi 模型+覆盖问�
 
 | 文件/目录 | 说明 |
 |---|---|
-| `litert-runner.c` | LiteRT 版 C 守护进程(GPU 主图 + CPU act 头,TCP/unix/abstract socket) |
-| `laya-litert.mjs` | LiteRT 客户端:adb shell 域拉起 daemon + `loadLitert()` / `stopLitert()` |
+| `litert-runner.c` | LiteRT 版 C 守护进程(NPU split 主图+scorer C 实现 / GPU 主图 + CPU act 头,TCP/unix/abstract socket;`LITERT_DISP_DIR`/`LAYA_SCORER` 可配) |
+| `laya-litert.mjs` | LiteRT 客户端:adb shell 域或本地 spawn(`LAYA_RUNNER_LOCAL=1`)拉起 daemon + `loadLitert()` / `stopLitert()` |
 | `e2e-litert.mjs` / `parity.mjs` | GPU 链路 E2E / 与 ONNX 路径语义对齐 |
 | `litert-bench.c` | LiteRT 基准(GPU/NPU 旋钮 + 输出一致性校验;计时含回读同步) |
 | `runner.c` / `runner` | C 常驻推理守护进程(ORT C API) |
@@ -114,8 +136,8 @@ node sms-e2e-test.mjs           # SMS 判别管路测试(multi 模型+覆盖问�
 | `cli.mjs` → `~/bin/laya` | CLI:`infer` / `serve` / `status` / `stop` |
 | `service/` | 多业务决策服务:自适配注册表 + 决策日志报表 + 邮件/MQTT 网关(端口 8789;`GET /report/page` 详单页:业务×决策等级×日期,可下钻) |
 | `finetune/` | 微调管线:数据准备/RLCD 训练/评估/导出 + 任务定义 + parity 报告 |
-| `apk/` | Android APK(智能决策业务台):LiteRT GPU 内置推理(JNI C API)+ 动态业务 + 网关 + 微信风 UI;系统页四个子标签(系统/架构图/流程图/数据流,`DiagramView` 零依赖自绘);报表页含「下钻详单」:业务×决策等级×日期矩阵,点数字下钻明细;网关页含 LLM 设置×3(升级通道可选,OpenAI 兼容) |
-| `figs.py` / `figs/` | 公众号/README 配图生成脚本与产物(性能对比 / 分层架构 / 延迟台阶 / 业务流程) |
+| `apk/` | Android APK(智能决策业务台):LiteRT NPU/GPU 内置推理(MTK SoC 自动选 NPU,引擎链 NPU→GPU→CPU)+ 动态业务 + 网关 + 微信风 UI;系统页四个子标签(系统/架构图/流程图/数据流,`DiagramView` 零依赖自绘);报表页含「下钻详单」:业务×决策等级×日期矩阵,点数字下钻明细;网关页含 LLM 设置×3(升级通道可选,OpenAI 兼容) |
+| `figs.py` / `figs/` | 公众号/README 配图生成脚本与产物(性能对比 / 分层架构 / 延迟台阶 / 业务流程 / 决策泳道图) |
 | `bench.c` / `bench86` | 原生推理基准(SEQ/BATCH/OPTS 可编译期配置,nnapi/xnnpack EP) |
 | `triage-test.mjs` | 工单分流 E2E 回归 |
 | `validate-historical.mjs` | 真实历史工单全量回归 |
