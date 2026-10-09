@@ -2,6 +2,23 @@
 
 在手机(Termux, aarch64)上运行 [Laya](https://huggingface.co/convaiinnovations/laya) System-1 决策模型:给定工单/文本(state)和类型化问题(choice/score/noul),单次前向返回带校准概率的答案,不生成文本、无幻觉。
 
+## 下载 APK
+
+**[v1.3.0 — NPU 决策全链路打通](https://github.com/supermy/laya-test/releases/tag/v1.3.0)**(内置 MTK NPU 后端 + 5 业务,天玑 9500 自动启用 NPU,其他机型自动落 GPU/CPU):
+
+```
+https://github.com/supermy/laya-test/releases/download/v1.3.0/layaoffice-1514.apk
+```
+
+国内网络直连 GitHub 卡顿时,任选一个镜像前缀拼同一链接:
+
+```
+https://ghproxy.net/https://github.com/supermy/laya-test/releases/download/v1.3.0/layaoffice-1514.apk
+https://gh-proxy.com/https://github.com/supermy/laya-test/releases/download/v1.3.0/layaoffice-1514.apk
+```
+
+安装后需在系统页安装模型包(`/sdcard/models/laya-litert*/`,zip 内含 NPU 主图 `laya_ml_s256_embeds_npu.tflite` + `laya_ml_scorer.bin` 时 MTK 机型自动走 NPU)。
+
 ## 架构
 
 ```
