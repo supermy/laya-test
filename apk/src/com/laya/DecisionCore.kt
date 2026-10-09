@@ -30,7 +30,8 @@ object DecisionCore {
     for (d in dirs) {
       val task = d.name.removePrefix("laya-litert-")
       val pkg = File(d, "phone")
-      val ready = pkg.isDirectory && File(pkg, "laya_ml_s256_embeds_wfp16.tflite").isFile
+      val ready = pkg.isDirectory && (File(pkg, "laya_ml_s256_embeds_wfp16.tflite").isFile ||
+          File(pkg, "laya_ml_s256_embeds_npu.tflite").isFile)
       if (ready) out[task] = BUILTIN[task] ?: File(pkg, "label.txt").takeIf { it.isFile }?.readText()?.trim() ?: task
     }
     // multi 基础模型:目录名为 laya-litert(无后缀),模型即多语言工单分流
@@ -182,7 +183,7 @@ object DecisionCore {
     val src = if (task == "multi") File("/sdcard/models/laya-litert/phone")
               else File("/sdcard/models/laya-litert-$task/phone")
     val files = listOf(
-      "laya_ml_s256_embeds_wfp16.tflite", "laya_ml_act_head_fp32.tflite",
+      "laya_ml_act_head_fp32.tflite",
       "token_embeddings_fp16.bin", "token_embeddings.json",
       "laya_ml_calibration.json", "tokenizer.json",
     )
@@ -192,13 +193,22 @@ object DecisionCore {
       val d = File(base, f)
       if (!d.isFile || d.length() != s.length()) s.copyTo(d, overwrite = true)
     }
-    // NPU 附加文件(dispatch 主图 + scorer bin)存在才复制(GPU 兜底不依赖)
-    for (f in listOf("laya_ml_s256_embeds_npu.tflite", "laya_ml_scorer.bin")) {
+    // 主图:NPU dispatch 与 GPU wfp16 至少其一(纯 NPU 包可无 wfp16)
+    var hasMain = false
+    for (f in listOf("laya_ml_s256_embeds_npu.tflite", "laya_ml_s256_embeds_wfp16.tflite")) {
       val s = File(src, f)
       if (s.isFile) {
+        hasMain = true
         val d = File(base, f)
         if (!d.isFile || d.length() != s.length()) s.copyTo(d, overwrite = true)
       }
+    }
+    check(hasMain) { "缺少主图(dispatch/wfp16 至少其一): $src" }
+    // NPU 附加文件(scorer bin)存在才复制(GPU 兜底不依赖)
+    val sc = File(src, "laya_ml_scorer.bin")
+    if (sc.isFile) {
+      val d = File(base, sc.name)
+      if (!d.isFile || d.length() != sc.length()) sc.copyTo(d, overwrite = true)
     }
     val e: DecisionEngine =
       if (npuAvailable(ctx)) {

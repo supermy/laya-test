@@ -1041,17 +1041,17 @@ public class MainActivity extends Activity {
     upStatus.setTextSize(11); upStatus.setTextColor(0xFF66707E);
     upStatus.setText("六文件校验通过后注册为新业务;zip 内路径任意,校验自动完成");
     up.addView(upStatus);
-    Button impBtn = button(up, "导入并注册");
+    Button impBtn = button(up, "上传并注册");
     impBtn.setOnClickListener(v -> {
       String src = upSrc.getText().toString().trim();
       String task = upTask.getText().toString().trim();
       if (src.isEmpty() || task.isEmpty()) { upStatus.setText("请填包路径和业务名"); return; }
-      upStatus.setText("导入中…(zip 约 250MB,校验六文件)");
+      upStatus.setText("上传中…(zip 约 250MB,校验六文件)");
       new Thread(() -> {
         String err = com.laya.DecisionCore.importPackage(getApplicationContext(), src, task);
         runOnUiThread(() -> {
           if (err == null) {
-            upStatus.setText("✅ 导入成功,已注册业务 [" + task + "]");
+            upStatus.setText("✅ 上传成功,已注册业务 [" + task + "]");
             setTab(3);
           } else upStatus.setText("❌ " + err);
         });
@@ -1122,7 +1122,7 @@ public class MainActivity extends Activity {
     LinearLayout sh = new LinearLayout(this);
     sh.setOrientation(LinearLayout.HORIZONTAL);
     sh.setGravity(Gravity.CENTER_VERTICAL);
-    TextView sht = hint("业务泳道图:三条通道由 DecisionCore 串行化(NPU ~0.23s/3问)");
+    TextView sht = hint("业务数据流(泳道):三条通道由 DecisionCore 串行化(NPU ~0.23s/3问)");
     sht.setPadding(0, 0, 0, 0);
     LinearLayout.LayoutParams shlp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
     sht.setLayoutParams(shlp);
@@ -1158,7 +1158,7 @@ public class MainActivity extends Activity {
     p2.addView(hint("业务流程:决策完成 → 本端自动处理 / LLM 进一步处理(重要+紧急)→ 日志回流 → 微调闭环(与 README fig4 同构)"));
     p2.addView(new DiagramView(this, 3));
 
-    String[] subNames = {"系统", "架构图", "流程图", "泳道图"};
+    String[] subNames = {"系统", "架构图", "流程图", "数据流"};
     String[] subVert = {"系\n统", "架\n构\n图", "流\n程\n图", "数\n据\n流"}; // 竖排文字
     LinearLayout[] subPanels = {l, p1, p2, p3};
     final ScrollView[] subScrolls = new ScrollView[4];
