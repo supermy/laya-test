@@ -931,11 +931,11 @@ public class MainActivity extends Activity {
           String r;
           try {
             HttpURLConnection c = (HttpURLConnection) new URL(url + "/chat/completions").openConnection();
-            c.setRequestMethod("POST"); c.setConnectTimeout(8000); c.setReadTimeout(20000);
+            c.setRequestMethod("POST"); c.setConnectTimeout(8000); c.setReadTimeout(120000);
             c.setDoOutput(true); c.setRequestProperty("Content-Type", "application/json");
             if (!key.isEmpty()) c.setRequestProperty("Authorization", "Bearer " + key);
             try (OutputStream os = c.getOutputStream()) {
-              os.write(new JSONObject().put("model", model).put("max_tokens", 8)
+              os.write(new JSONObject().put("model", model).put("max_tokens", 300)
                   .put("messages", new org.json.JSONArray().put(new JSONObject()
                       .put("role", "user").put("content", "只回复两个字母:OK"))).toString().getBytes(StandardCharsets.UTF_8));
             }
