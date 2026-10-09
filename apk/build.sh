@@ -69,6 +69,10 @@ cp aar/jni/arm64-v8a/libLiteRt.so aar/jni/arm64-v8a/libLiteRtClGlAccelerator.so 
 cp "$OUT/liblayajni.so" lib/arm64-v8a/
 # 独立进程推理 runner(17ms/问):二进制按 lib*.so 命名装入 nativeLibraryDir(exec 可执行)
 cp "$HERE/jniExec/litert-runner" lib/arm64-v8a/librunner_rt.so
+# NPU 独立进程 runner(MTK MDLA dispatch):同模式 lib*.so 命名;dispatch 库运行时经
+# LITERT_DISP_DIR=nativeLibraryDir 加载,依赖仅 libLiteRt(AAR)+ libc++_shared,无 absl 污染
+cp "$HERE/jniExec/litert-runner-npu" lib/arm64-v8a/libnpu_rt.so
+cp "$HERE/jniExec/libLiteRtDispatch_MediaTek.so" lib/arm64-v8a/
 for f in "$HERE"/jniExec/lib*; do cp "$f" lib/arm64-v8a/; done
 cp $PREFIX/lib/libc++_shared.so lib/arm64-v8a/
 # 只打包 AAR 自带库:AAR 静态链接 absl;外部 absl(如 C runner 构建)会造成符号版本污染,

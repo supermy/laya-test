@@ -101,7 +101,8 @@ int main(int argc, char** argv) {
   LiteRtEnvironment env;
   if (use_npu) {
     // NPU: dispatch library dir 必须指向 libLiteRtDispatch_MediaTek.so 所在目录
-    static const char* disp_dir = "/data/local/tmp/litert";
+    const char* disp_dir = getenv("LITERT_DISP_DIR");
+    if (!disp_dir) disp_dir = "/data/local/tmp/litert";
     LiteRtEnvOption eopts[1] = {
         {kLiteRtEnvOptionTagDispatchLibraryDir,
          {kLiteRtAnyTypeString, {.str_value = disp_dir}}}};
@@ -115,6 +116,7 @@ int main(int argc, char** argv) {
   CHECK(LiteRtSetOptionsHardwareAccelerators(opts, use_npu ? (kLiteRtHwAcceleratorNpu | kLiteRtHwAcceleratorCpu)
                                           : use_gpu ? kLiteRtHwAcceleratorGpu
                                                     : kLiteRtHwAcceleratorCpu));
+#ifndef LITERT_BENCH_NO_GPU
   if (use_gpu) {
     LrtGpuOptions* gpu;
     CHECK(LrtCreateGpuOptions(&gpu));
@@ -133,6 +135,7 @@ int main(int argc, char** argv) {
     CHECK(LiteRtCreateOpaqueOptions(id, payload, dtor, &opaque));
     CHECK(LiteRtAddOpaqueOptions(opts, opaque));
   }
+#endif  // LITERT_BENCH_NO_GPU
 
   double t0 = now_ms();
   LiteRtModel main_m, act_m;
@@ -154,6 +157,7 @@ int main(int argc, char** argv) {
     LiteRtOptions opts2;
     CHECK(LiteRtCreateOptions(&opts2));
     CHECK(LiteRtSetOptionsHardwareAccelerators(opts2, kLiteRtHwAcceleratorGpu));
+#ifndef LITERT_BENCH_NO_GPU
     LrtGpuOptions* gpu2;
     CHECK(LrtCreateGpuOptions(&gpu2));
     CHECK(LrtSetGpuAcceleratorCompilationOptionsPrecision(gpu2, kLiteRtDelegatePrecisionFp32));
@@ -164,6 +168,7 @@ int main(int argc, char** argv) {
     LiteRtOpaqueOptions opaque2;
     CHECK(LiteRtCreateOpaqueOptions(id2, payload2, dtor2, &opaque2));
     CHECK(LiteRtAddOpaqueOptions(opts2, opaque2));
+#endif  // LITERT_BENCH_NO_GPU
     CHECK(LiteRtCreateCompiledModel(env, act_m, opts2, &cm_act));
   } else {
     LiteRtOptions opts2;

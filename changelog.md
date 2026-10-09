@@ -1,5 +1,43 @@
 # Changelog
 
+## 2026-10-09 — v1.3.0:NPU 决策全链路打通(NEG 根因修复)+ APK NPU 后端
+
+### ⚠️ 10-03 NPU 结论勘误(v1.2.0 的 NPU 段落作废)
+
+- **"pooled 输出与 GPU 参考一致,决策可用"是错的**。依据是 bench 的 act_logits(0.0360/-0.0311)与 GPU 一致——事后证实该值对**任何输入恒定不变**,是无效信号。MDLA 实际把整个 encoder 算成垃圾(token_logits/pooled 全 inf/nan);adb shell 域复验排除域差异,10-03 起即如此
+- "57ms/问"是真实的 MDLA 执行速度,但输出一直是垃圾;multi 模型今日复测在 shell 域也因 dispatch 未加载而 CPU 兜底(272ms)
+
+### 根因:掩码常量 NEG 的 fp16 下溢
+
+- `clean_main.py` 的滑动窗口/key 掩码常量 `NEG = -3.4028235e38`(torch fp32 min)。MDLA 内部 fp16 执行时该常量溢出为 **-inf**;`keybias = (1 - mask) × NEG` 在有效位置(mask=1)算出 **0 × (-inf) = NaN**(IEEE-754),NaN 随注意力扩散毒化全图
+- CPU/GPU 走 fp32,NEG 有限,所以只有 NPU 坏;与执行域无关
+- **修复:`NEG = -10000.0`**(fp16 可表示;softmax 中 exp(score-1e4) 下溢为 0,掩码语义等价)
+- 定位路径:tiny FC 模型 AOT 对照(MDLA 管线无恙,输出与 CPU 逐位一致)→ 6 级分层二分(0 层=LayerNorm 正确,+1 层 attention 即坏)→ 锁定掩码常量
+
+### 拆图架构:scorer 移出 NPU 图
+
+- 主图(encoder+head)输出改为 hidden_states [1,256,768] + pooled;scorer(LN→FC768→GELU(erf)→FC)权重导出 2.4MB fp32 bin,runner 用 C 实现(<1ms),marker logits 由 CPU 补算
+- `litert-runner.c`:split 模式检测(输出 rank=3 + LAYA_SCORER env)、LITERT_DISP_DIR env(替代硬编码 dispatch 目录)、LITERT_RUNNER_NO_GPU 编译开关、SO_REUSEADDR;`litert-bench.c` 同步 LITERT_DISP_DIR
+- **教训:bench 的 act_logits 恒定值不能作为输出正确性信号**(10-03、10-08 两次被它误导)
+
+### 四业务模型 NPU 化(ticket/ugc/agent/risk)
+
+- PC `split_negfix.py` 重导出(NEG 修复 + 拆图),AOT(MT6993)后推手机,bench 全有限
+- ticket 全量 E2E:**决策正确**(intent=billing 0.898 / urgency 1.94),**72ms/问 = GPU(150ms)的 2.1x**;ugc/agent/risk runner 冒烟通过
+- multi 模型:torch ckpt 缺失(仅存 wfp16/ONNX;HF 源 `convaiinnovations/laya-multilingual` 已定位),暂留 GPU,补齐后走同一管线
+
+### APK NPU 后端(独立进程,真机验证)
+
+- 方案与 GPU runner 相同的 lib*.so exec 模式:`libnpu_rt.so`(litert-runner NPU 版)+ `libLiteRtDispatch_MediaTek.so`;**AAR libLiteRt 2.2.0 与手编 dispatch 库兼容性实测通过**,dispatch 仅依赖 libLiteRt+libc++_shared,无 absl 污染
+- `LayaRunnerEngine(npu=true)`:spawn libnpu_rt.so + split 主图,env `LAYA_BACKEND=npu`/`LAYA_SCORER`/`LITERT_DISP_DIR=nativeLibraryDir`;`DecisionCore.mtkNpuAvailable()`(MediaTek SoC + 库存在),引擎链 **NPU→GPU→CPU** 逐级兜底,系统页显示 NPU 可用性
+- **真机验证:客服工单分流 3 问 246ms(≈82ms/问),后端 "NPU(MTK MDLA,独立进程)"**
+- 集成中修复 3 个存量 bug:①spawn 漏设 LAYA_BACKEND=npu → DISPATCH_OP unresolved;②`connectWithRetry` 的 `sockFile.length()>0` 恒假(unix socket 文件 st_size 恒为 0)——exec-runner 路径此前在设备上从未真正连通,历史 GPU 决策实为 JNI 进程内兜底;③`infer()` 响应解析 `readFull(total-4)` 多减 4 字节 → BufferUnderflow
+
+### 工具链沉淀
+
+- PC:`split_convert.py`(拆图+scorer bin)、`split_negfix.py`(NEG 修复版)、`bisect_export.py`(分层二分)、`patch_neg.py`(常量字节补丁)
+- 手机:`dbg-npu-raw.mjs`(raw 探针)、`run_npu_e2e.sh`/`run_dbg_*.sh`(按端口杀孤儿 runner,**pkill -f 会自匹配勿用**)
+
 ## 2026-10-03 — v1.2.0:微调四业务 + APK 端侧闭环 + NPU AOT
 
 ### ⚠️ 17ms 勘误(计时方法论修正)

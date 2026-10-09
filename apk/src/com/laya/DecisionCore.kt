@@ -2,6 +2,7 @@ package com.laya
 
 import android.content.Context
 import android.util.Log
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
@@ -16,9 +17,10 @@ object DecisionCore {
   private val BUILTIN = linkedMapOf(
     "ticket" to "客服工单分流", "ugc" to "UGC 内容审核",
     "agent" to "Agent 工作流路由", "risk" to "金融风控前置",
+    "multi" to "多语言工单分流(基础)",
   )
 
-  /** 已安装业务:/sdcard/models 下 laya-litert-* 目录的 phone 子目录含全套模型文件;内置四业务 + 动态包 */
+  /** 已安装业务:/sdcard/models 下 laya-litert-* 目录的 phone 子目录含全套模型文件;内置五业务 + 动态包 */
   @JvmStatic
   @JvmOverloads
   fun scanTasks(sdRoot: String = "/sdcard/models"): List<Pair<String, String>> {
@@ -31,12 +33,86 @@ object DecisionCore {
       val ready = pkg.isDirectory && File(pkg, "laya_ml_s256_embeds_wfp16.tflite").isFile
       if (ready) out[task] = BUILTIN[task] ?: File(pkg, "label.txt").takeIf { it.isFile }?.readText()?.trim() ?: task
     }
+    // multi 基础模型:目录名为 laya-litert(无后缀),模型即多语言工单分流
+    val multiPkg = File(root, "laya-litert/phone")
+    if (multiPkg.isDirectory && File(multiPkg, "laya_ml_s256_embeds_npu.tflite").isFile)
+      out["multi"] = BUILTIN["multi"]!!
     return out.toList()
   }
 
   private var jniEngine: DecisionEngine? = null
   private var runnerEngine: DecisionEngine? = null
   private var engineTask: String? = null
+  private var engineDesc: String = "未初始化(首次决策时自动选择)"
+
+  // ---- 硬件探测:引擎后端按装机手机资源自动确定(NPU → GPU → CPU 兜底) ----
+
+  /** 仅高通 SoC 且 APK 打包了 QNN 库时 NPU 可用;MTK 等直接落 GPU/CPU */
+  @JvmStatic
+  fun npuAvailable(ctx: Context): Boolean {
+    val soc = if (android.os.Build.VERSION.SDK_INT >= 31)
+      "${android.os.Build.SOC_MANUFACTURER} ${android.os.Build.SOC_MODEL}" else android.os.Build.HARDWARE
+    val qualcomm = soc.contains("qcom", true) || soc.contains("qualcomm", true) ||
+        android.os.Build.HARDWARE.startsWith("qcom")
+    return qualcomm && LayaEngine.npuLibrariesInstalled(ctx)
+  }
+
+  /** MTK 天玑:dispatch 库已打包(APK 内 libLiteRtDispatch_MediaTek.so)即具备 MDLA NPU 能力 */
+  fun mtkNpuAvailable(ctx: Context): Boolean {
+    val soc = if (android.os.Build.VERSION.SDK_INT >= 31)
+      android.os.Build.SOC_MANUFACTURER else ""
+    if (!soc.contains("MediaTek", true) && !android.os.Build.HARDWARE.contains("mt6", true)) return false
+    val nl = ctx.applicationInfo.nativeLibraryDir
+    return File(nl, "libLiteRtDispatch_MediaTek.so").isFile &&
+        File(nl, "libnpu_rt.so").isFile
+  }
+
+  /** 业务模型包是否携带 NPU dispatch 主图 + scorer bin */
+  fun npuModelReady(base: File): Boolean =
+    File(base, "laya_ml_s256_embeds_npu.tflite").isFile && File(base, "laya_ml_scorer.bin").isFile
+
+  private fun openclPresent(): Boolean =
+    listOf("/vendor/lib64/libOpenCL.so", "/system/lib64/libOpenCL.so")
+      .any { File(it).isFile }
+
+  /** 当前实际引擎描述(决策卡片/系统页展示) */
+  @JvmStatic
+  fun currentEngine(): String = engineDesc
+
+  /** 引擎与硬件情况(系统页展示) */
+  @JvmStatic
+  fun backendInfo(ctx: Context): String {
+    val soc = if (android.os.Build.VERSION.SDK_INT >= 31)
+      "${android.os.Build.SOC_MANUFACTURER} ${android.os.Build.SOC_MODEL}" else android.os.Build.HARDWARE
+    val npu = if (npuAvailable(ctx)) "NPU 可用(QNN)"
+      else if (mtkNpuAvailable(ctx)) "NPU 可用(MTK MDLA,需模型包携带 dispatch 主图)"
+      else "NPU 不可用(非高通/MTK SoC 或缺 NPU 库)"
+    val gpu = if (openclPresent()) "GPU/OpenCL 可用" else "GPU/OpenCL 未检出(运行时尝试)"
+    return "硬件 $soc · $npu · $gpu\n当前引擎: $engineDesc"
+  }
+
+  /** GPU→CPU 逐级尝试(runner 独立进程最快,JNI 进程内次之,CPU 兜底) */
+  private fun gpuOrCpu(ctx: Context, base: File): DecisionEngine =
+    try {
+      LayaRunnerEngine(ctx, base).also { engineDesc = "GPU(独立进程 runner)" }
+    } catch (t: Throwable) {
+      Log.w("DecisionCore", "runner failed, fallback JNI GPU/CPU", t)
+      try {
+        LayaNativeEngine(ctx, base, true).also { engineDesc = "GPU(JNI 进程内)" }
+      } catch (t2: Throwable) {
+        Log.w("DecisionCore", "jni gpu failed, fallback cpu", t2)
+        LayaNativeEngine(ctx, base, false).also { engineDesc = "CPU(兜底)" }
+      }
+    }
+
+  /** 进程内 LayaEngine 适配(NPU 专用路径):answer 接口对齐 DecisionEngine */
+  private class LayaFullEngine(context: Context, base: File) : DecisionEngine {
+    private val eng = LayaEngine(context, LayaEngine.Storage.WFP16, base)
+    init { eng.initialize(LayaEngine.Backend.NPU) }
+    override fun answer(state: Any?, question: Map<String, Any?>, questionId: String): Map<String, Any?> =
+      eng.answer(state, question, LayaEngine.Backend.NPU, questionId).answer
+    override fun close() { eng.close() }
+  }
 
   private fun q(type: String, ins: String, criteria: Any? = null): Map<String, Any?> =
     LinkedHashMap<String, Any?>().apply {
@@ -74,7 +150,7 @@ object DecisionCore {
   }
 
   private fun builtinDefs(task: String): List<Pair<String, Map<String, Any?>>> = when (task) {
-    "ticket" -> listOf(
+    "ticket", "multi" -> listOf(
       "q0" to q("choice", "分诊到售后部门", cl("技术支持", "账单计费", "销售咨询", "退换货", "故障维护", "其他")),
       "q1" to q("score", "客户紧急度1-5", listOf("可忽略", "低", "中", "高", "紧急")),
       "q2" to q("noul", "是否必须转人工处理(自动回复无法解决)"),
@@ -102,7 +178,9 @@ object DecisionCore {
     jniEngine?.let { try { it.close() } catch (_: Throwable) {} }
     jniEngine = null
     val base = File(ctx.filesDir, "laya-$task").apply { mkdirs() }
-    val src = File("/sdcard/models/laya-litert-$task/phone")
+    // multi 基础模型目录名为 laya-litert(无后缀)
+    val src = if (task == "multi") File("/sdcard/models/laya-litert/phone")
+              else File("/sdcard/models/laya-litert-$task/phone")
     val files = listOf(
       "laya_ml_s256_embeds_wfp16.tflite", "laya_ml_act_head_fp32.tflite",
       "token_embeddings_fp16.bin", "token_embeddings.json",
@@ -114,13 +192,32 @@ object DecisionCore {
       val d = File(base, f)
       if (!d.isFile || d.length() != s.length()) s.copyTo(d, overwrite = true)
     }
-    val e = try {
-      // 首选独立进程 runner(实测 17ms/问,绕开主进程 CL 回读慢路径)
-      LayaRunnerEngine(ctx, base)
-    } catch (t: Throwable) {
-      Log.w("DecisionCore", "runner failed, fallback JNI GPU/CPU", t)
-      LayaNativeEngine(ctx, base, true)
+    // NPU 附加文件(dispatch 主图 + scorer bin)存在才复制(GPU 兜底不依赖)
+    for (f in listOf("laya_ml_s256_embeds_npu.tflite", "laya_ml_scorer.bin")) {
+      val s = File(src, f)
+      if (s.isFile) {
+        val d = File(base, f)
+        if (!d.isFile || d.length() != s.length()) s.copyTo(d, overwrite = true)
+      }
     }
+    val e: DecisionEngine =
+      if (npuAvailable(ctx)) {
+        try {
+          Log.i("DecisionCore", "NPU available, trying QNN engine first")
+          LayaFullEngine(ctx, base).also { engineDesc = "NPU(QNN HTP,进程内)" }
+        } catch (t: Throwable) {
+          Log.w("DecisionCore", "npu engine failed, degrade to gpu/cpu", t)
+          gpuOrCpu(ctx, base)
+        }
+      } else if (mtkNpuAvailable(ctx) && npuModelReady(base)) {
+        try {
+          Log.i("DecisionCore", "MTK NPU available, trying dispatch runner")
+          LayaRunnerEngine(ctx, base, npu = true).also { engineDesc = "NPU(MTK MDLA,独立进程)" }
+        } catch (t: Throwable) {
+          Log.w("DecisionCore", "mtk npu runner failed, degrade to gpu/cpu", t)
+          gpuOrCpu(ctx, base)
+        }
+      } else gpuOrCpu(ctx, base)
     runnerEngine = e; engineTask = task
     return e
   }
@@ -189,6 +286,7 @@ object DecisionCore {
     jniEngine?.let { try { it.close() } catch (_: Throwable) {} }
     jniEngine = null
     engineTask = null
+    engineDesc = "未初始化(首次决策时自动选择)"
   }
 
   /** 卸载业务:释放引擎(若是当前)并删除已拷贝的模型文件(/sdcard 源包保留,可重装) */
@@ -370,5 +468,119 @@ object DecisionCore {
       }
     }
     return sb.toString()
+  }
+
+  // ---- 下钻详单:业务 × 决策等级 × 日期 ----
+  // 等级取法:score 问归一化分 ≥0.66 高 / ≥0.33 中 / 否则低;noul 命中=高/无信号=低;纯 choice 用判定标签。
+  @JvmStatic
+  fun levelOf(e: JSONObject): JSONObject {
+    val dec = e.optJSONObject("decoded") ?: e.optJSONObject("answers")
+    if (dec != null) {
+      val it = dec.keys()
+      while (it.hasNext()) {
+        val a = dec.optJSONObject(it.next()) ?: continue
+        if (a.optString("type") == "score") {
+          val legend = a.optJSONObject("legend")
+          val maxIdx = if (legend != null && legend.length() > 1) legend.length() - 1 else 4
+          val score = a.optDouble("score")
+          val n = if (maxIdx > 0) score / maxIdx else 0.0
+          val lv = if (n >= 0.66) "高" else if (n >= 0.33) "中" else "低"
+          val lab = if (legend != null) legend.optString(Math.round(score).toString()) else ""
+          val basis = "score=" + String.format(Locale.US, "%.2f", score) + if (lab.isNullOrBlank()) "" else "($lab)"
+          return JSONObject().put("level", lv).put("basis", basis)
+        }
+      }
+      val it2 = dec.keys()
+      while (it2.hasNext()) {
+        val a = dec.optJSONObject(it2.next()) ?: continue
+        if (a.optString("type") == "noul") {
+          val p = a.optDouble("noul")
+          return JSONObject().put("level", if (p >= 0.5) "低" else "高")
+            .put("basis", String.format(Locale.US, "noul=%.2f", p) + if (p >= 0.5) "(无信号)" else "(命中)")
+        }
+      }
+      val it3 = dec.keys()
+      while (it3.hasNext()) {
+        val a = dec.optJSONObject(it3.next()) ?: continue
+        if (a.optString("type") == "choice") {
+          val c = a.optString("choice")
+          return JSONObject().put("level", c).put("basis", "choice=$c")
+        }
+      }
+    }
+    return JSONObject().put("level", "未知").put("basis", "")
+  }
+
+  private fun readLogEntries(ctx: Context): List<JSONObject> {
+    val out = ArrayList<JSONObject>()
+    val f = logFile(ctx)
+    if (!f.isFile) return out
+    for (line in java.nio.file.Files.readAllBytes(f.toPath()).toString(Charsets.UTF_8).split("\n")) {
+      if (line.isBlank()) continue
+      try { out.add(JSONObject(line)) } catch (_: Exception) {}
+    }
+    return out
+  }
+
+  /** 聚合行:date × task × level → {count, avgLatency};rangeDays ≤0 表示全部 */
+  @JvmStatic
+  fun detailPivot(ctx: Context, rangeDays: Int, task: String?, level: String?): JSONObject {
+    val start = if (rangeDays > 0) System.currentTimeMillis() - rangeDays * 86_400_000L else 0L
+    val df = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val rows = LinkedHashMap<String, LongArray>()
+    var total = 0
+    for (e in readLogEntries(ctx)) {
+      if (e.optLong("ts") < start) continue
+      if (task != null && e.optString("task") != task) continue
+      val lv = levelOf(e).optString("level")
+      if (level != null && lv != level) continue
+      val key = df.format(Date(e.optLong("ts"))) + "|" + e.optString("task") + "|" + lv
+      val arr = rows[key] ?: LongArray(2)
+      arr[0]++; arr[1] += e.optLong("latencyMs"); rows[key] = arr
+      total++
+    }
+    val outRows = JSONArray()
+    for ((key, arr) in rows) {
+      val p = key.split("|")
+      outRows.put(JSONObject().put("date", p[0]).put("task", p[1]).put("level", p[2])
+        .put("count", arr[0]).put("avgLatency", if (arr[0] > 0) arr[1] / arr[0] else 0L))
+    }
+    return JSONObject().put("total", total).put("rows", outRows)
+  }
+
+  /** 下钻明细(最新优先,limit 条):time/task/level/basis/state/answers/latencyMs */
+  @JvmStatic
+  fun drillList(ctx: Context, date: String?, task: String?, level: String?, limit: Int): JSONArray {
+    val out = JSONArray()
+    val tf = SimpleDateFormat("MM-dd HH:mm:ss", Locale.US)
+    var n = 0
+    for (e in readLogEntries(ctx).asReversed()) {
+      val lv = levelOf(e)
+      val lvs = lv.optString("level")
+      if (level != null && lvs != level) continue
+      if (task != null && e.optString("task") != task) continue
+      if (date != null && SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(e.optLong("ts"))) != date) continue
+      val o = JSONObject()
+      o.put("time", tf.format(Date(e.optLong("ts")))).put("task", e.optString("task"))
+        .put("level", lvs).put("basis", lv.optString("basis"))
+        .put("state", e.optString("state")).put("latencyMs", e.optLong("latencyMs"))
+      val dec = e.optJSONObject("decoded")
+      if (dec != null) {
+        val parts = ArrayList<String>()
+        val it = dec.keys()
+        while (it.hasNext()) {
+          val a = dec.optJSONObject(it.next()) ?: continue
+          when (a.optString("type")) {
+            "choice" -> parts.add(a.optString("choice"))
+            "score" -> parts.add(String.format(Locale.US, "%.1f分", a.optDouble("score")))
+            "noul" -> parts.add(if (a.optDouble("noul") >= 0.5) "需人工" else "自动")
+          }
+        }
+        o.put("answers", parts.joinToString(" | "))
+      }
+      out.put(o)
+      if (++n >= limit) break
+    }
+    return out
   }
 }

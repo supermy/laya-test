@@ -16,7 +16,8 @@ import java.nio.ByteOrder
  * 动机:app 主进程内 CL 回读 137ms(bench 同刻 16ms)——进程隔离绕开主进程
  * 的 GPU 提交路径差异;runner 与 Termux bench 同为独立进程域。
  */
-class LayaRunnerEngine(private val context: Context, private val baseDir: File) : DecisionEngine {
+class LayaRunnerEngine(private val context: Context, private val baseDir: File,
+                       private val npu: Boolean = false) : DecisionEngine {
 
   private val appContext = context.applicationContext
   private val tokenizer = LayaTokenizer(File(baseDir, "tokenizer.json"))
@@ -41,14 +42,22 @@ class LayaRunnerEngine(private val context: Context, private val baseDir: File) 
   private fun spawnRunner() {
     sockFile.delete()
     val nl = appContext.applicationInfo.nativeLibraryDir
-    val main = File(baseDir, "laya_ml_s256_embeds_wfp16.tflite").absolutePath
+    // NPU 模式:split 架构主图(MDLA encoder)+ scorer bin(CPU),dispatch 库在 nativeLibraryDir
+    val main = File(baseDir, if (npu) "laya_ml_s256_embeds_npu.tflite" else "laya_ml_s256_embeds_wfp16.tflite").absolutePath
     val act = File(baseDir, "laya_ml_act_head_fp32.tflite").absolutePath
     val emb = File(baseDir, "token_embeddings_fp16.bin").absolutePath
     val pb = ProcessBuilder(
-      "$nl/librunner_rt.so", main, act, emb, sockFile.absolutePath, cacheDir.absolutePath,
+      "$nl/${if (npu) "libnpu_rt.so" else "librunner_rt.so"}", main, act, emb, sockFile.absolutePath, cacheDir.absolutePath,
     ).directory(appContext.filesDir).redirectErrorStream(true)
     pb.environment()["LD_LIBRARY_PATH"] = nl
     pb.environment()["TMPDIR"] = appContext.cacheDir.absolutePath
+    if (npu) {
+      // split 主图(rank=3 输出)要求 LAYA_SCORER;LAYA_BACKEND=npu 挂 dispatch 库,
+      // dispatch 目录指向 nativeLibraryDir(内含 libLiteRtDispatch_MediaTek.so)
+      pb.environment()["LAYA_BACKEND"] = "npu"
+      pb.environment()["LAYA_SCORER"] = File(baseDir, "laya_ml_scorer.bin").absolutePath
+      pb.environment()["LITERT_DISP_DIR"] = nl
+    }
     proc = pb.start().also { p ->
       Thread {
         p.inputStream.bufferedReader().forEachLine { Log.i("RunnerProc", it) }
@@ -59,7 +68,9 @@ class LayaRunnerEngine(private val context: Context, private val baseDir: File) 
   private fun connectWithRetry() {
     val deadline = SystemClock.elapsedRealtime() + 60_000
     while (SystemClock.elapsedRealtime() < deadline) {
-      if (sockFile.exists() && sockFile.length() > 0L) {
+      if (sockFile.exists()) {
+        // 注意:unix socket 文件 st_size 恒为 0,不能再用 length()>0 过滤;
+        // 未绑定/残留旧文件时 connect 会抛异常,由 catch + 重试兜底
         try {
           val s = android.net.LocalSocket()
           s.connect(android.net.LocalSocketAddress(sockFile.absolutePath, android.net.LocalSocketAddress.Namespace.FILESYSTEM))
@@ -137,7 +148,8 @@ class LayaRunnerEngine(private val context: Context, private val baseDir: File) 
     val head = readFull(4)
     val total = java.nio.ByteBuffer.wrap(head).order(ByteOrder.LITTLE_ENDIAN).int
     check(total in 16..(16 + 64 * 4 + 8 * 4)) { "bad rsp total $total" }
-    val body = readFull(total - 4)
+    // total 不含 4 字节长度前缀本身(与 runner 写出格式一致),不能多减 4
+    val body = readFull(total)
     val magic = u32(body, 0)
     check(magic == MAGIC) { "bad magic" }
     val status = body[4].toInt() and 0xFF

@@ -59,6 +59,63 @@ static const __fp16* g_embed_table;
 static size_t g_embed_bytes;
 static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+// ---- split 模式:主图输出 hidden_states [1,256,768](scorer 移出图,跑 CPU)----
+static int g_split_mode = 0;   // 主图输出 rank=3(hidden)而非 token_logits
+static int g_single_out = 0;   // 主图只有一个输出:pooled 取 hidden 第 0 行
+static float *g_sc_ln_w, *g_sc_ln_b, *g_sc_w1, *g_sc_b1, *g_sc_w2, *g_sc_b2;
+static int g_sc_hidden, g_sc_mid, g_sc_out;
+static float* g_sc_w1_scratch;
+
+static void load_scorer(const char* path) {
+  FILE* f = fopen(path, "rb");
+  if (!f) { fprintf(stderr, "litert-runner: cannot open scorer %s\n", path); exit(1); }
+  char magic[4]; unsigned int ver, hid, mid, out;
+  if (fread(magic, 1, 4, f) != 4 || memcmp(magic, "LSC1", 4) != 0 ||
+      fread(&ver, 4, 1, f) != 1 || fread(&hid, 4, 1, f) != 1 ||
+      fread(&mid, 4, 1, f) != 1 || fread(&out, 4, 1, f) != 1 || ver != 1) {
+    fprintf(stderr, "litert-runner: bad scorer format\n"); exit(1);
+  }
+  g_sc_hidden = (int)hid; g_sc_mid = (int)mid; g_sc_out = (int)out;
+  g_sc_ln_w = malloc(sizeof(float) * hid); g_sc_ln_b = malloc(sizeof(float) * hid);
+  g_sc_w1 = malloc(sizeof(float) * mid * hid); g_sc_b1 = malloc(sizeof(float) * mid);
+  g_sc_w2 = malloc(sizeof(float) * out * mid); g_sc_b2 = malloc(sizeof(float) * out);
+  if (fread(g_sc_ln_w, 4, hid, f) != hid || fread(g_sc_ln_b, 4, hid, f) != hid ||
+      fread(g_sc_w1, 4, mid * hid, f) != mid * hid || fread(g_sc_b1, 4, mid, f) != mid ||
+      fread(g_sc_w2, 4, out * mid, f) != out * mid || fread(g_sc_b2, 4, out, f) != out) {
+    fprintf(stderr, "litert-runner: scorer truncated\n"); exit(1);
+  }
+  fclose(f);
+  g_sc_w1_scratch = malloc(sizeof(float) * mid);
+  fprintf(stderr, "litert-runner: scorer loaded hidden=%d mid=%d out=%d\n", hid, mid, out);
+}
+
+/** 单行 scorer:LN → FC1 → GELU(erf,同 torch approximate='none')→ FC2。 */
+static void sc_row(const float* x, float* out) {
+  static float xn[768];
+  int H = g_sc_hidden, M = g_sc_mid, O = g_sc_out;
+  float mu = 0.0f;
+  for (int h = 0; h < H; h++) mu += x[h];
+  mu /= H;
+  float var = 0.0f;
+  for (int h = 0; h < H; h++) { float d = x[h] - mu; var += d * d; }
+  var /= H;
+  float inv = 1.0f / sqrtf(var + 1e-5f);
+  for (int h = 0; h < H; h++) xn[h] = (x[h] - mu) * inv * g_sc_ln_w[h] + g_sc_ln_b[h];
+  for (int j = 0; j < M; j++) {
+    const float* w = g_sc_w1 + (size_t)j * H;
+    float acc = g_sc_b1[j];
+    for (int h = 0; h < H; h++) acc += xn[h] * w[h];
+    acc = 0.5f * acc * (1.0f + erff(acc * 0.70710678118654752440f));
+    g_sc_w1_scratch[j] = acc;
+  }
+  for (int o = 0; o < O; o++) {
+    const float* w = g_sc_w2 + (size_t)o * M;
+    float acc = g_sc_b2[o];
+    for (int j = 0; j < M; j++) acc += g_sc_w1_scratch[j] * w[j];
+    out[o] = acc;
+  }
+}
+
 static int read_exact(int fd, void* buf, size_t len) {
   size_t got = 0;
   while (got < len) {
@@ -110,6 +167,7 @@ static LiteRtTensorBuffer make_buffer(LiteRtEnvironment env, LiteRtCompiledModel
   return buf;
 }
 
+#ifndef LITERT_RUNNER_NO_GPU
 static LiteRtOpaqueOptions gpu_opts(const char* cache_dir, const char* key) {
   LrtGpuOptions* gpu;
   CHECK(LrtCreateGpuOptions(&gpu));
@@ -122,6 +180,7 @@ static LiteRtOpaqueOptions gpu_opts(const char* cache_dir, const char* key) {
   CHECK(LiteRtCreateOpaqueOptions(id, payload, dtor, &opaque));
   return opaque;
 }
+#endif  // LITERT_RUNNER_NO_GPU
 
 static void write_buf(LiteRtTensorBuffer buf, const void* data, size_t bytes) {
   void* p;
@@ -155,9 +214,12 @@ static int handle_infer(int fd, unsigned char* buf, size_t payload, unsigned int
   const unsigned char* mmask = buf + ids_len * 16 + pos_len * 8;    // [K]
   const int64_t* qtype = (const int64_t*)(buf + ids_len * 16 + pos_len * 9); // [1]
 
-  // gather embedding rows (fp16 table -> fp32), attention mask, qtype onehot
+  // 注意:dispatch(NPU)路径按整窗读取输入缓冲,必须先把 padding 区清零,
+  // 否则残留垃圾(可能为 inf)会污染整图输出(GPU/CPU 路径零初始化缓冲无此问题)
   static float embeds[WINDOW * HIDDEN];
   static float mask[WINDOW];
+  memset(embeds, 0, sizeof embeds);
+  memset(mask, 0, sizeof mask);
   static float qonehot[3] = { 0, 0, 0 };
   if (*qtype < 0 || *qtype > 2) return send_error(fd, "bad qtype");
   memset(qonehot, 0, sizeof qonehot);
@@ -178,21 +240,48 @@ static int handle_infer(int fd, unsigned char* buf, size_t payload, unsigned int
 
   LiteRtTensorBuffer mins[3] = { g_in_embeds, g_in_mask, g_in_qtype };
   LiteRtTensorBuffer mouts[2] = { g_out_logits, g_out_pooled };
+  int nout = g_single_out ? 1 : 2;
   double tr0 = now_ms_runner();
-  LiteRtStatus s = LiteRtRunCompiledModel(g_cm_main, 0, 3, mins, 2, mouts);
+  LiteRtStatus s = LiteRtRunCompiledModel(g_cm_main, 0, 3, mins, nout, mouts);
   double tr1 = now_ms_runner();
   if (s != kLiteRtStatusOk) { char m[64]; snprintf(m, sizeof m, "main run failed: %d", (int)s); return send_error(fd, m); }
 
-  static float logits[WINDOW];
   static float pooled[HIDDEN];
-  read_buf(g_out_logits, logits, sizeof(float) * L);
-  read_buf(g_out_pooled, pooled, sizeof(float) * HIDDEN);
-
-  // gather marker logits (only masked markers)
   unsigned int k = 0;
   static float raw[64];
-  for (unsigned int j = 0; j < K; j++)
-    if (mmask[j] && markers[j] >= 0 && markers[j] < (int64_t)L) raw[k++] = logits[markers[j]];
+  if (g_split_mode) {
+    // 主图输出 hidden_states [1,256,768]:取 marker 行,scorer 在 CPU 上算 logits
+    static float hidden_rows[WINDOW * HIDDEN];
+    read_buf(g_out_logits, hidden_rows, sizeof(float) * L * HIDDEN);
+    if (g_single_out) {
+      memcpy(pooled, hidden_rows, sizeof(float) * HIDDEN);  // pooled_cls = h[:,0]
+    } else {
+      read_buf(g_out_pooled, pooled, sizeof(float) * HIDDEN);
+    }
+    {
+      int nin = 0; float mn = 1e30f, mx = -1e30f;
+      for (size_t i = 0; i < (size_t)L * HIDDEN; i++) {
+        if (isnan(hidden_rows[i]) || isinf(hidden_rows[i])) nin++;
+        else { if (hidden_rows[i] < mn) mn = hidden_rows[i]; if (hidden_rows[i] > mx) mx = hidden_rows[i]; }
+      }
+      fprintf(stderr, "hidden: n=%zu inf/nan=%d min=%.4f max=%.4f | pooled[0]=%.4f\n", (size_t)L * HIDDEN, nin, mn, mx, pooled[0]);
+    }
+    static float sc_out[8];
+    for (unsigned int j = 0; j < K; j++)
+      if (mmask[j] && markers[j] >= 0 && markers[j] < (int64_t)L) {
+        sc_row(hidden_rows + (size_t)markers[j] * HIDDEN, sc_out);
+        raw[k++] = sc_out[0];
+      }
+  } else {
+    static float logits[WINDOW];
+    read_buf(g_out_logits, logits, sizeof(float) * L);
+    read_buf(g_out_pooled, pooled, sizeof(float) * HIDDEN);
+    fprintf(stderr, "old-mode pooled[0..2]=%.4f %.4f %.4f logits[0..2]=%.4f %.4f %.4f\n",
+            pooled[0], pooled[1], pooled[2], logits[0], logits[1], logits[2]);
+    // gather marker logits (only masked markers)
+    for (unsigned int j = 0; j < K; j++)
+      if (mmask[j] && markers[j] >= 0 && markers[j] < (int64_t)L) raw[k++] = logits[markers[j]];
+  }
   if (k == 0) return send_error(fd, "no valid markers");
 
   // act head features (laya_host.act_features)
@@ -302,8 +391,11 @@ int main(int argc, char** argv) {
 
   int use_npu = getenv("LAYA_BACKEND") && strcmp(getenv("LAYA_BACKEND"), "npu") == 0;
   if (use_npu) {
-    // NPU 模式:dispatch 库目录固定 /data/local/tmp/litert(libLiteRtDispatch_MediaTek.so 所在)
-    static const char* disp_dir = "/data/local/tmp/litert";
+    // NPU 模式:dispatch 库目录必须指向 libLiteRtDispatch_MediaTek.so 所在目录
+    // (默认 /data/local/tmp/litert;Termux 域运行时用 LITERT_DISP_DIR 覆盖,
+    //  因为 app 域无法 mmap /data/local/tmp 下的库)
+    const char* disp_dir = getenv("LITERT_DISP_DIR");
+    if (!disp_dir) disp_dir = "/data/local/tmp/litert";
     LiteRtEnvOption eopts[1] = {
         {kLiteRtEnvOptionTagDispatchLibraryDir,
          {kLiteRtAnyTypeString, {.str_value = disp_dir}}}};
@@ -315,6 +407,26 @@ int main(int argc, char** argv) {
   CHECK(LiteRtCreateModelFromFile(g_env, main_path, &main_m));
   CHECK(LiteRtCreateModelFromFile(g_env, act_path, &act_m));
 
+  // split 模式检测:主图输出 0 为 hidden_states(rank=3)时,scorer 由 CPU 完成
+  {
+    LiteRtSignature sig0;
+    if (LiteRtGetModelSignature(main_m, 0, &sig0) == kLiteRtStatusOk) {
+      LiteRtTensor t0;
+      if (LiteRtGetSignatureOutputTensorByIndex(sig0, 0, &t0) == kLiteRtStatusOk) {
+        LiteRtRankedTensorType tt0;
+        if (LiteRtGetRankedTensorType(t0, &tt0) == kLiteRtStatusOk && tt0.layout.rank == 3) {
+          g_split_mode = 1;
+          LiteRtTensor t1;
+          g_single_out = (LiteRtGetSignatureOutputTensorByIndex(sig0, 1, &t1) != kLiteRtStatusOk);
+          const char* sc = getenv("LAYA_SCORER");
+          if (!sc) { fprintf(stderr, "litert-runner: split main model requires LAYA_SCORER env\n"); exit(1); }
+          load_scorer(sc);
+          fprintf(stderr, "litert-runner: split mode (single_out=%d)\n", g_single_out);
+        }
+      }
+    }
+  }
+
   LiteRtOptions opts;
   CHECK(LiteRtCreateOptions(&opts));
   if (use_npu) {
@@ -322,8 +434,12 @@ int main(int argc, char** argv) {
     CHECK(LiteRtSetOptionsHardwareAccelerators(opts, kLiteRtHwAcceleratorNpu | kLiteRtHwAcceleratorCpu));
     CHECK(LiteRtCreateCompiledModel(g_env, main_m, opts, &g_cm_main));
   } else {
+#ifndef LITERT_RUNNER_NO_GPU
     CHECK(LiteRtSetOptionsHardwareAccelerators(opts, kLiteRtHwAcceleratorGpu));
     LiteRtAddOpaqueOptions(opts, gpu_opts(cache_dir, "laya_ml_s256_wfp16_fp32"));
+#else
+    CHECK(LiteRtSetOptionsHardwareAccelerators(opts, kLiteRtHwAcceleratorCpu));
+#endif
     CHECK(LiteRtCreateCompiledModel(g_env, main_m, opts, &g_cm_main));
   }
   bool fully = false;
@@ -342,7 +458,7 @@ int main(int argc, char** argv) {
   g_in_mask = make_buffer(g_env, g_cm_main, msig, 1, 0);
   g_in_qtype = make_buffer(g_env, g_cm_main, msig, 2, 0);
   g_out_logits = make_buffer(g_env, g_cm_main, msig, 0, 1);
-  g_out_pooled = make_buffer(g_env, g_cm_main, msig, 1, 1);
+  if (!g_single_out) g_out_pooled = make_buffer(g_env, g_cm_main, msig, 1, 1);
   g_a_in_pooled = make_buffer(g_env, g_cm_act, asig, 0, 0);
   g_a_in_feats = make_buffer(g_env, g_cm_act, asig, 1, 0);
   g_a_out = make_buffer(g_env, g_cm_act, asig, 0, 1);
@@ -363,8 +479,10 @@ int main(int argc, char** argv) {
   if (strncmp(sock_path, "tcp:", 4) == 0) {
     int port = atoi(sock_path + 4);
     if (port <= 0 || port > 65535) { fprintf(stderr, "bad tcp port\n"); return 1; }
-    srv = socket(AF_INET, SOCK_STREAM, 0);
-    tcp_addr.sin_family = AF_INET;
+  srv = socket(AF_INET, SOCK_STREAM, 0);
+  int one = 1;
+  setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+  tcp_addr.sin_family = AF_INET;
     tcp_addr.sin_port = htons((uint16_t)port);
     tcp_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr_p = (struct sockaddr*)&tcp_addr;

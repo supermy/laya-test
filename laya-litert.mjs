@@ -11,6 +11,11 @@ const ACT = process.env.LAYA_ACT || "/sdcard/models/laya-litert/laya_ml_act_head
 const EMBED = process.env.LAYA_EMBED || "/sdcard/models/laya-litert/token_embeddings_fp16.bin";
 const RUNNER_BIN = process.env.LAYA_RUNNER_BIN || "litert-runner";
 const LD = `${RUNNER_DIR}:/system/lib64`;
+// 本地(Termux 域)运行:LAYA_RUNNER_LOCAL=1,无需 adb;库目录默认 ~/laya-test/npu-libs
+const RUNNER_LOCAL = process.env.LAYA_RUNNER_LOCAL === "1";
+const LIB_DIR = process.env.LAYA_LIB_DIR || `${process.env.HOME}/laya-test/npu-libs`;
+
+let localChild = null;
 
 function adbSerial() {
   const out = execFileSync("adb", ["devices"], { encoding: "utf8" });
@@ -42,17 +47,25 @@ export async function loadLitert({ modelDir, socketPath = { port: 7878, host: "1
   dbg("loadLitert start, socketPath=", JSON.stringify(socketPath));
   const ping = () => LayaNative.ping(socketPath);
   if (await ping()) { dbg("daemon already up"); return LayaNative.load({ modelDir, socketPath }); }
-  dbg("ping failed, spawning via adb");
 
-  const serial = adbSerial();
-  dbg("serial=", serial);
-  adbShell(serial, `mkdir -p ${cacheDir}`);
-  dbg("cache dir ready, spawning runner");
-  const sockArg = "tcp:" + socketPath.port;
-  const npuEnv = process.env.LAYA_BACKEND === "npu" ? "LAYA_BACKEND=npu " : "";
-  const cmd = `LD_LIBRARY_PATH=${LD} ${npuEnv}${RUNNER_DIR}/${RUNNER_BIN} ${MAIN} ${ACT} ${EMBED} ${sockArg} ${cacheDir}`;
-  dbg("spawn cmd=", cmd);
-  adbShell(serial, cmd, { bg: true });
+  if (RUNNER_LOCAL) {
+    dbg("local mode: spawning runner in Termux domain");
+    // NPU 需要 dispatch 库目录;GPU 本地模式暂不支持(NDK 版 runner 经 adb 走 shell 域)
+    const env = { ...process.env, LD_LIBRARY_PATH: LIB_DIR };
+    if (process.env.LAYA_BACKEND === "npu") env.LITERT_DISP_DIR = LIB_DIR;
+    const args = [MAIN, ACT, EMBED, "tcp:" + socketPath.port, cacheDir];
+    localChild = spawn(RUNNER_BIN, args, { env, cwd: process.cwd(), stdio: ["ignore", "ignore", "inherit"] });
+    dbg("spawned", RUNNER_BIN, "pid=", localChild.pid);
+  } else {
+    dbg("ping failed, spawning via adb");
+    const serial = adbSerial();
+    adbShell(serial, `mkdir -p ${cacheDir}`);
+    const sockArg = "tcp:" + socketPath.port;
+    const npuEnv = process.env.LAYA_BACKEND === "npu" ? `LAYA_BACKEND=npu LITERT_DISP_DIR=${LIB_DIR} ` : "";
+    const cmd = `LD_LIBRARY_PATH=${LD} ${npuEnv}${RUNNER_DIR}/${RUNNER_BIN} ${MAIN} ${ACT} ${EMBED} ${sockArg} ${cacheDir}`;
+    dbg("spawn cmd=", cmd);
+    adbShell(serial, cmd, { bg: true });
+  }
   dbg("spawned, polling socket");
 
   // GPU compile: ~3s with program cache, ~6s cold, plus model load; allow 60s.
@@ -64,11 +77,16 @@ export async function loadLitert({ modelDir, socketPath = { port: 7878, host: "1
     }
     await new Promise((r) => setTimeout(r, 200));
   }
-  const log = adbShell(serial, `tail -20 /data/local/tmp/litert/runner.log 2>/dev/null`).trim();
+  const log = RUNNER_LOCAL ? "" : adbShell(serial, `tail -20 /data/local/tmp/litert/runner.log 2>/dev/null`).trim();
   throw new Error(`litert daemon did not come up in 60s${log ? `\n--- runner.log ---\n${log}` : ""}`);
 }
 
 export async function stopLitert() {
+  if (RUNNER_LOCAL) {
+    if (localChild) { try { localChild.kill("SIGTERM"); } catch {} localChild = null; }
+    else { try { execFileSync("pkill", ["-f", RUNNER_BIN], { timeout: 15000 }); } catch {} }
+    return;
+  }
   // kill by name over adb (shell-domain process; Termux pkill can't see it)
   try { execFileSync("adb", ["-s", adbSerial(), "shell", "pkill -f litert-runner"], { timeout: 15000 }); } catch {}
 }
