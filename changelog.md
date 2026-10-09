@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-10 — v1.4.1:应用内语言切换(系统页)
+
+- 系统页新增「语言 / Language」选择器:**跟随系统 / 中文 / English**,点击即切,`recreate()` 重建后立即生效,无需重启
+- 实现:`attachBaseContext` 包裹目标 locale(`createConfigurationContext`)+ SharedPreferences(`ui/locale`)记忆——绕开 targetSdk 28 在 HyperOS 上系统级 per-app locale 不注入的限制
+- 语言与当前 tab 记忆(`ui/tab`),切换语言后停留在原页面
+- 真机验证:中→英(标题/底部 tab/决策页文案变英文)、英→中恢复、tab 保持 ✓
+
 ## 2026-10-10 — v1.4.0:决策 tab 整词旋转 90° + ☰ 显隐 + UI 国际化(zh/en)
 
 ### 决策页 tab 改版(与报表页统一)

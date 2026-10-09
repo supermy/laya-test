@@ -87,6 +87,7 @@ public class MainActivity extends Activity {
   @Override
   public void onCreate(Bundle b) {
     super.onCreate(b);
+    final int savedTab = getSharedPreferences("ui", MODE_PRIVATE).getInt("tab", 0); // recreate/切语言后回到原 tab
     refreshTasks();
     buildUi();
     // LLM 升级完成回调:决策页气泡展示风险分析(邮件/MQTT 渠道触发的也在此显示)
@@ -101,6 +102,22 @@ public class MainActivity extends Activity {
     }
     bot(getString(R.string.ready_msg, taskLabels));
     handleIntent(getIntent() != null ? getIntent() : null);
+    if ((getIntent() == null || getIntent().getStringExtra("tab") == null) && tab != savedTab) setTab(savedTab);
+  }
+
+  // ---- UI 语言(应用内切换):attachBaseContext 包裹目标 locale,选择记忆在 prefs("ui"/"locale") ----
+  private String uiLocale() { return getSharedPreferences("ui", MODE_PRIVATE).getString("locale", "sys"); }
+
+  @Override
+  protected void attachBaseContext(android.content.Context base) {
+    String sel = base.getSharedPreferences("ui", MODE_PRIVATE).getString("locale", "sys");
+    if (!"sys".equals(sel)) {
+      java.util.Locale loc = "en".equals(sel) ? java.util.Locale.US : java.util.Locale.SIMPLIFIED_CHINESE;
+      android.content.res.Configuration cfg = new android.content.res.Configuration(base.getResources().getConfiguration());
+      cfg.setLocale(loc);
+      base = base.createConfigurationContext(cfg);
+    }
+    super.attachBaseContext(base);
   }
 
   @Override
@@ -235,6 +252,7 @@ public class MainActivity extends Activity {
 
   private void setTab(int k) {
     tab = k;
+    getSharedPreferences("ui", MODE_PRIVATE).edit().putInt("tab", k).apply();
     refreshGatewayBar();
     for (int i = 0; i < 4; i++) {
       boolean on = i == k;
@@ -1245,6 +1263,48 @@ public class MainActivity extends Activity {
     LinearLayout l = new LinearLayout(this);
     l.setOrientation(LinearLayout.VERTICAL);
     l.setPadding(dp(12), dp(8), dp(12), dp(8));
+
+    // ---- 语言 / Language(应用内切换,立即生效) ----
+    LinearLayout langRow = new LinearLayout(this);
+    langRow.setOrientation(LinearLayout.VERTICAL);
+    langRow.setBackground(pill(0xFFF0F4FF, dp(10)));
+    langRow.setPadding(dp(10), dp(8), dp(10), dp(8));
+    LinearLayout.LayoutParams langLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+    langLp.bottomMargin = dp(10);
+    langRow.setLayoutParams(langLp);
+    TextView langHead = new TextView(this);
+    langHead.setText(getString(R.string.lang_label)); langHead.setTextSize(14); langHead.setTypeface(Typeface.DEFAULT_BOLD);
+    langRow.addView(langHead);
+    LinearLayout langBtns = new LinearLayout(this);
+    langBtns.setOrientation(LinearLayout.HORIZONTAL);
+    LinearLayout.LayoutParams btnsLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+    btnsLp.topMargin = dp(4);
+    langBtns.setLayoutParams(btnsLp);
+    String curLoc = uiLocale();
+    String[] locIds = {"sys", "zh", "en"};
+    for (String id : locIds) {
+      final String fid = id;
+      Button b = new Button(this);
+      b.setText("sys".equals(id) ? getString(R.string.lang_follow) : "zh".equals(id) ? getString(R.string.lang_zh) : getString(R.string.lang_en));
+      b.setAllCaps(false); b.setTextSize(12);
+      b.setMinHeight(0); b.setMinimumWidth(0); b.setMinimumHeight(0);
+      b.setPadding(dp(12), dp(6), dp(12), dp(6));
+      boolean on = id.equals(curLoc);
+      b.setTextColor(on ? Color.WHITE : 0xFF1A2B4C);
+      b.setBackground(pill(on ? PRIMARY : 0xFFE7EAF2, dp(14)));
+      LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+      blp.leftMargin = dp(8);
+      b.setLayoutParams(blp);
+      b.setOnClickListener(v -> {
+        if (!fid.equals(uiLocale())) {
+          getSharedPreferences("ui", MODE_PRIVATE).edit().putString("locale", fid).apply();
+          recreate(); // attachBaseContext 读取新 locale 重建整套 UI
+        }
+      });
+      langBtns.addView(b);
+    }
+    langRow.addView(langBtns);
+    l.addView(langRow);
 
     // ---- 手动上传模型包输入界面 ----
     LinearLayout up = new LinearLayout(this);
