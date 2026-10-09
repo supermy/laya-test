@@ -92,8 +92,8 @@ public class MainActivity extends Activity {
     buildUi();
     // LLM 升级完成回调:决策页气泡展示风险分析(邮件/MQTT 渠道触发的也在此显示)
     com.laya.DecisionCore.setLlmListener((task, content, err) -> runOnUiThread(() -> {
-      if (err != null) bot("🤖 LLM 升级失败 [" + task + "]: " + err);
-      else if (!content.isEmpty()) bot("🤖 LLM 风险分析 [" + task + "]\n" + content);
+      if (err != null) bot(getString(R.string.llm_fail_msg, task, err));
+      else if (!content.isEmpty()) bot(getString(R.string.llm_analysis_msg, task, content));
     }));
     // 恢复内置网关(仅配置了 enabled 时)
     if (com.laya.Gateway.cfg(this).optBoolean("enabled")) {
@@ -218,7 +218,7 @@ public class MainActivity extends Activity {
     if (name == null) name = uri.getLastPathSegment();
     if (name == null) name = "picked.zip";
     final String fname = name;
-    upStatus.setText("读取所选 zip…");
+    upStatus.setText(getString(R.string.picking_zip));
     new Thread(() -> {
       try {
         File dst = new File(getCacheDir(), "picked-upload.zip");
@@ -237,17 +237,17 @@ public class MainActivity extends Activity {
             String guess = fname.replaceFirst("(?i)\\.zip$", "").replaceFirst("^laya-litert-", "");
             if (guess.matches("[a-zA-Z0-9_-]{1,32}")) upTask.setText(guess);
           }
-          upStatus.setText("已选择 " + fname + "(" + mb + "MB),点「上传并注册」完成校验");
+          upStatus.setText(getString(R.string.picked_msg, fname, mb));
         });
       } catch (Throwable e) {
-        runOnUiThread(() -> upStatus.setText("❌ 读取失败: " + e.getMessage()));
+        runOnUiThread(() -> upStatus.setText(getString(R.string.read_failed, e.getMessage())));
       }
     }).start();
   }
 
 
   private void refreshGatewayBar() {
-    if (gwBarText != null) gwBarText.setText("网关: " + com.laya.Gateway.status(this));
+    if (gwBarText != null) gwBarText.setText(getString(R.string.gateway_bar, com.laya.Gateway.status(this)));
   }
 
   private void setTab(int k) {
@@ -351,7 +351,7 @@ public class MainActivity extends Activity {
     bottom.setPadding(dp(12), dp(8), dp(12), dp(8));
     bottom.setBackgroundColor(Color.WHITE);
     input = new EditText(this);
-    input.setHint("输入" + taskLabels.get(taskIdx) + "文本"); input.setTextSize(14); input.setMaxLines(3);
+    input.setHint(getString(R.string.input_hint, taskLabels.get(taskIdx))); input.setTextSize(14); input.setMaxLines(3);
     input.setBackground(pill(Color.WHITE, dp(22)));
     input.setPadding(dp(14), dp(10), dp(14), dp(10));
     bottom.addView(input, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -390,8 +390,8 @@ public class MainActivity extends Activity {
       String when = df.format(new java.util.Date(llm.optLong("ts")));
       org.json.JSONObject l = llm.optJSONObject("llm");
       String c = l != null ? l.optString("content") : "";
-      if (!c.isEmpty()) bot("🤖 最近 LLM 风险分析 · " + when + "\n" + c);
-      else if (llm.has("error")) bot("🤖 最近 LLM 升级失败(" + when + "): " + llm.optString("error"));
+      if (!c.isEmpty()) bot(getString(R.string.last_llm_analysis, when, c));
+      else if (llm.has("error")) bot(getString(R.string.last_llm_fail, when, llm.optString("error")));
     }
     scroller.post(() -> scroller.scrollTo(0, scroller.getHeight()));
   }
@@ -407,16 +407,16 @@ public class MainActivity extends Activity {
     busy = true;
     input.setText("");
     bubble(text, true);
-    bubble("推理中…", false);
+    bubble(getString(R.string.inferring), false);
     final int ti = taskIdx;
     new Thread(() -> {
       String reply;
       try {
         com.laya.DecisionCore.Result r = com.laya.DecisionCore.decide(this, taskIds.get(ti), text);
-        reply = fmtAnswers(taskIds.get(ti), r.answers, (int) r.latencyMs) + "\n后端: " + com.laya.DecisionCore.currentEngine();
+        reply = fmtAnswers(taskIds.get(ti), r.answers, (int) r.latencyMs) + getString(R.string.backend_prefix, com.laya.DecisionCore.currentEngine());
       } catch (Throwable e) {
         android.util.Log.e("LayaApp", "decision failed", e);
-        reply = "推理失败: " + e.getClass().getSimpleName() + ": " + e.getMessage();
+        reply = getString(R.string.infer_failed, e.getClass().getSimpleName(), e.getMessage());
       }
       final String r2 = reply;
       runOnUiThread(() -> { bubble(r2, false); busy = false; });
@@ -465,7 +465,7 @@ public class MainActivity extends Activity {
     pagerRow.setGravity(Gravity.CENTER_VERTICAL);
     pagerRow.setPadding(0, dp(4), 0, dp(4));
     Button prev = new Button(this);
-    prev.setText("◀ 上一页"); prev.setAllCaps(false); prev.setTextSize(12);
+    prev.setText(getString(R.string.page_prev)); prev.setAllCaps(false); prev.setTextSize(12);
     prev.setOnClickListener(v -> { if (detailPage > 0) { detailPage--; renderReport(3); } });
     prev.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
     pagerRow.addView(prev);
@@ -474,7 +474,7 @@ public class MainActivity extends Activity {
     pagerLabel.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
     pagerRow.addView(pagerLabel);
     Button next = new Button(this);
-    next.setText("下一页 ▶"); next.setAllCaps(false); next.setTextSize(12);
+    next.setText(getString(R.string.page_next)); next.setAllCaps(false); next.setTextSize(12);
     next.setOnClickListener(v -> { if (detailPage < detailPages - 1) { detailPage++; renderReport(3); } });
     next.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
     pagerRow.addView(next);
@@ -488,23 +488,23 @@ public class MainActivity extends Activity {
     LinearLayout fRow1 = new LinearLayout(this);
     fRow1.setGravity(Gravity.CENTER_VERTICAL);
     spinRange = new Spinner(this);
-    spinRange.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, new String[]{"近7天", "今天", "近30天", "全部"}));
+    spinRange.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, new String[]{getString(R.string.range_7d), getString(R.string.range_today), getString(R.string.range_30d), getString(R.string.range_all)}));
     spinRange.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.4f));
     fRow1.addView(spinRange);
     spinLevel = new Spinner(this);
-    spinLevel.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, new String[]{"全部等级", "高", "中", "低"}));
+    spinLevel.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, new String[]{getString(R.string.level_all), getString(R.string.level_high), getString(R.string.level_mid), getString(R.string.level_low)}));
     spinLevel.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.4f));
     fRow1.addView(spinLevel);
     spinTask = new Spinner(this);
     java.util.List<String> tOpts = new ArrayList<>();
-    tOpts.add("全部业务");
+    tOpts.add(getString(R.string.task_all));
     for (int i = 0; i < taskIds.size(); i++) tOpts.add(taskLabels.get(i) + " (" + taskIds.get(i) + ")");
     spinTask.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, tOpts));
     spinTask.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f));
     fRow1.addView(spinTask);
     drillPane.addView(fRow1);
     Button qBtn = new Button(this);
-    qBtn.setText("查询(点下方数字下钻)");
+    qBtn.setText(getString(R.string.drill_query));
     qBtn.setAllCaps(false); qBtn.setTextSize(13);
     qBtn.setOnClickListener(v -> renderDrill());
     drillPane.addView(qBtn);
@@ -529,8 +529,9 @@ public class MainActivity extends Activity {
     final FrameLayout holder = new FrameLayout(this);
     holder.addView(scroller);
     holder.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
-    String[] kinds = {"日报", "月报", "年报", "详单", "下钻详单"};
-    String[] vert = {"日\n报", "月\n报", "年\n报", "详\n单", "下\n钻\n详\n单"};
+    String[] kinds = {getString(R.string.kind_daily), getString(R.string.kind_monthly), getString(R.string.kind_yearly), getString(R.string.kind_detail), getString(R.string.kind_drill)};
+    String[] vert = new String[kinds.length]; // 名称逐字竖排
+    for (int i = 0; i < kinds.length; i++) vert[i] = String.join("\n", kinds[i].split(""));
     final Button[] chips = new Button[5];
     final LinearLayout rail = new LinearLayout(this);
     rail.setOrientation(LinearLayout.VERTICAL);
@@ -595,7 +596,7 @@ public class MainActivity extends Activity {
   private void renderDrill() {
     final int days = new int[]{7, 1, 30, 0}[spinRange.getSelectedItemPosition()];
     final int lp = spinLevel.getSelectedItemPosition();
-    final String level = lp == 0 ? null : (String) spinLevel.getSelectedItem();
+    final String level = lp == 0 ? null : new String[]{"高", "中", "低"}[lp - 1]; // 数据键固定,UI 显示已本地化
     final int tp = spinTask.getSelectedItemPosition();
     final String task = tp == 0 ? null : taskIds.get(tp - 1);
     final android.app.Activity act = this;
@@ -623,7 +624,7 @@ public class MainActivity extends Activity {
     for (String l : levels) if (!lvOrd.contains(l)) lvOrd.add(l);
     ArrayList<String> dOrd = new ArrayList<>(dates); java.util.Collections.reverse(dOrd);
     TextView head = new TextView(this);
-    head.setText("共 " + piv.optInt("total") + " 条 · ①业务×等级 ②按日期,点数字下钻");
+    head.setText(getString(R.string.drill_head, piv.optInt("total")));
     head.setTextSize(12); head.setTextColor(0xFF66707E); head.setPadding(dp(4), dp(8), 0, dp(4));
     drillTables.addView(head);
     java.util.Map<String, Integer> grid = new LinkedHashMap<>();
@@ -636,9 +637,9 @@ public class MainActivity extends Activity {
     LinearLayout t1 = new LinearLayout(this); t1.setOrientation(LinearLayout.VERTICAL);
     t1.setBackground(pill(0xFFFFFFFF, dp(10))); t1.setPadding(dp(6), dp(6), dp(6), dp(6));
     LinearLayout h1 = new LinearLayout(this);
-    h1.addView(dCell("业务", true, 0, null, 2.2f));
+    h1.addView(dCell(getString(R.string.col_task), true, 0, null, 2.2f));
     for (String lv : lvOrd) h1.addView(dCell(lv, true, 0, null, 1f));
-    h1.addView(dCell("合计", true, 0, null, 1f));
+    h1.addView(dCell(getString(R.string.col_total), true, 0, null, 1f));
     t1.addView(h1);
     for (String t : tasks) {
       LinearLayout r = new LinearLayout(this);
@@ -658,9 +659,9 @@ public class MainActivity extends Activity {
     LinearLayout t2 = new LinearLayout(this); t2.setOrientation(LinearLayout.VERTICAL);
     t2.setBackground(pill(0xFFFFFFFF, dp(10))); t2.setPadding(dp(6), dp(6), dp(6), dp(6));
     LinearLayout h2 = new LinearLayout(this);
-    h2.addView(dCell("日期", true, 0, null, 1.6f));
+    h2.addView(dCell(getString(R.string.col_date), true, 0, null, 1.6f));
     for (String t : tasks) h2.addView(dCell(t, true, 0, null, 1f));
-    h2.addView(dCell("合计", true, 0, null, 1f));
+    h2.addView(dCell(getString(R.string.col_total), true, 0, null, 1f));
     t2.addView(h2);
     for (String d : dOrd) {
       LinearLayout r = new LinearLayout(this);
@@ -682,7 +683,7 @@ public class MainActivity extends Activity {
   private void drillShow(String date, String task, String level) {
     drillOut.removeAllViews();
     TextView loading = new TextView(this);
-    loading.setText("详单加载中…"); loading.setTextSize(12); loading.setPadding(dp(4), dp(8), 0, 0);
+    loading.setText(getString(R.string.loading_detail)); loading.setTextSize(12); loading.setPadding(dp(4), dp(8), 0, 0);
     drillOut.addView(loading);
     final android.app.Activity act = this;
     new Thread(() -> {
@@ -692,9 +693,9 @@ public class MainActivity extends Activity {
         java.util.Map<String, String> labels = new LinkedHashMap<>();
         for (int i = 0; i < taskIds.size(); i++) labels.put(taskIds.get(i), taskLabels.get(i));
         TextView title = new TextView(this);
-        title.setText("== 详单 " + (date != null ? date : "区间") + " · "
-            + (task != null ? labels.getOrDefault(task, task) : "全部业务") + " · "
-            + (level != null ? level : "全部等级") + " · " + es.length() + " 条 ==");
+        title.setText(getString(R.string.drill_title, date != null ? date : getString(R.string.range_any),
+            task != null ? labels.getOrDefault(task, task) : getString(R.string.task_all),
+            level != null ? level : getString(R.string.level_any), es.length()));
         title.setTextSize(13); title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setPadding(dp(4), dp(10), 0, dp(4));
         drillOut.addView(title);
@@ -728,7 +729,7 @@ public class MainActivity extends Activity {
         }
         if (es.length() == 0) {
           TextView empty = new TextView(this);
-          empty.setText("(无记录)"); empty.setTextSize(12); empty.setTextColor(0xFF66707E);
+          empty.setText(getString(R.string.no_records)); empty.setTextSize(12); empty.setTextColor(0xFF66707E);
           empty.setPadding(dp(4), dp(6), 0, 0);
           drillOut.addView(empty);
         }
@@ -753,7 +754,7 @@ public class MainActivity extends Activity {
           org.json.JSONObject d = com.laya.DecisionCore.detail(act, detailPage, 20);
           detailPages = d.optInt("pages", 1);
           JSONArray rows = d.optJSONArray("rows");
-          String[] heads = {"决策时间", "业务", "决策结果", "评分", "判定", "等级", "耗时", "内容"};
+          String[] heads = {getString(R.string.head_time), getString(R.string.col_task), getString(R.string.head_result), getString(R.string.label_score), getString(R.string.label_verdict), getString(R.string.col_level), getString(R.string.label_latency), getString(R.string.head_content)};
           float[] ws = {1.4f, 0.7f, 1.0f, 0.6f, 0.7f, 0.6f, 0.8f, 1.9f};
           java.util.List<String[]> data = new ArrayList<>();
           if (rows != null) for (int i = 0; i < rows.length(); i++) {
@@ -766,13 +767,13 @@ public class MainActivity extends Activity {
           final int pg = d.optInt("page", 1), pgs = d.optInt("pages", 1);
           runOnUiThread(() -> {
             showTable(heads, ws, fin);
-            pagerLabel.setText("第 " + pg + " / " + pgs + " 页");
+            pagerLabel.setText(getString(R.string.pager_label, pg, pgs));
           });
           return;
         }
         JSONObject rt = com.laya.DecisionCore.reportTable(act, kind);
         JSONArray rows = rt.optJSONArray("rows");
-        String[] heads = {"时段", "决策数", "平均耗时", "主要分类", "分类分布"};
+        String[] heads = {getString(R.string.head_period), getString(R.string.head_count, 0), getString(R.string.head_avg_latency), getString(R.string.head_top), getString(R.string.head_dist)};
         float[] ws = {1.2f, 0.8f, 0.9f, 1.1f, 2.0f};
         java.util.List<String[]> data = new ArrayList<>();
         if (rows != null) for (int i = 0; i < rows.length(); i++) {
@@ -790,12 +791,12 @@ public class MainActivity extends Activity {
             reportList.addView(empty);
           } else {
             String[] heads2 = new String[heads.length];
-            for (int i = 0; i < heads.length; i++) heads2[i] = i == 1 ? heads[i] + "(共" + tot + ")" : heads[i];
+            for (int i = 0; i < heads.length; i++) heads2[i] = i == 1 ? getString(R.string.head_count, tot) : heads[i];
             showTable(heads2, ws, fin);
           }
         });
       } catch (Exception e) {
-        final String msg = "生成失败: " + e.getMessage();
+        final String msg = getString(R.string.gen_failed, e.getMessage());
         runOnUiThread(() -> {
           reportList.removeAllViews();
           TextView err = new TextView(act);
@@ -850,24 +851,24 @@ public class MainActivity extends Activity {
     pMail.setOrientation(LinearLayout.VERTICAL);
     pMail.setPadding(dp(12), dp(8), dp(12), dp(8));
     LinearLayout l = pMail;
-    l.addView(hint("邮件网关(IMAP 拉取决策指令 → SMTP 回复;主题或正文写 \"laya <业务> <文本>\")"));
-    gwEmailHost = fieldU(l, "服务器(本机测试: 127.0.0.1 / 生产: imap.qq.com)");
-    gwEmailUser = fieldU(l, "邮箱账号");
-    gwEmailPass = fieldU(l, "授权码/密码");
+    l.addView(hint(getString(R.string.mail_hint)));
+    gwEmailHost = fieldU(l, getString(R.string.mail_host_hint));
+    gwEmailUser = fieldU(l, getString(R.string.mail_user_hint));
+    gwEmailPass = fieldU(l, getString(R.string.mail_pass_hint));
     LinearLayout pr = new LinearLayout(this);
     pr.setOrientation(LinearLayout.HORIZONTAL);
-    gwImapPort = fieldU(pr, "IMAP 端口", "143");
-    gwSmtpPort = fieldU(pr, "SMTP 端口", "25");
+    gwImapPort = fieldU(pr, getString(R.string.imap_port_hint), "143");
+    gwSmtpPort = fieldU(pr, getString(R.string.smtp_port_hint), "25");
     LinearLayout.LayoutParams plp1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
     plp1.rightMargin = dp(8); gwImapPort.setLayoutParams(plp1);
     gwSmtpPort.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
     l.addView(pr);
     gwSsl = new CheckBox(this);
-    gwSsl.setText("SSL(993/465,生产邮箱勾选;本地测试不勾)");
+    gwSsl.setText(getString(R.string.ssl_hint));
     gwSsl.setTextSize(13); gwSsl.setPadding(0, dp(6), 0, dp(6));
     l.addView(gwSsl);
-    gwReportTo = fieldU(l, "日报收件箱(可空,如 boss@localhost)");
-    Button emailBtn = button(l, "保存并启动邮件网关");
+    gwReportTo = fieldU(l, getString(R.string.report_to_hint));
+    Button emailBtn = button(l, getString(R.string.save_start_mail));
     emailBtn.setOnClickListener(v -> {
       try {
         JSONObject cfg = com.laya.Gateway.cfg(getApplicationContext());
@@ -883,11 +884,11 @@ public class MainActivity extends Activity {
         if (!to.isEmpty()) cfg.put("report", new JSONObject().put("to", to));
         gwStatus.setText(com.laya.Gateway.saveAndStart(getApplicationContext(), cfg));
         refreshGatewayBar();
-      } catch (Exception e) { gwStatus.setText("配置失败: " + e.getMessage()); }
+      } catch (Exception e) { gwStatus.setText(getString(R.string.cfg_failed, e.getMessage())); }
     });
-    Button emailTestBtn = button(l, "测试 IMAP 收件箱");
+    Button emailTestBtn = button(l, getString(R.string.test_imap_btn));
     emailTestBtn.setOnClickListener(v -> {
-      gwStatus.setText("IMAP 测试中…");
+      gwStatus.setText(getString(R.string.imap_testing));
       new Thread(() -> {
         String r;
         try {
@@ -902,9 +903,9 @@ public class MainActivity extends Activity {
         runOnUiThread(() -> gwStatus.setText(fr));
       }).start();
     });
-    Button smtpTestBtn = button(l, "测试 SMTP 发信(发到日报收件箱)");
+    Button smtpTestBtn = button(l, getString(R.string.test_smtp_btn));
     smtpTestBtn.setOnClickListener(v -> {
-      gwStatus.setText("SMTP 测试中…");
+      gwStatus.setText(getString(R.string.smtp_testing));
       new Thread(() -> {
         String r;
         try {
@@ -924,11 +925,11 @@ public class MainActivity extends Activity {
     pMq.setOrientation(LinearLayout.VERTICAL);
     pMq.setPadding(dp(12), dp(8), dp(12), dp(8));
     l = pMq;
-    l.addView(hint("消息队列(MQTT):订阅 laya/req/+ → 决策 → 发布 laya/resp"));
-    gwMqUrl = fieldU(l, "MQTT Broker,如 tcp://192.168.0.168:1883");
-    gwMqSub = fieldU(l, "订阅主题", "laya/req/+");
-    gwMqPub = fieldU(l, "发布主题", "laya/resp");
-    Button mqBtn = button(l, "保存并启动 MQTT 网关");
+    l.addView(hint(getString(R.string.mqtt_hint)));
+    gwMqUrl = fieldU(l, getString(R.string.mqtt_url_hint));
+    gwMqSub = fieldU(l, getString(R.string.mqtt_sub_hint), "laya/req/+");
+    gwMqPub = fieldU(l, getString(R.string.mqtt_pub_hint), "laya/resp");
+    Button mqBtn = button(l, getString(R.string.save_start_mqtt));
     mqBtn.setOnClickListener(v -> {
       try {
         JSONObject cfg = com.laya.Gateway.cfg(getApplicationContext());
@@ -936,11 +937,11 @@ public class MainActivity extends Activity {
         cfg.put("mqtt", new JSONObject().put("enabled", true).put("url", gwMqUrl.getText().toString()));
         cfg.put("topics", new JSONObject().put("sub", gwMqSub.getText().toString()).put("pub", gwMqPub.getText().toString()));
         gwStatus.setText(com.laya.Gateway.saveAndStart(getApplicationContext(), cfg));
-      } catch (Exception e) { gwStatus.setText("配置失败: " + e.getMessage()); }
+      } catch (Exception e) { gwStatus.setText(getString(R.string.cfg_failed, e.getMessage())); }
     });
-    Button mqTestBtn = button(l, "测试 MQTT(连接+订阅+发布)");
+    Button mqTestBtn = button(l, getString(R.string.test_mqtt_btn));
     mqTestBtn.setOnClickListener(v -> {
-      gwStatus.setText("MQTT 测试中…");
+      gwStatus.setText(getString(R.string.mqtt_testing));
       new Thread(() -> {
         String r;
         try {
@@ -952,11 +953,10 @@ public class MainActivity extends Activity {
         runOnUiThread(() -> gwStatus.setText(fr));
       }).start();
     });
-    l.addView(hint("模型包上传(局域网):浏览器打开 " + com.laya.Gateway.uploadUrl()
-        + " 提交 zip+业务名;或 curl -X POST --data-binary @pkg.zip \"" + com.laya.Gateway.uploadUrl() + "/upload?task=名字\""));
-    Button upTestBtn = button(l, "测试上传服务");
+    l.addView(hint(getString(R.string.upload_hint, com.laya.Gateway.uploadUrl(), com.laya.Gateway.uploadUrl())));
+    Button upTestBtn = button(l, getString(R.string.test_upload_btn));
     upTestBtn.setOnClickListener(v -> {
-      gwStatus.setText("上传服务测试中…");
+      gwStatus.setText(getString(R.string.upload_testing));
       new Thread(() -> {
         final String r = com.laya.Gateway.testUpload();
         runOnUiThread(() -> gwStatus.setText(r));
@@ -968,7 +968,7 @@ public class MainActivity extends Activity {
     pLlm.setOrientation(LinearLayout.VERTICAL);
     pLlm.setPadding(dp(12), dp(8), dp(12), dp(8));
     l = pLlm;
-    l.addView(hint("LLM 设置(决策后处理重要+紧急业务,3 个供可选;OpenAI 兼容 /chat/completions)"));
+    l.addView(hint(getString(R.string.llm_hint)));
     JSONObject llmCfg = com.laya.Gateway.cfg(this).optJSONObject("llm");
     JSONObject llmSlots = llmCfg != null ? llmCfg.optJSONObject("slots") : null;
     String actId = llmCfg != null ? llmCfg.optString("active", "llm1") : "llm1";
@@ -992,16 +992,16 @@ public class MainActivity extends Activity {
       LinearLayout head = new LinearLayout(this);
       head.setGravity(Gravity.CENTER_VERTICAL);
       llmRb[i] = new RadioButton(this);
-      llmRb[i].setText("启用"); llmRb[i].setTextSize(12);
+      llmRb[i].setText(getString(R.string.llm_enable)); llmRb[i].setTextSize(12);
       llmRb[i].setChecked(slotIds[i].equals(actId));
       head.addView(llmRb[i]);
-      llmName[i] = fieldU(head, "名称");
+      llmName[i] = fieldU(head, getString(R.string.name_hint));
       JSONObject fs = s;
       String nm = s != null ? s.optString("name", defNames[i]) : defNames[i];
       llmName[i].setText(nm);
       llmName[i].setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
       slot.addView(head);
-      llmUrl[i] = fieldU(slot, "Base URL(OpenAI 兼容)");
+      llmUrl[i] = fieldU(slot, getString(R.string.base_url_hint));
       llmUrl[i].setText(s != null ? s.optString("baseURL", defUrls[i]) : defUrls[i]);
       LinearLayout mr = new LinearLayout(this);
       llmModel[i] = fieldU(mr, "Model");
@@ -1021,7 +1021,7 @@ public class MainActivity extends Activity {
       final int k = i;
       llmRb[i].setOnClickListener(v -> { for (int j = 0; j < 3; j++) llmRb[j].setChecked(j == k); });
     }
-    Button llmSave = button(l, "保存 LLM 设置");
+    Button llmSave = button(l, getString(R.string.save_llm));
     llmSave.setOnClickListener(v -> {
       try {
         JSONObject slots = new JSONObject();
@@ -1036,19 +1036,19 @@ public class MainActivity extends Activity {
         }
         gwStatus.setText(com.laya.Gateway.saveLlm(this,
             new JSONObject().put("active", checked < 0 ? "llm1" : slotIds[checked]).put("slots", slots)));
-      } catch (Exception e) { gwStatus.setText("LLM 配置失败: " + e.getMessage()); }
+      } catch (Exception e) { gwStatus.setText(getString(R.string.llm_cfg_failed, e.getMessage())); }
     });
-    Button llmTest = button(l, "测试选中的 LLM(发一条 ping)");
+    Button llmTest = button(l, getString(R.string.test_llm_btn));
     llmTest.setOnClickListener(v -> {
       try {
         int checked = -1;
         for (int i = 0; i < 3; i++) if (llmRb[i].isChecked()) checked = i;
-        if (checked < 0) { gwStatus.setText("请先勾选一个 LLM"); return; }
+        if (checked < 0) { gwStatus.setText(getString(R.string.llm_pick_first)); return; }
         final String url = llmUrl[checked].getText().toString().trim().replaceAll("/+$", "");
         final String model = llmModel[checked].getText().toString().trim();
         final String key = llmKey[checked].getText().toString().trim();
         final String nm = llmName[checked].getText().toString();
-        gwStatus.setText("测试 " + nm + " …");
+        gwStatus.setText(getString(R.string.testing_x, nm));
         new Thread(() -> {
           String r;
           try {
@@ -1068,13 +1068,13 @@ public class MainActivity extends Activity {
             if (code < 400) {
               String txt = new JSONObject(body).optJSONArray("choices") != null
                   ? new JSONObject(body).optJSONArray("choices").optJSONObject(0).optJSONObject("message").optString("content") : "";
-              r = "✅ " + nm + " 连通(" + code + ")回复: " + txt.trim();
-            } else r = "❌ " + nm + " HTTP " + code + ": " + body.substring(0, Math.min(160, body.length()));
-          } catch (Exception e) { r = "❌ " + nm + " 失败: " + e.getMessage(); }
+              r = getString(R.string.llm_ok, nm, code, txt.trim());
+            } else r = getString(R.string.llm_http_err, nm, code, body.substring(0, Math.min(160, body.length())));
+          } catch (Exception e) { r = getString(R.string.llm_fail, nm, e.getMessage()); }
           final String fr = r;
           runOnUiThread(() -> gwStatus.setText(fr));
         }).start();
-      } catch (Exception e) { gwStatus.setText("测试失败: " + e.getMessage()); }
+      } catch (Exception e) { gwStatus.setText(getString(R.string.test_failed, e.getMessage())); }
     });
 
     // ---- 左侧竖排 tab(与报表页同款):邮件/队列/LLM ----
@@ -1089,7 +1089,9 @@ public class MainActivity extends Activity {
     final FrameLayout gHolder = new FrameLayout(this);
     gHolder.addView(scrolls[0]);
     gHolder.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
-    String[] gVert = {"邮\n件", "队\n列", "L\nL\nM"};
+    String[] gkinds = {getString(R.string.gw_mail), getString(R.string.gw_mq), "LLM"};
+    String[] gVert = new String[gkinds.length]; // 名称逐字竖排
+    for (int i = 0; i < gkinds.length; i++) gVert[i] = String.join("\n", gkinds[i].split(""));
     final Button[] gchips = new Button[3];
     final LinearLayout grail = new LinearLayout(this);
     grail.setOrientation(LinearLayout.VERTICAL);
@@ -1135,9 +1137,9 @@ public class MainActivity extends Activity {
     LinearLayout gBottom = new LinearLayout(this);
     gBottom.setOrientation(LinearLayout.VERTICAL);
     gBottom.setPadding(dp(12), dp(2), dp(12), dp(8));
-    Button stopBtn = button(gBottom, "停止全部网关");
+    Button stopBtn = button(gBottom, getString(R.string.stop_gw));
     stopBtn.setOnClickListener(v -> gwStatus.setText(com.laya.Gateway.stop(getApplicationContext())));
-    gwStatus = hint("网关: " + com.laya.Gateway.status(this));
+    gwStatus = hint(getString(R.string.gateway_bar, com.laya.Gateway.status(this)));
     gBottom.addView(gwStatus);
     body.addView(gBottom);
     // 初始高亮
@@ -1208,9 +1210,9 @@ public class MainActivity extends Activity {
   }
 
   /** 目录内全部文件打包为 zip(文件位于 zip 根,importPackage 可直接校验导入);ZIP 根含 label.txt 等附加文件也一并带上 */
-  private static void zipDir(File dir, File dst) throws Exception {
+  private void zipDir(File dir, File dst) throws Exception {
     File[] files = dir.listFiles();
-    if (files == null || files.length == 0) throw new IllegalStateException("源包为空或不存在: " + dir);
+    if (files == null || files.length == 0) throw new IllegalStateException(getString(R.string.src_empty_err, String.valueOf(dir)));
     java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(
         new java.io.BufferedOutputStream(new FileOutputStream(dst)));
     zos.setLevel(java.util.zip.Deflater.BEST_SPEED); // 650MB 级模型包,速度优先
@@ -1242,15 +1244,17 @@ public class MainActivity extends Activity {
         if (f.endsWith("embeds_npu.tflite")) npu = human(s.length());
         if (f.endsWith("embeds_wfp16.tflite")) gpu = human(s.length());
         sb.append("✓ ").append(f).append("  ").append(human(s.length())).append('\n');
-      } else sb.append("✗ ").append(f).append("  缺\n");
+      } else sb.append("✗ ").append(f).append("  ").append(getString(R.string.missing_mark)).append('\n');
     }
     String main = npu != null && gpu != null ? "NPU dispatch(" + npu + ")+GPU wfp16(" + gpu + ")"
-        : npu != null ? "NPU dispatch(" + npu + ")(纯 NPU 包)" : "GPU wfp16(" + gpu + ")(无 NPU 主图)";
-    sb.insert(0, "格式: " + main + "\n齐全: " + have + "/8 · 共 " + human(total)
-        + "\n源包: " + src.getAbsolutePath() + "\n");
+        : npu != null ? "NPU dispatch(" + npu + ")" + getString(R.string.npu_pure_suffix) : "GPU wfp16(" + gpu + ")" + getString(R.string.no_npu_suffix);
+    sb.insert(0, getString(R.string.fmt_prefix, main) + "\n"
+        + getString(R.string.complete_prefix, have, human(total)) + "\n"
+        + getString(R.string.src_prefix, src.getAbsolutePath()) + "\n");
     long it = 0; int ih = 0;
     for (String f : MODEL_FILES) { File d = new File(inst, f); if (d.isFile()) { ih++; it += d.length(); } }
-    sb.append("装入副本: ").append(ih == 0 ? "未装入" : ih + "/8 文件 · " + human(it));
+    sb.append(getString(R.string.loaded_copy, ih == 0 ? getString(R.string.not_installed)
+        : getString(R.string.files_of_8, ih, human(it))));
     return sb.toString();
   }
 
@@ -1315,10 +1319,10 @@ public class MainActivity extends Activity {
     ulp.bottomMargin = dp(10);
     up.setLayoutParams(ulp);
     TextView upHead = new TextView(this);
-    upHead.setText("⬆ 手动上传模型包"); upHead.setTextSize(14); upHead.setTypeface(Typeface.DEFAULT_BOLD);
+    upHead.setText(getString(R.string.upload_head)); upHead.setTextSize(14); upHead.setTypeface(Typeface.DEFAULT_BOLD);
     up.addView(upHead);
-    upSrc = fieldU(up, "包路径(目录或 zip;可点下方按钮选择)");
-    Button pickBtn = button(up, "📁 选择 zip 文件…");
+    upSrc = fieldU(up, getString(R.string.pkg_path_hint));
+    Button pickBtn = button(up, getString(R.string.pick_zip));
     pickBtn.setOnClickListener(v -> {
       Intent it = new Intent(Intent.ACTION_OPEN_DOCUMENT);
       it.addCategory(Intent.CATEGORY_OPENABLE);
@@ -1326,24 +1330,24 @@ public class MainActivity extends Activity {
       it.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream"});
       startActivityForResult(it, REQ_PICK_ZIP);
     });
-    upTask = fieldU(up, "业务名(英文,如 demo)");
+    upTask = fieldU(up, getString(R.string.task_name_hint));
     upStatus = new TextView(this);
     upStatus.setTextSize(11); upStatus.setTextColor(0xFF66707E);
-    upStatus.setText("选择 zip 或手填路径;六文件校验通过后注册为新业务,zip 内路径任意");
+    upStatus.setText(getString(R.string.upload_note));
     up.addView(upStatus);
-    Button impBtn = button(up, "上传并注册");
+    Button impBtn = button(up, getString(R.string.upload_register));
     impBtn.setOnClickListener(v -> {
       String src = upSrc.getText().toString().trim();
       String task = upTask.getText().toString().trim();
-      if (src.isEmpty() || task.isEmpty()) { upStatus.setText("请填包路径和业务名"); return; }
-      upStatus.setText("上传中…(zip 约 250MB,校验六文件)");
+      if (src.isEmpty() || task.isEmpty()) { upStatus.setText(getString(R.string.fill_path_task)); return; }
+      upStatus.setText(getString(R.string.uploading));
       new Thread(() -> {
         String err = com.laya.DecisionCore.importPackage(getApplicationContext(), src, task);
         if (err == null && src.equals(new File(getCacheDir(), "picked-upload.zip").getAbsolutePath()))
           new File(getCacheDir(), "picked-upload.zip").delete(); // 选择器中转 zip 用完即删
         runOnUiThread(() -> {
           if (err == null) {
-            upStatus.setText("✅ 上传成功,已注册业务 [" + task + "]");
+            upStatus.setText(getString(R.string.upload_ok, task));
             setTab(3);
           } else upStatus.setText("❌ " + err);
         });
@@ -1351,9 +1355,9 @@ public class MainActivity extends Activity {
     });
     l.addView(up);
 
-    Button rescan = button(l, "⟳ 重新扫描业务");
+    Button rescan = button(l, getString(R.string.rescan));
     rescan.setOnClickListener(v -> { refreshTasks(); setTab(3); });
-    l.addView(hint("已注册业务列表;加载=装入 app 可决策;模型详情=展开八文件清单(点清单收起);删除=移除源包与副本(不可恢复)"));
+    l.addView(hint(getString(R.string.biz_list_hint)));
 
     for (int i = 0; i < taskIds.size(); i++) {
       final String task = taskIds.get(i);
@@ -1374,14 +1378,14 @@ public class MainActivity extends Activity {
       head.setTextSize(14); head.setTypeface(Typeface.DEFAULT_BOLD); head.setTextColor(0xFF1A2B4C);
       card.addView(head);
       TextView st = new TextView(this);
-      st.setText(loaded ? "已装入 app(约 650MB)· 可决策 / 收网关指令" : "未装入 · 决策时自动安装,或点下方[加载]");
+      st.setText(getString(loaded ? R.string.loaded_state : R.string.not_loaded_state));
       st.setTextSize(11); st.setTextColor(0xFF66707E);
       st.setPadding(0, dp(2), 0, dp(4));
       card.addView(st);
 
       // 单按钮动态切换:未加载=加载(装入 app);已加载=卸载(释放空间)
       Button toggle = new Button(this);
-      toggle.setText(loaded ? "卸载(释放空间)" : "加载(装入 app)");
+      toggle.setText(getString(loaded ? R.string.uninstall : R.string.load_btn));
       toggle.setAllCaps(false); toggle.setTextSize(12);
       toggle.setTextColor(loaded ? 0xFF444A55 : Color.WHITE);
       toggle.setBackground(pill(loaded ? CHIP_OFF : PRIMARY, dp(14)));
@@ -1392,10 +1396,10 @@ public class MainActivity extends Activity {
           com.laya.DecisionCore.unload(this, task);
           setTab(3);
         } else {
-          st.setText("加载中…(拷贝 650MB + GPU 编译,约 1-2 分钟)");
+          st.setText(getString(R.string.loading_model));
           new Thread(() -> {
             try { com.laya.DecisionCore.preload(this, task); runOnUiThread(() -> setTab(3)); }
-            catch (Throwable e) { runOnUiThread(() -> st.setText("加载失败: " + e.getMessage())); }
+            catch (Throwable e) { runOnUiThread(() -> st.setText(getString(R.string.load_failed, e.getMessage()))); }
           }).start();
         }
       });
@@ -1405,15 +1409,15 @@ public class MainActivity extends Activity {
       LinearLayout row2 = new LinearLayout(this);
       row2.setOrientation(LinearLayout.HORIZONTAL);
       Button detailBtn = new Button(this);
-      detailBtn.setText("模型详情"); detailBtn.setAllCaps(false); detailBtn.setTextSize(12);
+      detailBtn.setText(getString(R.string.detail_btn)); detailBtn.setAllCaps(false); detailBtn.setTextSize(12);
       detailBtn.setTextColor(0xFF444A55); detailBtn.setBackground(pill(CHIP_OFF, dp(14)));
       detailBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
       Button expBtn = new Button(this);
-      expBtn.setText("导出 zip"); expBtn.setAllCaps(false); expBtn.setTextSize(12);
+      expBtn.setText(getString(R.string.export_zip)); expBtn.setAllCaps(false); expBtn.setTextSize(12);
       expBtn.setTextColor(0xFF444A55); expBtn.setBackground(pill(CHIP_OFF, dp(14)));
       expBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
       Button delBtn = new Button(this);
-      delBtn.setText("删除业务"); delBtn.setAllCaps(false); delBtn.setTextSize(12);
+      delBtn.setText(getString(R.string.delete_biz)); delBtn.setAllCaps(false); delBtn.setTextSize(12);
       delBtn.setTextColor(0xFFB3261E); delBtn.setBackground(pill(0xFFFCEAEA, dp(14)));
       delBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
       LinearLayout.LayoutParams half1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
@@ -1442,7 +1446,7 @@ public class MainActivity extends Activity {
 
       expBtn.setOnClickListener(v -> {
         final File dst = new File("/sdcard/Download", "laya-litert-" + task + ".zip");
-        expBtn.setText("打包中…"); expBtn.setEnabled(false);
+        expBtn.setText(getString(R.string.packing)); expBtn.setEnabled(false);
         new Thread(() -> {
           String err = null;
           try {
@@ -1454,13 +1458,13 @@ public class MainActivity extends Activity {
           }
           final String ferr = err;
           runOnUiThread(() -> {
-            expBtn.setText("导出 zip"); expBtn.setEnabled(true);
+            expBtn.setText(getString(R.string.export_zip)); expBtn.setEnabled(true);
             if (ferr == null)
-              new AlertDialog.Builder(this).setTitle("导出完成")
-                  .setMessage(dst.getAbsolutePath() + "\n大小 " + human(dst.length()) + "\n可在系统页「上传并注册」重新导入,或传到其他设备")
-                  .setPositiveButton("好", null).show();
+              new AlertDialog.Builder(this).setTitle(getString(R.string.export_done_title))
+                  .setMessage(getString(R.string.export_done_msg, dst.getAbsolutePath(), human(dst.length())))
+                  .setPositiveButton(getString(R.string.ok_btn), null).show();
             else
-              new AlertDialog.Builder(this).setTitle("导出失败").setMessage(ferr).setPositiveButton("好", null).show();
+              new AlertDialog.Builder(this).setTitle(getString(R.string.export_failed_title)).setMessage(ferr).setPositiveButton(getString(R.string.ok_btn), null).show();
           });
         }).start();
       });
@@ -1468,10 +1472,10 @@ public class MainActivity extends Activity {
       delBtn.setOnClickListener(v -> {
         String srcPath = srcDir(task).getAbsolutePath();
         new AlertDialog.Builder(this)
-            .setTitle("删除业务 [" + task + "]")
-            .setMessage("将删除源包 " + srcPath + " 与装入副本(files/laya-" + task + "),不可恢复。确定删除?")
-            .setNegativeButton("取消", null)
-            .setPositiveButton("删除", (d, w) -> {
+            .setTitle(getString(R.string.delete_title, task))
+            .setMessage(getString(R.string.delete_msg, srcPath, task))
+            .setNegativeButton(getString(R.string.cancel), null)
+            .setPositiveButton(getString(R.string.delete_btn), (d, w) -> {
               com.laya.DecisionCore.unload(this, task);
               new Thread(() -> {
                 deleteQuiet(srcDir(task).getParentFile());
@@ -1484,7 +1488,7 @@ public class MainActivity extends Activity {
     }
 
     sysView = new TextView(this);
-    sysView.setText(com.laya.DecisionCore.backendInfo(this) + "\n网关状态见顶部状态栏");
+    sysView.setText(com.laya.DecisionCore.backendInfo(this) + getString(R.string.sys_tail));
     sysView.setTextSize(13);
     l.addView(sysView);
 
@@ -1492,23 +1496,24 @@ public class MainActivity extends Activity {
     LinearLayout p3 = new LinearLayout(this);
     p3.setOrientation(LinearLayout.VERTICAL);
     p3.setPadding(dp(12), dp(8), dp(12), dp(8));
-    p3.addView(hint("数据流泳道:一次决策请求的端到端路径 — 业务输入 → 引擎链(NPU→GPU→CPU)→ 主图+scorer → 分流(60.9% 本端 / 39.1% 升级 LLM)"));
+    p3.addView(hint(getString(R.string.flow_hint_data)));
     p3.addView(new DiagramView(this, 1));
 
     // ---- 子标签页:左侧竖排(系统/架构图/流程图/数据流)+ 显隐开关 ----
     LinearLayout p1 = new LinearLayout(this);
     p1.setOrientation(LinearLayout.VERTICAL);
     p1.setPadding(dp(12), dp(8), dp(12), dp(8));
-    p1.addView(hint("分层决策架构:云端微调闭环 + LLM 升级通道(与 README fig2 同构)"));
+    p1.addView(hint(getString(R.string.flow_hint_arch)));
     p1.addView(new DiagramView(this, 0));
     LinearLayout p2 = new LinearLayout(this);
     p2.setOrientation(LinearLayout.VERTICAL);
     p2.setPadding(dp(12), dp(8), dp(12), dp(8));
-    p2.addView(hint("业务流程:决策完成 → 本端自动处理 / LLM 进一步处理(重要+紧急)→ 日志回流 → 微调闭环(与 README fig4 同构)"));
+    p2.addView(hint(getString(R.string.flow_hint_proc)));
     p2.addView(new DiagramView(this, 3));
 
-    String[] subNames = {"系统", "架构图", "流程图", "数据流"};
-    String[] subVert = {"系\n统", "架\n构\n图", "流\n程\n图", "数\n据\n流"}; // 竖排文字
+    String[] subNames = {getString(R.string.sub_sys), getString(R.string.sub_arch), getString(R.string.sub_flow), getString(R.string.sub_data)};
+    String[] subVert = new String[subNames.length]; // 竖排文字
+    for (int i = 0; i < subNames.length; i++) subVert[i] = String.join("\n", subNames[i].split(""));
     LinearLayout[] subPanels = {l, p1, p2, p3};
     final ScrollView[] subScrolls = new ScrollView[4];
     for (int i = 0; i < 4; i++) {
