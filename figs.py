@@ -34,10 +34,10 @@ for name, ms, label, color in rows:
 d.text((60, y + 6), "同一张工单、同一组问题;GPU 路径为 fp32,窗口 256", font=F(24), fill=MUT)
 img.save("/sdcard/Pictures/fig1_perf.png")
 
-# ---------- 图2:架构 ----------
-img = Image.new("RGB", (W, 850), BG)
+# ---------- 图2:架构(分层决策:小模型全量筛查 + LLM 升级通道 + 微调闭环) ----------
+img = Image.new("RGB", (W, 1120), BG)
 d = ImageDraw.Draw(img)
-d.text((60, 40), "端侧推理管线:一次 tokenize,两条加速路径", font=F(38), fill=INK)
+d.text((60, 40), "端侧分层决策架构:决策模型全量筛查,LLM 只接重要紧急", font=F(38), fill=INK)
 
 def box(xy, title, lines, border, fill=SOFT):
     d.rounded_rectangle(xy, 14, fill=fill, outline=border, width=3)
@@ -58,18 +58,64 @@ def arrow(p0, p1, label=None):
     if label:
         d.text(((p0[0] + p1[0]) / 2 - d.textlength(label, font=F(20)) / 2 + 10, (p0[1] + p1[1]) / 2 - 34), label, font=F(20), fill=BLUE)
 
-# JS 层
-box([70, 110, 1010, 300], "Node JS(应用侧)",
-    ["tokenize + 拼序列(~2ms)", "fp16 embedding 查表(host)", "温度校准 · 解码 · 置信度"], BLUE, (240, 244, 255))
-arrow((540, 300), (540, 380), "TCP 127.0.0.1(同款协议,双后端)")
+# 云端层:微调闭环 + LLM 升级通道
+box([70, 110, 510, 250], "云端微调(5060 GPU)", ["prepare → RLCD 训练 → evaluate", "export int8 / LiteRT wfp16", "新业务 2-3 天上线"], BLUE, (240, 244, 255))
+box([570, 110, 1010, 250], "云端 LLM(决策后处理)", ["决策后接手 重要+紧急(39.1%)", "进一步推理 · 生成回复", "token 支出 ↓~60%"], ORANGE, (255, 246, 238))
+# 端侧应用层
+box([70, 320, 1010, 500], "Node JS / Android APK(端侧)",
+    ["tokenize + 拼序列(~2ms)", "Laya 决策:department / urgency / intent",
+     "分流:常规本端处理 · 重要紧急决策后交 LLM", "温度校准 · 解码 · 置信度"], BLUE, (240, 244, 255))
+arrow((290, 250), (290, 318), "模型下发 · 自动发现")
+arrow((790, 318), (790, 252), "决策后升级")
+arrow((540, 500), (540, 578), "TCP 127.0.0.1(同款协议,双后端)")
 # 两条后端
-box([70, 385, 510, 610], "litert-runner(GPU)", ["LiteRT 2.2.0 delegate", "GPU fp32 主图 17-19ms", "act 头 · CPU 0.8ms", "程序缓存热启 3s"], GREEN, (238, 248, 244))
-box([570, 385, 1010, 610], "runner(ORT int8)", ["onnxruntime 1.23 C API", "int8 MatMulNBits", "batch1 逐问推理", "~650ms/问"], (150, 160, 185), (246, 247, 250))
+box([70, 583, 510, 800], "litert-runner(GPU/NPU)", ["LiteRT 2.2.0 delegate", "GPU fp32/wfp16 ~150ms/问", "NPU AOT dispatch ~57ms/问", "程序缓存热启 3s"], GREEN, (238, 248, 244))
+box([570, 583, 1010, 800], "runner(ORT int8)", ["onnxruntime 1.23 C API", "int8 MatMulNBits", "batch1 逐问推理", "~650ms/问"], (150, 160, 185), (246, 247, 250))
 # 硬件层
-box([70, 655, 510, 765], "天玑 9500 · Mali GPU", ["adb shell 域运行(system 库依赖)"], GREEN, (238, 248, 244))
-box([570, 655, 1010, 765], "天玑 9500 · 6 线程 CPU", ["LD_LIBRARY_PATH=capi+pylib"], (150, 160, 185), (246, 247, 250))
-arrow((290, 610), (290, 653)); arrow((790, 610), (790, 653))
+box([70, 845, 510, 965], "天玑 9500 · Mali GPU / MDLA NPU", ["adb shell 域运行(system 库依赖)"], GREEN, (238, 248, 244))
+box([570, 845, 1010, 965], "天玑 9500 · 6 线程 CPU", ["LD_LIBRARY_PATH=capi+pylib"], (150, 160, 185), (246, 247, 250))
+arrow((290, 800), (290, 843)); arrow((790, 800), (790, 843))
+d.text((60, 1000), "算力账:Laya 决策 ~0.8 TFLOP/单 ≈ 全 LLM 处理(8B,~22 TFLOP)的 1/30;", font=F(26), fill=INK)
+d.text((60, 1040), "39.1% 升级率下总算力 ↓57%;加置信度门槛压到 20% 升级,可 ↓77%", font=F(26), fill=INK)
 img.save("/sdcard/Pictures/fig2_arch.png")
+
+# ---------- 图4:业务流程(决策分流 + LLM 升级 + 微调闭环) ----------
+img = Image.new("RGB", (W, 1140), BG)
+d = ImageDraw.Draw(img)
+d.text((60, 40), "业务流程:决策模型分流 · LLM 只处理重要紧急", font=F(38), fill=INK)
+d.text((60, 92), "升级率取真实分布(tickets.csv 28587 单):high 39.1% / medium 40.3% / low 20.6%", font=F(24), fill=MUT)
+
+box([340, 135, 740, 210], "业务输入", ["工单 / 短信 / UGC / 风控事件"], BLUE, (240, 244, 255))
+arrow((540, 210), (540, 248))
+box([240, 252, 840, 392], "Laya 决策模型(单次前向,NPU ~0.17s/单)",
+    ["department → 该谁管", "urgency → 重要紧急吗", "intent → 用户要什么",
+     "微调后 choice acc 67.4%(零样本仅 38-42%)"], BLUE, (240, 244, 255))
+arrow((400, 392), (400, 443)); arrow((680, 392), (680, 443))
+box([70, 447, 470, 600], "本端自动处理(60.9%)",
+    ["决策后:低/中优先级模板回复 · 智能路由", "sms/ugc/risk 判别即拦截", "~0.2s · <1J 能耗/单"], GREEN, (238, 248, 244))
+box([610, 447, 1010, 600], "LLM 进一步处理(39.1%)",
+    ["决策后:重要+紧急升级", "云端 API / 端侧大模型兜底", "复杂推理 · 生成回复", "~22 TFLOP · ~700J/单(8B)"], ORANGE, (255, 246, 238))
+arrow((290, 600), (290, 655)); arrow((790, 600), (790, 655))
+box([240, 659, 840, 762], "处理结果 + 决策日志(service /report/daily)",
+    ["数据回流:处理质量标注 → 训练语料"], INK, (246, 247, 250))
+arrow((540, 762), (540, 800))
+box([70, 804, 1010, 948], "新业务微调闭环(finetune/ 四脚本,云端 GPU)",
+    ["prepare_data 切分 → train RLCD(--task) → evaluate(acc/F1/ECE) → export int8/LiteRT",
+     "新业务冷启动:构造式合成数据先行,上线后换真实语料;模型落 /sdcard/models 自动发现"], BLUE, (240, 244, 255))
+# 回路:微调 → 决策模型
+d.line([(1010, 876), (1052, 876)], fill=GREEN, width=3)
+d.line([(1052, 876), (1052, 322)], fill=GREEN, width=3)
+d.line([(1052, 322), (846, 322)], fill=GREEN, width=3)
+import math as _m
+for s in (2.7, -2.7):
+    d.line([(846, 322), (846 - 14 * _m.cos(s), 322 - 14 * _m.sin(s))], fill=GREEN, width=3)
+d.text((852, 250), "模型下发", font=F(22), fill=GREEN)
+d.text((852, 280), "新业务上线", font=F(22), fill=GREEN)
+d.text((60, 995), "算力账:全 LLM ≈ 22 TFLOP/单(8B,1400 tok);分层 = 0.8 + 39.1%×22 ≈ 9.5 TFLOP,总算力 ↓57%", font=F(26), fill=INK)
+d.text((60, 1035), "能耗/费用:自动处理单 <1J vs LLM 单 ~700J;云端 token 费随升级率同比例 ↓~60%", font=F(26), fill=INK)
+d.text((60, 1075), "再加低置信度也升级的门槛(p→20%),总算力可 ↓77%", font=F(26), fill=MUT)
+img.save("/sdcard/Pictures/fig4_flow.png")
+print("done: fig1_perf / fig2_arch / fig3_step / fig4_flow -> /sdcard/Pictures/")
 
 # ---------- 图3:热节流台阶(真实基准数据) ----------
 img = Image.new("RGB", (W, 700), BG)

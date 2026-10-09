@@ -15,7 +15,11 @@ import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.FrameLayout;
 import android.widget.PopupWindow;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.ScrollView;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
 import java.io.File;
@@ -68,6 +72,7 @@ public class MainActivity extends Activity {
   private int tab = 0; // 0决策 1报表 2网关 3系统
   private int taskIdx = 0;
   private LinearLayout body;
+  private Button menuBtn;
   private LinearLayout msgList;
   private ScrollView scroller;
   private EditText input;
@@ -113,16 +118,27 @@ public class MainActivity extends Activity {
     root.setOrientation(LinearLayout.VERTICAL);
     root.setBackgroundColor(WX_PAGE_BG);
 
-    // ---- 标题栏(仿微信:浅灰底、居中标题、底部分隔线) ----
+    // ---- 标题栏(仿微信:浅灰底、居中标题、左侧☰菜单按钮、底部分隔线) ----
+    menuBtn = new Button(this);
+    menuBtn.setText("☰"); menuBtn.setAllCaps(false); menuBtn.setTextSize(18);
+    menuBtn.setPadding(dp(12), dp(2), dp(12), dp(2));
+    menuBtn.setMinHeight(0); menuBtn.setMinimumHeight(0);
+    menuBtn.setMinWidth(0); menuBtn.setMinimumWidth(0);
+    menuBtn.setTextColor(0xFF1A1A1A);
+    menuBtn.setBackground(null);
+    menuBtn.setLayoutParams(new FrameLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, Gravity.START | Gravity.CENTER_VERTICAL));
     LinearLayout titleBar = new LinearLayout(this);
     titleBar.setOrientation(LinearLayout.VERTICAL);
     titleBar.setBackgroundColor(0xFFEDEDED);
+    FrameLayout titleHolder = new FrameLayout(this);
     TextView title = new TextView(this);
     title.setText("智能决策业务台");
     title.setTextSize(17); title.setTypeface(Typeface.DEFAULT_BOLD); title.setGravity(Gravity.CENTER);
     title.setTextColor(0xFF1A1A1A);
     title.setPadding(0, dp(10), 0, dp(10));
-    titleBar.addView(title);
+    titleHolder.addView(title);
+    titleHolder.addView(menuBtn);
+    titleBar.addView(titleHolder);
     View titleDiv = new View(this);
     titleDiv.setBackgroundColor(0xFFE0E0E0);
     titleBar.addView(titleDiv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)));
@@ -298,7 +314,7 @@ public class MainActivity extends Activity {
       String reply;
       try {
         com.laya.DecisionCore.Result r = com.laya.DecisionCore.decide(this, taskIds.get(ti), text);
-        reply = fmtAnswers(taskIds.get(ti), r.answers, (int) r.latencyMs) + "\n后端: LiteRT GPU(C API 内置)";
+        reply = fmtAnswers(taskIds.get(ti), r.answers, (int) r.latencyMs) + "\n后端: " + com.laya.DecisionCore.currentEngine();
       } catch (Throwable e) {
         android.util.Log.e("LayaApp", "decision failed", e);
         reply = "推理失败: " + e.getClass().getSimpleName() + ": " + e.getMessage();
@@ -329,40 +345,6 @@ public class MainActivity extends Activity {
   }
 
   // ================= ② 报表 =================
-  private TextView reportMenuBtn;
-
-  /** 报表类型浮动菜单(左侧,可隐藏) */
-  private void showReportMenu(View anchor) {
-    LinearLayout menu = new LinearLayout(this);
-    menu.setOrientation(LinearLayout.VERTICAL);
-    menu.setBackground(pill(Color.WHITE, dp(14)));
-    menu.setPadding(dp(6), dp(6), dp(6), dp(6));
-    String[] kinds = {"日报", "月报", "年报", "详单"};
-    for (int i = 0; i < 4; i++) {
-      final int k = i;
-      TextView it = new TextView(this);
-      it.setText(kinds[i]); it.setTextSize(14);
-      it.setPadding(dp(18), dp(12), dp(18), dp(12));
-      it.setOnClickListener(v -> {
-        reportKind = k;
-        if (reportMenuBtn != null) reportMenuBtn.setText("☰ " + kinds[k]);
-        renderReport(k);
-        dismissReportMenu();
-      });
-      menu.addView(it, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-    }
-    PopupWindow pw = new PopupWindow(menu, dp(140), LinearLayout.LayoutParams.WRAP_CONTENT, true);
-    pw.setBackgroundDrawable(pill(Color.WHITE, dp(14)));
-    pw.setElevation(dp(6));
-    reportMenuBtn.setTag(pw);
-    pw.showAsDropDown(anchor, 0, dp(4));
-  }
-
-  private void dismissReportMenu() {
-    if (reportMenuBtn != null && reportMenuBtn.getTag() instanceof PopupWindow)
-      ((PopupWindow) reportMenuBtn.getTag()).dismiss();
-  }
-
   private int reportKind = 0;
   private int detailPage = 0;   // 详单当前页(0 基)
   private int detailPages = 1;
@@ -373,20 +355,10 @@ public class MainActivity extends Activity {
     LinearLayout l = new LinearLayout(this);
     l.setOrientation(LinearLayout.VERTICAL);
     l.setPadding(dp(12), dp(8), dp(12), dp(8));
-    LinearLayout row = new LinearLayout(this);
-    row.setGravity(Gravity.CENTER_VERTICAL);
-    reportMenuBtn = new TextView(this);
-    reportMenuBtn.setText("☰ " + (reportKind == 0 ? "日报" : reportKind == 1 ? "月报" : reportKind == 2 ? "年报" : "详单"));
-    reportMenuBtn.setTextSize(13); reportMenuBtn.setTextColor(Color.WHITE);
-    reportMenuBtn.setPadding(dp(14), dp(8), dp(14), dp(8));
-    reportMenuBtn.setBackground(pill(PRIMARY, dp(18)));
-    reportMenuBtn.setOnClickListener(v -> showReportMenu(v));
-    row.addView(reportMenuBtn);
     TextView cur = new TextView(this);
-    cur.setText("报表来自本机决策日志,左侧菜单切换"); cur.setTextSize(12); cur.setTextColor(0xFF66707E);
-    cur.setPadding(dp(10), 0, 0, 0);
-    row.addView(cur);
-    l.addView(row);
+    cur.setText("报表来自本机决策日志,左侧 tab 切换"); cur.setTextSize(12); cur.setTextColor(0xFF66707E);
+    cur.setPadding(dp(2), 0, 0, 0);
+    l.addView(cur);
 
     // 详单翻页行(仅详单显示)
     pagerRow = new LinearLayout(this);
@@ -410,20 +382,269 @@ public class MainActivity extends Activity {
     pagerRow.setVisibility(View.GONE);
     l.addView(pagerRow);
 
+    // ---- 下钻详单面板(仅 reportKind==4 显示):业务 × 决策等级 × 日期 ----
+    drillPane = new LinearLayout(this);
+    drillPane.setOrientation(LinearLayout.VERTICAL);
+    drillPane.setPadding(0, dp(6), 0, 0);
+    LinearLayout fRow1 = new LinearLayout(this);
+    fRow1.setGravity(Gravity.CENTER_VERTICAL);
+    spinRange = new Spinner(this);
+    spinRange.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, new String[]{"近7天", "今天", "近30天", "全部"}));
+    spinRange.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.4f));
+    fRow1.addView(spinRange);
+    spinLevel = new Spinner(this);
+    spinLevel.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, new String[]{"全部等级", "高", "中", "低"}));
+    spinLevel.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.4f));
+    fRow1.addView(spinLevel);
+    spinTask = new Spinner(this);
+    java.util.List<String> tOpts = new ArrayList<>();
+    tOpts.add("全部业务");
+    for (int i = 0; i < taskIds.size(); i++) tOpts.add(taskLabels.get(i) + " (" + taskIds.get(i) + ")");
+    spinTask.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, tOpts));
+    spinTask.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f));
+    fRow1.addView(spinTask);
+    drillPane.addView(fRow1);
+    Button qBtn = new Button(this);
+    qBtn.setText("查询(点下方数字下钻)");
+    qBtn.setAllCaps(false); qBtn.setTextSize(13);
+    qBtn.setOnClickListener(v -> renderDrill());
+    drillPane.addView(qBtn);
+    drillTables = new LinearLayout(this);
+    drillTables.setOrientation(LinearLayout.VERTICAL);
+    drillPane.addView(drillTables);
+    drillOut = new LinearLayout(this);
+    drillOut.setOrientation(LinearLayout.VERTICAL);
+    drillPane.addView(drillOut);
+    drillPane.setVisibility(View.GONE);
+    l.addView(drillPane);
+
     TextView tv = new TextView(this);
     tv.setTextSize(13); tv.setPadding(0, dp(10), 0, 0);
     l.addView(tv);
     scroller = new ScrollView(this);
     scroller.addView(l);
-    body.addView(scroller);
     reportView = tv;
     renderReport(reportKind);
+
+    // ---- 左侧竖排 tab(与系统页同款):日报/月报/年报/详单/下钻详单 ----
+    final FrameLayout holder = new FrameLayout(this);
+    holder.addView(scroller);
+    holder.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+    String[] kinds = {"日报", "月报", "年报", "详单", "下钻详单"};
+    String[] vert = {"日\n报", "月\n报", "年\n报", "详\n单", "下\n钻\n详\n单"};
+    final Button[] chips = new Button[5];
+    final LinearLayout rail = new LinearLayout(this);
+    rail.setOrientation(LinearLayout.VERTICAL);
+    for (int i = 0; i < 5; i++) {
+      final int k = i;
+      Button c = new Button(this);
+      c.setText(vert[i]); c.setAllCaps(false); c.setTextSize(13);
+      c.setPadding(dp(2), dp(10), dp(2), dp(10));
+      c.setMinHeight(0); c.setMinimumHeight(0);
+      LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+      clp.bottomMargin = dp(4); c.setLayoutParams(clp);
+      c.setOnClickListener(v -> {
+        reportKind = k;
+        renderReport(k);
+        for (int j = 0; j < 5; j++) {
+          chips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
+          chips[j].setBackground(pill(j == k ? PRIMARY : 0xFFE7EAF2, dp(12)));
+        }
+      });
+      chips[i] = c;
+      rail.addView(c);
+    }
+    final LinearLayout leftCol = new LinearLayout(this);
+    leftCol.setOrientation(LinearLayout.VERTICAL);
+    leftCol.setPadding(dp(4), dp(4), dp(0), dp(0));
+    leftCol.addView(rail);
+    LinearLayout.LayoutParams lclp = new LinearLayout.LayoutParams(dp(40), LinearLayout.LayoutParams.MATCH_PARENT);
+    lclp.rightMargin = dp(2);
+    leftCol.setLayoutParams(lclp);
+    LinearLayout top = new LinearLayout(this);
+    top.setOrientation(LinearLayout.HORIZONTAL);
+    top.addView(leftCol);
+    top.addView(holder);
+    body.addView(top);
+    // 标题栏 ☰ 切换本页左栏
+    menuBtn.setOnClickListener(v -> {
+      boolean show = leftCol.getVisibility() == View.GONE;
+      leftCol.setVisibility(show ? View.VISIBLE : View.GONE);
+    });
+    // 初始高亮当前类型
+    chips[reportKind].setTextColor(Color.WHITE);
+    chips[reportKind].setBackground(pill(PRIMARY, dp(12)));
   }
   private TextView reportView;
+  private LinearLayout drillPane, drillTables, drillOut;
+  private Spinner spinTask, spinLevel, spinRange;
+
+  private TextView dCell(String t, boolean bold, int color, View.OnClickListener oc, float weight) {
+    TextView c = new TextView(this);
+    c.setText(t); c.setTextSize(12); c.setGravity(Gravity.CENTER);
+    c.setTextColor(color != 0 ? color : 0xFF1A2B4C);
+    if (bold) c.setTypeface(Typeface.DEFAULT_BOLD);
+    c.setBackground(pill(0xFFF6F7FA, dp(6)));
+    c.setPadding(dp(4), dp(7), dp(4), dp(7));
+    c.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, weight));
+    if (oc != null) { c.setTextColor(0xFF3E7BFA); c.setOnClickListener(oc); }
+    return c;
+  }
+
+  private void renderDrill() {
+    final int days = new int[]{7, 1, 30, 0}[spinRange.getSelectedItemPosition()];
+    final int lp = spinLevel.getSelectedItemPosition();
+    final String level = lp == 0 ? null : (String) spinLevel.getSelectedItem();
+    final int tp = spinTask.getSelectedItemPosition();
+    final String task = tp == 0 ? null : taskIds.get(tp - 1);
+    final android.app.Activity act = this;
+    new Thread(() -> {
+      final JSONObject piv = com.laya.DecisionCore.detailPivot(act, days, task, level);
+      runOnUiThread(() -> renderPivot(act, piv, task, level));
+    }).start();
+  }
+
+  private void renderPivot(android.app.Activity act, JSONObject piv, String taskF, String levelF) {
+    drillTables.removeAllViews();
+    drillOut.removeAllViews();
+    ArrayList<JSONObject> rows = new ArrayList<>();
+    JSONArray jr = piv.optJSONArray("rows");
+    if (jr != null) for (int i = 0; i < jr.length(); i++) rows.add(jr.optJSONObject(i));
+    java.util.Collections.sort(rows, (a, b) -> {
+      String ka = a.optString("date") + a.optString("task") + a.optString("level");
+      String kb = b.optString("date") + b.optString("task") + b.optString("level");
+      return ka.compareTo(kb);
+    });
+    // 收集维度
+    java.util.LinkedHashSet<String> tasks = new java.util.LinkedHashSet<>(), dates = new java.util.LinkedHashSet<>(), levels = new java.util.LinkedHashSet<>();
+    for (JSONObject r : rows) { tasks.add(r.optString("task")); dates.add(r.optString("date")); levels.add(r.optString("level")); }
+    ArrayList<String> lvOrd = new ArrayList<>(); for (String l : new String[]{"高", "中", "低"}) if (levels.contains(l)) lvOrd.add(l);
+    for (String l : levels) if (!lvOrd.contains(l)) lvOrd.add(l);
+    ArrayList<String> dOrd = new ArrayList<>(dates); java.util.Collections.reverse(dOrd);
+    TextView head = new TextView(this);
+    head.setText("共 " + piv.optInt("total") + " 条 · ①业务×等级 ②按日期,点数字下钻");
+    head.setTextSize(12); head.setTextColor(0xFF66707E); head.setPadding(dp(4), dp(8), 0, dp(4));
+    drillTables.addView(head);
+    java.util.Map<String, Integer> grid = new LinkedHashMap<>();
+    java.util.Map<String, Integer> gDate = new LinkedHashMap<>();
+    for (JSONObject r : rows) {
+      grid.merge(r.optString("task") + "|" + r.optString("level"), r.optInt("count"), Integer::sum);
+      gDate.merge(r.optString("date") + "|" + r.optString("task"), r.optInt("count"), Integer::sum);
+    }
+    // 表1:业务 × 等级
+    LinearLayout t1 = new LinearLayout(this); t1.setOrientation(LinearLayout.VERTICAL);
+    t1.setBackground(pill(0xFFFFFFFF, dp(10))); t1.setPadding(dp(6), dp(6), dp(6), dp(6));
+    LinearLayout h1 = new LinearLayout(this);
+    h1.addView(dCell("业务", true, 0, null, 2.2f));
+    for (String lv : lvOrd) h1.addView(dCell(lv, true, 0, null, 1f));
+    h1.addView(dCell("合计", true, 0, null, 1f));
+    t1.addView(h1);
+    for (String t : tasks) {
+      LinearLayout r = new LinearLayout(this);
+      r.addView(dCell(t, true, 0, null, 2.2f));
+      int tot = 0;
+      for (String lv : lvOrd) {
+        int n = grid.getOrDefault(t + "|" + lv, 0); tot += n;
+        final String ft = t, flv = lv;
+        r.addView(dCell(n == 0 ? "·" : String.valueOf(n), false, 0, v -> drillShow(null, ft, flv), 1f));
+      }
+      final String ft = t;
+      r.addView(dCell(String.valueOf(tot), true, 0, v -> drillShow(null, ft, null), 1f));
+      t1.addView(r);
+    }
+    drillTables.addView(t1);
+    // 表2:日期 × 业务
+    LinearLayout t2 = new LinearLayout(this); t2.setOrientation(LinearLayout.VERTICAL);
+    t2.setBackground(pill(0xFFFFFFFF, dp(10))); t2.setPadding(dp(6), dp(6), dp(6), dp(6));
+    LinearLayout h2 = new LinearLayout(this);
+    h2.addView(dCell("日期", true, 0, null, 1.6f));
+    for (String t : tasks) h2.addView(dCell(t, true, 0, null, 1f));
+    h2.addView(dCell("合计", true, 0, null, 1f));
+    t2.addView(h2);
+    for (String d : dOrd) {
+      LinearLayout r = new LinearLayout(this);
+      r.addView(dCell(d.substring(5), false, 0, null, 1.6f));
+      int tot = 0;
+      for (String t : tasks) {
+        int n = gDate.getOrDefault(d + "|" + t, 0); tot += n;
+        final String fd = d, ft = t;
+        r.addView(dCell(n == 0 ? "·" : String.valueOf(n), false, 0, v -> drillShow(fd, ft, null), 1f));
+      }
+      final String fd = d;
+      r.addView(dCell(String.valueOf(tot), true, 0, v -> drillShow(fd, null, null), 1f));
+      t2.addView(r);
+    }
+    LinearLayout gap = new LinearLayout(this); gap.setPadding(0, dp(8), 0, 0);
+    drillTables.addView(gap); drillTables.addView(t2);
+  }
+
+  private void drillShow(String date, String task, String level) {
+    drillOut.removeAllViews();
+    TextView loading = new TextView(this);
+    loading.setText("详单加载中…"); loading.setTextSize(12); loading.setPadding(dp(4), dp(8), 0, 0);
+    drillOut.addView(loading);
+    final android.app.Activity act = this;
+    new Thread(() -> {
+      final JSONArray es = com.laya.DecisionCore.drillList(act, date, task, level, 200);
+      runOnUiThread(() -> {
+        drillOut.removeAllViews();
+        java.util.Map<String, String> labels = new LinkedHashMap<>();
+        for (int i = 0; i < taskIds.size(); i++) labels.put(taskIds.get(i), taskLabels.get(i));
+        TextView title = new TextView(this);
+        title.setText("== 详单 " + (date != null ? date : "区间") + " · "
+            + (task != null ? labels.getOrDefault(task, task) : "全部业务") + " · "
+            + (level != null ? level : "全部等级") + " · " + es.length() + " 条 ==");
+        title.setTextSize(13); title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setPadding(dp(4), dp(10), 0, dp(4));
+        drillOut.addView(title);
+        for (int i = 0; i < es.length(); i++) {
+          JSONObject e = es.optJSONObject(i); if (e == null) continue;
+          LinearLayout card = new LinearLayout(this);
+          card.setOrientation(LinearLayout.VERTICAL);
+          card.setBackground(pill(0xFFF7F8FA, dp(8)));
+          card.setPadding(dp(9), dp(6), dp(9), dp(7));
+          LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+          clp.bottomMargin = dp(6); card.setLayoutParams(clp);
+          TextView l1 = new TextView(this);
+          String lv = e.optString("level");
+          int lvc = "高".equals(lv) ? 0xFFD62828 : "中".equals(lv) ? 0xFFE78A00 : "低".equals(lv) ? 0xFF2A9D8F : 0xFF66707E;
+          l1.setText(e.optString("time") + "  [" + labels.getOrDefault(e.optString("task"), e.optString("task")) + "]  " + lv
+              + "  " + e.optLong("latencyMs") + "ms");
+          l1.setTextSize(12); l1.setTypeface(Typeface.DEFAULT_BOLD); l1.setTextColor(lvc);
+          card.addView(l1);
+          String ans = e.optString("answers", "");
+          String basis = e.optString("basis", "");
+          TextView l2 = new TextView(this);
+          l2.setText((ans.isEmpty() ? "" : ans + "\n") + basis);
+          l2.setTextSize(11); l2.setTextColor(0xFF444A55); l2.setPadding(0, dp(1), 0, dp(2));
+          card.addView(l2);
+          TextView l3 = new TextView(this);
+          String st = e.optString("state");
+          l3.setText(st.length() > 80 ? st.substring(0, 80) + "…" : st);
+          l3.setTextSize(11); l3.setTextColor(0xFF66707E);
+          card.addView(l3);
+          drillOut.addView(card);
+        }
+        if (es.length() == 0) {
+          TextView empty = new TextView(this);
+          empty.setText("(无记录)"); empty.setTextSize(12); empty.setTextColor(0xFF66707E);
+          empty.setPadding(dp(4), dp(6), 0, 0);
+          drillOut.addView(empty);
+        }
+        scroller.post(() -> scroller.fullScroll(View.FOCUS_DOWN));
+      });
+    }).start();
+  }
 
   private void renderReport(int kind) {
     final boolean isDetail = kind == 3;
-    runOnUiThread(() -> pagerRow.setVisibility(isDetail ? View.VISIBLE : View.GONE));
+    final boolean isDrill = kind == 4;
+    runOnUiThread(() -> {
+      pagerRow.setVisibility(isDetail ? View.VISIBLE : View.GONE);
+      reportView.setVisibility(isDrill ? View.GONE : View.VISIBLE);
+      drillPane.setVisibility(isDrill ? View.VISIBLE : View.GONE);
+    });
+    if (isDrill) { runOnUiThread(this::renderDrill); return; }
     new Thread(() -> {
       String s0;
       try {
@@ -454,9 +675,11 @@ public class MainActivity extends Activity {
   private TextView gwStatus;
 
   private void buildGatewayTab() {
-    LinearLayout l = new LinearLayout(this);
-    l.setOrientation(LinearLayout.VERTICAL);
-    l.setPadding(dp(12), dp(8), dp(12), dp(8));
+    // 三个子页面板,左栏 tab 切换
+    LinearLayout pMail = new LinearLayout(this);
+    pMail.setOrientation(LinearLayout.VERTICAL);
+    pMail.setPadding(dp(12), dp(8), dp(12), dp(8));
+    LinearLayout l = pMail;
     l.addView(hint("邮件网关(IMAP 拉取决策指令 → SMTP 回复;主题或正文写 \"laya <业务> <文本>\")"));
     gwEmailHost = fieldU(l, "服务器(本机测试: 127.0.0.1 / 生产: imap.qq.com)");
     gwEmailUser = fieldU(l, "邮箱账号");
@@ -492,6 +715,45 @@ public class MainActivity extends Activity {
         refreshGatewayBar();
       } catch (Exception e) { gwStatus.setText("配置失败: " + e.getMessage()); }
     });
+    Button emailTestBtn = button(l, "测试 IMAP 收件箱");
+    emailTestBtn.setOnClickListener(v -> {
+      gwStatus.setText("IMAP 测试中…");
+      new Thread(() -> {
+        String r;
+        try {
+          r = com.laya.Gateway.testEmail(new JSONObject()
+              .put("host", gwEmailHost.getText().toString())
+              .put("user", gwEmailUser.getText().toString())
+              .put("pass", gwEmailPass.getText().toString())
+              .put("imapPort", parsePort(gwImapPort.getText().toString(), gwSsl.isChecked() ? 993 : 143))
+              .put("ssl", gwSsl.isChecked()));
+        } catch (Exception e) { r = "❌ IMAP: " + e.getMessage(); }
+        final String fr = r;
+        runOnUiThread(() -> gwStatus.setText(fr));
+      }).start();
+    });
+    Button smtpTestBtn = button(l, "测试 SMTP 发信(发到日报收件箱)");
+    smtpTestBtn.setOnClickListener(v -> {
+      gwStatus.setText("SMTP 测试中…");
+      new Thread(() -> {
+        String r;
+        try {
+          JSONObject ec = new JSONObject()
+              .put("host", gwEmailHost.getText().toString())
+              .put("user", gwEmailUser.getText().toString())
+              .put("pass", gwEmailPass.getText().toString())
+              .put("smtpPort", parsePort(gwSmtpPort.getText().toString(), gwSsl.isChecked() ? 465 : 25))
+              .put("ssl", gwSsl.isChecked());
+          r = com.laya.Gateway.testSmtp(ec, gwReportTo.getText().toString());
+        } catch (Exception e) { r = "❌ SMTP: " + e.getMessage(); }
+        final String fr = r;
+        runOnUiThread(() -> gwStatus.setText(fr));
+      }).start();
+    });
+    LinearLayout pMq = new LinearLayout(this);
+    pMq.setOrientation(LinearLayout.VERTICAL);
+    pMq.setPadding(dp(12), dp(8), dp(12), dp(8));
+    l = pMq;
     l.addView(hint("消息队列(MQTT):订阅 laya/req/+ → 决策 → 发布 laya/resp"));
     gwMqUrl = fieldU(l, "MQTT Broker,如 tcp://192.168.0.168:1883");
     gwMqSub = fieldU(l, "订阅主题", "laya/req/+");
@@ -506,15 +768,211 @@ public class MainActivity extends Activity {
         gwStatus.setText(com.laya.Gateway.saveAndStart(getApplicationContext(), cfg));
       } catch (Exception e) { gwStatus.setText("配置失败: " + e.getMessage()); }
     });
+    Button mqTestBtn = button(l, "测试 MQTT(连接+订阅+发布)");
+    mqTestBtn.setOnClickListener(v -> {
+      gwStatus.setText("MQTT 测试中…");
+      new Thread(() -> {
+        String r;
+        try {
+          JSONObject mc = new JSONObject().put("url", gwMqUrl.getText().toString());
+          JSONObject tc = new JSONObject().put("sub", gwMqSub.getText().toString()).put("pub", gwMqPub.getText().toString());
+          r = com.laya.Gateway.testMqtt(mc, tc);
+        } catch (Exception e) { r = "❌ MQTT: " + e.getMessage(); }
+        final String fr = r;
+        runOnUiThread(() -> gwStatus.setText(fr));
+      }).start();
+    });
     l.addView(hint("模型包上传(局域网):浏览器打开 " + com.laya.Gateway.uploadUrl()
         + " 提交 zip+业务名;或 curl -X POST --data-binary @pkg.zip \"" + com.laya.Gateway.uploadUrl() + "/upload?task=名字\""));
-    Button stopBtn = button(l, "停止全部网关");
+    Button upTestBtn = button(l, "测试上传服务");
+    upTestBtn.setOnClickListener(v -> {
+      gwStatus.setText("上传服务测试中…");
+      new Thread(() -> {
+        final String r = com.laya.Gateway.testUpload();
+        runOnUiThread(() -> gwStatus.setText(r));
+      }).start();
+    });
+
+    // ---- LLM 设置(重要+紧急升级通道,3 槽位供可选) ----
+    LinearLayout pLlm = new LinearLayout(this);
+    pLlm.setOrientation(LinearLayout.VERTICAL);
+    pLlm.setPadding(dp(12), dp(8), dp(12), dp(8));
+    l = pLlm;
+    l.addView(hint("LLM 设置(决策后处理重要+紧急业务,3 个供可选;OpenAI 兼容 /chat/completions)"));
+    JSONObject llmCfg = com.laya.Gateway.cfg(this).optJSONObject("llm");
+    JSONObject llmSlots = llmCfg != null ? llmCfg.optJSONObject("slots") : null;
+    String actId = llmCfg != null ? llmCfg.optString("active", "llm1") : "llm1";
+    String[] slotIds = {"llm1", "llm2", "llm3"};
+    String[] defNames = {"DeepSeek", "Qwen(通义)", "GLM(智谱)"};
+    String[] defUrls = {"https://api.deepseek.com", "https://dashscope.aliyuncs.com/compatible-mode/v1", "https://open.bigmodel.cn/api/paas/v4"};
+    String[] defModels = {"deepseek-chat", "qwen-flash", "glm-4-flash"};
+    final EditText[] llmName = new EditText[3];
+    final EditText[] llmUrl = new EditText[3];
+    final EditText[] llmModel = new EditText[3];
+    final EditText[] llmKey = new EditText[3];
+    final RadioButton[] llmRb = new RadioButton[3];
+    for (int i = 0; i < 3; i++) {
+      JSONObject s = llmSlots != null ? llmSlots.optJSONObject(slotIds[i]) : null;
+      LinearLayout slot = new LinearLayout(this);
+      slot.setOrientation(LinearLayout.VERTICAL);
+      slot.setBackground(pill(0xFFF7F8FA, dp(10)));
+      slot.setPadding(dp(9), dp(6), dp(9), dp(8));
+      LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+      slp.bottomMargin = dp(8); slot.setLayoutParams(slp);
+      LinearLayout head = new LinearLayout(this);
+      head.setGravity(Gravity.CENTER_VERTICAL);
+      llmRb[i] = new RadioButton(this);
+      llmRb[i].setText("启用"); llmRb[i].setTextSize(12);
+      llmRb[i].setChecked(slotIds[i].equals(actId));
+      head.addView(llmRb[i]);
+      llmName[i] = fieldU(head, "名称");
+      JSONObject fs = s;
+      String nm = s != null ? s.optString("name", defNames[i]) : defNames[i];
+      llmName[i].setText(nm);
+      llmName[i].setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+      slot.addView(head);
+      llmUrl[i] = fieldU(slot, "Base URL(OpenAI 兼容)");
+      llmUrl[i].setText(s != null ? s.optString("baseURL", defUrls[i]) : defUrls[i]);
+      LinearLayout mr = new LinearLayout(this);
+      llmModel[i] = fieldU(mr, "Model");
+      llmModel[i].setText(s != null ? s.optString("model", defModels[i]) : defModels[i]);
+      llmModel[i].setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+      llmKey[i] = fieldU(mr, "API Key");
+      if (s != null) llmKey[i].setText(s.optString("apiKey", ""));
+      llmKey[i].setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+      LinearLayout.LayoutParams mlp0 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+      mlp0.rightMargin = dp(8); llmModel[i].setLayoutParams(mlp0);
+      slot.addView(mr);
+      l.addView(slot);
+    }
+    llmRb[0].setId(901); llmRb[1].setId(902); llmRb[2].setId(903);
+    // 手动互斥(RadioGroup 纵向占太高):点一个清其余
+    for (int i = 0; i < 3; i++) {
+      final int k = i;
+      llmRb[i].setOnClickListener(v -> { for (int j = 0; j < 3; j++) llmRb[j].setChecked(j == k); });
+    }
+    Button llmSave = button(l, "保存 LLM 设置");
+    llmSave.setOnClickListener(v -> {
+      try {
+        JSONObject slots = new JSONObject();
+        int checked = -1;
+        for (int i = 0; i < 3; i++) {
+          if (llmRb[i].isChecked()) checked = i;
+          slots.put(slotIds[i], new JSONObject()
+              .put("name", llmName[i].getText().toString())
+              .put("baseURL", llmUrl[i].getText().toString().trim())
+              .put("model", llmModel[i].getText().toString().trim())
+              .put("apiKey", llmKey[i].getText().toString().trim()));
+        }
+        gwStatus.setText(com.laya.Gateway.saveLlm(this,
+            new JSONObject().put("active", checked < 0 ? "llm1" : slotIds[checked]).put("slots", slots)));
+      } catch (Exception e) { gwStatus.setText("LLM 配置失败: " + e.getMessage()); }
+    });
+    Button llmTest = button(l, "测试选中的 LLM(发一条 ping)");
+    llmTest.setOnClickListener(v -> {
+      try {
+        int checked = -1;
+        for (int i = 0; i < 3; i++) if (llmRb[i].isChecked()) checked = i;
+        if (checked < 0) { gwStatus.setText("请先勾选一个 LLM"); return; }
+        final String url = llmUrl[checked].getText().toString().trim().replaceAll("/+$", "");
+        final String model = llmModel[checked].getText().toString().trim();
+        final String key = llmKey[checked].getText().toString().trim();
+        final String nm = llmName[checked].getText().toString();
+        gwStatus.setText("测试 " + nm + " …");
+        new Thread(() -> {
+          String r;
+          try {
+            HttpURLConnection c = (HttpURLConnection) new URL(url + "/chat/completions").openConnection();
+            c.setRequestMethod("POST"); c.setConnectTimeout(8000); c.setReadTimeout(20000);
+            c.setDoOutput(true); c.setRequestProperty("Content-Type", "application/json");
+            if (!key.isEmpty()) c.setRequestProperty("Authorization", "Bearer " + key);
+            try (OutputStream os = c.getOutputStream()) {
+              os.write(new JSONObject().put("model", model).put("max_tokens", 8)
+                  .put("messages", new org.json.JSONArray().put(new JSONObject()
+                      .put("role", "user").put("content", "只回复两个字母:OK"))).toString().getBytes(StandardCharsets.UTF_8));
+            }
+            int code = c.getResponseCode();
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            (code < 400 ? c.getInputStream() : c.getErrorStream()).transferTo(bos);
+            String body = bos.toString("UTF-8");
+            if (code < 400) {
+              String txt = new JSONObject(body).optJSONArray("choices") != null
+                  ? new JSONObject(body).optJSONArray("choices").optJSONObject(0).optJSONObject("message").optString("content") : "";
+              r = "✅ " + nm + " 连通(" + code + ")回复: " + txt.trim();
+            } else r = "❌ " + nm + " HTTP " + code + ": " + body.substring(0, Math.min(160, body.length()));
+          } catch (Exception e) { r = "❌ " + nm + " 失败: " + e.getMessage(); }
+          final String fr = r;
+          runOnUiThread(() -> gwStatus.setText(fr));
+        }).start();
+      } catch (Exception e) { gwStatus.setText("测试失败: " + e.getMessage()); }
+    });
+
+    // ---- 左侧竖排 tab(与报表页同款):邮件/队列/LLM ----
+    LinearLayout[] panels = {pMail, pMq, pLlm};
+    final ScrollView[] scrolls = new ScrollView[3];
+    for (int i = 0; i < 3; i++) {
+      ScrollView sv = new ScrollView(this);
+      sv.addView(panels[i]);
+      scrolls[i] = sv;
+    }
+    scroller = scrolls[0];
+    final FrameLayout gHolder = new FrameLayout(this);
+    gHolder.addView(scrolls[0]);
+    gHolder.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+    String[] gVert = {"邮\n件", "队\n列", "L\nL\nM"};
+    final Button[] gchips = new Button[3];
+    final LinearLayout grail = new LinearLayout(this);
+    grail.setOrientation(LinearLayout.VERTICAL);
+    for (int i = 0; i < 3; i++) {
+      final int k = i;
+      Button c = new Button(this);
+      c.setText(gVert[i]); c.setAllCaps(false); c.setTextSize(13);
+      c.setPadding(dp(2), dp(10), dp(2), dp(10));
+      c.setMinHeight(0); c.setMinimumHeight(0);
+      LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+      clp.bottomMargin = dp(4); c.setLayoutParams(clp);
+      c.setOnClickListener(v -> {
+        gHolder.removeAllViews();
+        gHolder.addView(scrolls[k]);
+        scroller = scrolls[k];
+        for (int j = 0; j < 3; j++) {
+          gchips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
+          gchips[j].setBackground(pill(j == k ? PRIMARY : 0xFFE7EAF2, dp(12)));
+        }
+      });
+      gchips[i] = c;
+      grail.addView(c);
+    }
+    final LinearLayout gLeft = new LinearLayout(this);
+    gLeft.setOrientation(LinearLayout.VERTICAL);
+    gLeft.setPadding(dp(4), dp(4), dp(0), dp(0));
+    gLeft.addView(grail);
+    LinearLayout.LayoutParams glclp = new LinearLayout.LayoutParams(dp(40), LinearLayout.LayoutParams.MATCH_PARENT);
+    glclp.rightMargin = dp(2);
+    gLeft.setLayoutParams(glclp);
+    LinearLayout gTop = new LinearLayout(this);
+    gTop.setOrientation(LinearLayout.HORIZONTAL);
+    gTop.addView(gLeft);
+    gTop.addView(gHolder);
+    gTop.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+    body.addView(gTop);
+    // 标题栏 ☰ 切换本页左栏
+    menuBtn.setOnClickListener(v -> {
+      boolean show = gLeft.getVisibility() == View.GONE;
+      gLeft.setVisibility(show ? View.VISIBLE : View.GONE);
+    });
+    // 共用底栏:停止 + 状态
+    LinearLayout gBottom = new LinearLayout(this);
+    gBottom.setOrientation(LinearLayout.VERTICAL);
+    gBottom.setPadding(dp(12), dp(2), dp(12), dp(8));
+    Button stopBtn = button(gBottom, "停止全部网关");
     stopBtn.setOnClickListener(v -> gwStatus.setText(com.laya.Gateway.stop(getApplicationContext())));
     gwStatus = hint("网关: " + com.laya.Gateway.status(this));
-    l.addView(gwStatus);
-    scroller = new ScrollView(this);
-    scroller.addView(l);
-    body.addView(scroller);
+    gBottom.addView(gwStatus);
+    body.addView(gBottom);
+    // 初始高亮
+    gchips[0].setTextColor(Color.WHITE);
+    gchips[0].setBackground(pill(PRIMARY, dp(12)));
   }
 
   /** 下划线输入框(网关页):不带 pill 背景,走系统默认下划线 */
@@ -653,16 +1111,18 @@ public class MainActivity extends Activity {
     }
 
     sysView = new TextView(this);
-    sysView.setText("推理后端: LiteRT GPU(C API, app 内置)\n网关状态见顶部状态栏");
+    sysView.setText(com.laya.DecisionCore.backendInfo(this) + "\n网关状态见顶部状态栏");
     sysView.setTextSize(13);
     l.addView(sysView);
 
-    l.addView(hint("== 架构图 =="));
-    l.addView(new DiagramView(this, 0));
+    // 泳道数据流独立成「数据流」子页
+    LinearLayout p3 = new LinearLayout(this);
+    p3.setOrientation(LinearLayout.VERTICAL);
+    p3.setPadding(dp(12), dp(8), dp(12), dp(8));
     LinearLayout sh = new LinearLayout(this);
     sh.setOrientation(LinearLayout.HORIZONTAL);
     sh.setGravity(Gravity.CENTER_VERTICAL);
-    TextView sht = hint("== 业务数据流(泳道)==");
+    TextView sht = hint("业务数据流(泳道):三条通道由 DecisionCore 串行化");
     sht.setPadding(0, 0, 0, 0);
     LinearLayout.LayoutParams shlp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
     sht.setLayoutParams(shlp);
@@ -681,14 +1141,78 @@ public class MainActivity extends Activity {
       }
     });
     sh.addView(transpose);
-    l.addView(sh);
+    p3.addView(sh);
     swimHolder = new FrameLayout(this);
     swimHolder.addView(new DiagramView(this, swimVertical ? 2 : 1));
-    l.addView(swimHolder);
+    p3.addView(swimHolder);
 
-    scroller = new ScrollView(this);
-    scroller.addView(l);
-    body.addView(scroller);
+    // ---- 子标签页:左侧竖排(系统/架构图/流程图/数据流)+ 显隐开关 ----
+    LinearLayout p1 = new LinearLayout(this);
+    p1.setOrientation(LinearLayout.VERTICAL);
+    p1.setPadding(dp(12), dp(8), dp(12), dp(8));
+    p1.addView(hint("分层决策架构:云端微调闭环 + LLM 升级通道(与 README fig2 同构)"));
+    p1.addView(new DiagramView(this, 0));
+    LinearLayout p2 = new LinearLayout(this);
+    p2.setOrientation(LinearLayout.VERTICAL);
+    p2.setPadding(dp(12), dp(8), dp(12), dp(8));
+    p2.addView(hint("业务流程:决策完成 → 本端自动处理 / LLM 进一步处理(重要+紧急)→ 日志回流 → 微调闭环(与 README fig4 同构)"));
+    p2.addView(new DiagramView(this, 3));
+
+    String[] subNames = {"系统", "架构图", "流程图", "数据流"};
+    String[] subVert = {"系\n统", "架\n构\n图", "流\n程\n图", "数\n据\n流"}; // 竖排文字
+    LinearLayout[] subPanels = {l, p1, p2, p3};
+    final ScrollView[] subScrolls = new ScrollView[4];
+    for (int i = 0; i < 4; i++) {
+      ScrollView sv = new ScrollView(this);
+      sv.addView(subPanels[i]);
+      subScrolls[i] = sv;
+    }
+    final FrameLayout subHolder = new FrameLayout(this);
+    final Button[] chips = new Button[4];
+    final LinearLayout rail = new LinearLayout(this);
+    rail.setOrientation(LinearLayout.VERTICAL);
+    for (int i = 0; i < 4; i++) {
+      final int k = i;
+      Button c = new Button(this);
+      c.setText(subVert[i]); c.setAllCaps(false); c.setTextSize(13);
+      c.setPadding(dp(2), dp(10), dp(2), dp(10));
+      c.setMinHeight(0); c.setMinimumHeight(0);
+      LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+      clp.bottomMargin = dp(4); c.setLayoutParams(clp);
+      c.setOnClickListener(v -> {
+        subHolder.removeAllViews();
+        subHolder.addView(subScrolls[k]);
+        scroller = subScrolls[k];
+        for (int j = 0; j < 4; j++) {
+          chips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
+          chips[j].setBackground(pill(j == k ? PRIMARY : 0xFFE7EAF2, dp(12)));
+        }
+      });
+      chips[i] = c;
+      rail.addView(c);
+    }
+    final LinearLayout leftCol = new LinearLayout(this);
+    leftCol.setOrientation(LinearLayout.VERTICAL);
+    leftCol.setPadding(dp(4), dp(4), dp(0), dp(0));
+    leftCol.addView(rail);
+    LinearLayout.LayoutParams lclp = new LinearLayout.LayoutParams(dp(40), LinearLayout.LayoutParams.MATCH_PARENT);
+    lclp.rightMargin = dp(2);
+    leftCol.setLayoutParams(lclp);
+    // 显隐开关在标题栏左侧(☰),点击收起/展开左栏
+    menuBtn.setOnClickListener(v -> {
+      boolean show = leftCol.getVisibility() == View.GONE;
+      leftCol.setVisibility(show ? View.VISIBLE : View.GONE);
+    });
+    LinearLayout sysTop = new LinearLayout(this);
+    sysTop.setOrientation(LinearLayout.HORIZONTAL);
+    sysTop.addView(leftCol);
+    subHolder.addView(subScrolls[0]);
+    scroller = subScrolls[0];
+    subHolder.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+    sysTop.addView(subHolder);
+    sysTop.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
+    body.addView(sysTop);
+    chips[0].performClick();
   }
 
   // ================= 通用 =================

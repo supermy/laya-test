@@ -28,6 +28,12 @@ TCP 127.0.0.1(GPU)/ Unix socket(长度前缀分帧协议,两端同款)
 - 模型在 `/sdcard/models/`,全程无 Python 依赖
 - 单张工单(3 问)端到端:LiteRT GPU ~0.45s / multi int8 ORT ~1.2s
 
+![分层决策架构](figs/fig2_arch.png)
+
+**分层决策(算力经济性)**:决策模型全量筛查,常规问题决策后本端自动处理;重要+紧急(升级率取 tickets.csv 28587 单真实 high 占比 **39.1%**)在**决策完成后**交付 LLM 进一步处理(复杂推理 · 生成回复,不参与决策阶段)。每单算力:全 LLM ~22 TFLOP(8B,1400 tok)vs 分层 0.8 + 39.1%×22 ≈ 9.5 TFLOP,**总算力 ↓57%**(升级率压到 20% 可 ↓77%);端侧能耗 <1J vs ~700J/单,云端 token 费随升级率同比例 ↓~60%。
+
+![业务流程图](figs/fig4_flow.png)
+
 ## 模型
 
 | 模型 | 大小 | 语言 | 强项 | 切换 |
@@ -57,6 +63,7 @@ LAYA_MODEL=sms laya serve # 垃圾短信判别,另有 POST /sms {"text":"..."}
 
 # 多业务服务(端口 8789,自动发现 /sdcard/models/laya-*-int8)
 node service/server.mjs   # GET /tasks,POST /task/:id,GET /report/daily
+                          # GET /report/page — 详单页:业务×决策等级×日期,点击下钻明细
 
 # 单次推理
 echo '{"state":{"subject":"...","body":"..."},"questions":{...}}' | laya infer
@@ -105,9 +112,10 @@ node sms-e2e-test.mjs           # SMS 判别管路测试(multi 模型+覆盖问�
 | `runner.c` / `runner` | C 常驻推理守护进程(ORT C API) |
 | `laya-native.mjs` | Node 客户端:tokenize → socket → 后处理,`LayaNative.loadWithDaemon()` / `smsInfer()` |
 | `cli.mjs` → `~/bin/laya` | CLI:`infer` / `serve` / `status` / `stop` |
-| `service/` | 多业务决策服务:自适配注册表 + 决策日志报表 + 邮件/MQTT 网关(端口 8789) |
+| `service/` | 多业务决策服务:自适配注册表 + 决策日志报表 + 邮件/MQTT 网关(端口 8789;`GET /report/page` 详单页:业务×决策等级×日期,可下钻) |
 | `finetune/` | 微调管线:数据准备/RLCD 训练/评估/导出 + 任务定义 + parity 报告 |
-| `apk/` | Android APK:LiteRT GPU 内置推理(JNI C API)+ 动态业务 + 网关 + 微信风 UI |
+| `apk/` | Android APK(智能决策业务台):LiteRT GPU 内置推理(JNI C API)+ 动态业务 + 网关 + 微信风 UI;系统页四个子标签(系统/架构图/流程图/数据流,`DiagramView` 零依赖自绘);报表页含「下钻详单」:业务×决策等级×日期矩阵,点数字下钻明细;网关页含 LLM 设置×3(升级通道可选,OpenAI 兼容) |
+| `figs.py` / `figs/` | 公众号/README 配图生成脚本与产物(性能对比 / 分层架构 / 延迟台阶 / 业务流程) |
 | `bench.c` / `bench86` | 原生推理基准(SEQ/BATCH/OPTS 可编译期配置,nnapi/xnnpack EP) |
 | `triage-test.mjs` | 工单分流 E2E 回归 |
 | `validate-historical.mjs` | 真实历史工单全量回归 |

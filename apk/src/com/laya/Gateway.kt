@@ -70,6 +70,24 @@ object Gateway {
     return "网关已停止(含模型上传服务)"
   }
 
+  // ---- LLM 设置(重要+紧急升级通道,3 槽位供可选) ----
+  @JvmStatic
+  fun saveLlm(ctx: Context, llm: JSONObject): String {
+    ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit()
+      .putString("cfg", cfg(ctx).put("llm", llm).toString()).apply()
+    val a = llm.optJSONObject("slots")?.optJSONObject(llm.optString("active"))
+    return "LLM 设置已保存;当前选中: " + (a?.optString("name")?.ifBlank { null } ?: llm.optString("active", "?"))
+  }
+
+  /** 当前选中的 LLM 槽位(含 id),未配置返回 null */
+  @JvmStatic
+  fun llmActive(ctx: Context): JSONObject? {
+    val llm = cfg(ctx).optJSONObject("llm") ?: return null
+    val id = llm.optString("active").ifBlank { "llm1" }
+    val s = llm.optJSONObject("slots")?.optJSONObject(id) ?: return null
+    return s.put("id", id)
+  }
+
   @JvmStatic
   fun status(ctx: Context): String {
     val c = cfg(ctx)
@@ -187,6 +205,76 @@ object Gateway {
     m.subject = subject
     m.setText(text, "UTF-8")
     Transport.send(m)
+  }
+
+  // ---- 手动测试(即时连通性验证,不改配置不启动常驻) ----
+
+  /** IMAP 登录 + 打开收件箱,返回邮件数 */
+  @JvmStatic
+  fun testEmail(email: JSONObject): String {
+    return try {
+      val host = email.optString("host"); val user = email.optString("user"); val pass = email.optString("pass")
+      if (host.isEmpty() || user.isEmpty()) return "❌ IMAP: 请先填服务器与账号"
+      val ssl = email.optBoolean("ssl", true)
+      val port = email.optInt("imapPort", if (ssl) 993 else 143)
+      val t0 = android.os.SystemClock.elapsedRealtime()
+      val props = Properties().apply {
+        put("mail.store.protocol", if (ssl) "imaps" else "imap")
+        put("mail.imap.partialfetch", "false"); put("mail.imaps.partialfetch", "false")
+      }
+      val store = Session.getInstance(props, null).getStore(if (ssl) "imaps" else "imap")
+      store.connect(host, port, user, pass)
+      val inbox = store.getFolder("INBOX"); inbox.open(Folder.READ_ONLY)
+      val n = inbox.messageCount
+      inbox.close(false); store.close()
+      "✅ IMAP 连通 ${host}:${port},收件箱 ${n} 封(${android.os.SystemClock.elapsedRealtime() - t0}ms)"
+    } catch (t: Throwable) { "❌ IMAP: ${t.message}" }
+  }
+
+  /** SMTP 发一封测试邮件 */
+  @JvmStatic
+  fun testSmtp(email: JSONObject, to: String): String {
+    return try {
+      if (to.isEmpty()) return "❌ SMTP: 请先填日报收件箱"
+      val t0 = android.os.SystemClock.elapsedRealtime()
+      sendMail(email, to, "Laya 测试邮件", "这是一封手动测试邮件,收到即 SMTP 通道正常。")
+      "✅ SMTP 已发至 $to(${android.os.SystemClock.elapsedRealtime() - t0}ms)"
+    } catch (t: Throwable) { "❌ SMTP: ${t.message}" }
+  }
+
+  /** MQTT 连接 + 订阅 + 发布 ping */
+  @JvmStatic
+  fun testMqtt(mq: JSONObject, topics: JSONObject?): String {
+    return try {
+      val url = mq.optString("url")
+      if (url.isEmpty()) return "❌ MQTT: 请先填 Broker 地址"
+      val sub = topics?.optString("sub")?.ifEmpty { "laya/req/+" } ?: "laya/req/+"
+      val pub = topics?.optString("pub")?.ifEmpty { "laya/resp" } ?: "laya/resp"
+      val t0 = android.os.SystemClock.elapsedRealtime()
+      val c = MqttClient(url, "laya-test-" + UUID.randomUUID().toString().take(6), MemoryPersistence())
+      val opts = MqttConnectOptions().apply { isCleanSession = true; connectionTimeout = 8; keepAliveInterval = 30 }
+      c.connect(opts)
+      c.subscribe(sub)
+      c.publish(pub, MqttMessage(JSONObject().put("task", "__test").put("text", "ping").toString().toByteArray()))
+      c.disconnect()
+      "✅ MQTT 连通 $url,sub=$sub pub=$pub(${android.os.SystemClock.elapsedRealtime() - t0}ms)"
+    } catch (t: Throwable) { "❌ MQTT: ${t.message}" }
+  }
+
+  /** 上传服务 HTTP 自探 */
+  @JvmStatic
+  fun testUpload(): String {
+    return try {
+      if (!UploadServer.running()) return "❌ 上传服务未运行(先保存并启动网关)"
+      val u = uploadUrl()
+      val t0 = android.os.SystemClock.elapsedRealtime()
+      val c = (java.net.URL(u).openConnection() as java.net.HttpURLConnection).apply {
+        requestMethod = "GET"; connectTimeout = 4000; readTimeout = 4000
+      }
+      val code = c.responseCode; c.disconnect()
+      if (code < 400) "✅ 上传服务 HTTP $code @ $u(${android.os.SystemClock.elapsedRealtime() - t0}ms)"
+      else "❌ 上传服务 HTTP $code @ $u"
+    } catch (t: Throwable) { "❌ 上传服务: ${t.message}" }
   }
 
   // ---- MQTT 网关 ----

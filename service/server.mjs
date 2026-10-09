@@ -6,6 +6,9 @@
 //   POST /task/:id   {"text":...}     决策(写入日志)→ {answers,latencyMs}
 //   GET  /report/daily|monthly|yearly [?date=YYYY-MM-DD]  报表(markdown 文本)
 //   GET  /report/detail?period=daily&date=...             详单 CSV
+//   GET  /report/page                                     详单页面(业务×决策等级×日期,可下钻)
+//   GET  /report/query?from&to[&task&level]               聚合行 JSON(date,task,level,count)
+//   GET  /report/entries?date|from&to[&task&level&limit]  下钻明细 JSON
 //   POST /admin/reload               重读注册表(拖新业务后免重启)
 // 业务自适配:扫描 /sdcard/models/laya-*-int8(有 laya_config.json 即为一个业务),
 // 与 registry.json 合并;新增模型+重启或 POST /admin/reload 即接入。
@@ -75,17 +78,22 @@ async function getClient(id) {
   const t = TASKS[id];
   if (!t) throw new Error(`未知业务: ${id}`);
   const p = (async () => {
-    const c = await LayaNative.loadWithDaemon({
-      modelDir: t.modelDir,
-      modelPath: t.modelPath,
-      socketPath: os.homedir() + `/laya-test/laya-svc-${id}.sock`,
-      threads: 6,
-      runnerBin: RUNNER,
-      env: daemonEnv(),
-    });
-    clients.set(id, c);
-    loadPromises.delete(id);
-    return c;
+    try {
+      const c = await LayaNative.loadWithDaemon({
+        modelDir: t.modelDir,
+        modelPath: t.modelPath,
+        socketPath: os.homedir() + `/laya-test/laya-svc-${id}.sock`,
+        threads: 6,
+        runnerBin: RUNNER,
+        env: daemonEnv(),
+      });
+      c._loadedAt = Date.now(); // 供 /admin/reload 判断模型文件是否更新过
+      clients.set(id, c);
+      return c;
+    } catch (e) {
+      loadPromises.delete(id); // 失败不留污染,下次请求可重试
+      throw e;
+    }
   })();
   loadPromises.set(id, p);
   return p;
@@ -165,7 +173,7 @@ function detailCsv(entries) {
   const rows = ["ts,task,latencyMs,answers_json,state"];
   for (const e of entries) {
     const state = (e.state || "").replace(/"/g, '""').replace(/\s+/g, " ").slice(0, 120);
-    rows.push([new Date(e.ts).toISOString(), e.task, e.latencyMs ?? "", JSON.stringify(e.answers).replace(/"/g, '""'), `"${state}"`].join(","));
+    rows.push([new Date(e.ts).toISOString(), e.task, e.latencyMs ?? "", `"${JSON.stringify(e.answers).replace(/"/g, '""')}"`, `"${state}"`].join(","));
   }
   return rows.join("\n");
 }
@@ -199,6 +207,218 @@ function detailFor(period, dateStr) {
   const [s, e] = rangeFor(period, dateStr);
   return detailCsv(readLogs((d) => d >= s && d < e));
 }
+
+// ---------- 决策后任务等级 + 下钻详单 ----------
+// 等级取法:有 score 问(urgency/风险信号)→ 归一化分映射 高/中/低;
+// 无 score 有 noul → 命中=高/无信号=低;纯 choice → 判定标签本身。
+function levelOf(e) {
+  const ans = e.answers || {};
+  for (const a of Object.values(ans)) {
+    if (a.type !== "score") continue;
+    const max = a.legend ? Object.keys(a.legend).length - 1 : 4;
+    const n = max > 0 ? (a.score ?? 0) / max : 0;
+    const lab = a.legend?.[String(Math.round(a.score ?? 0))];
+    const lv = n >= 0.66 ? "高" : n >= 0.33 ? "中" : "低";
+    return { level: lv, basis: `score=${(a.score ?? 0).toFixed(2)}${lab ? `(${lab})` : ""}` };
+  }
+  for (const a of Object.values(ans)) {
+    // noul 口径与下钻/网关/聚合一致:noul>=0.5 为"命中"(需人工),等级高
+    if (a.type === "noul") return { level: a.noul >= 0.5 ? "高" : "低", basis: `noul=${(a.noul ?? 0).toFixed(2)}${a.noul >= 0.5 ? "(命中)" : "(无信号)"}` };
+  }
+  for (const a of Object.values(ans)) {
+    if (a.type === "choice") return { level: String(a.choice), basis: `choice=${a.choice}(conf=${(a.confidence ?? 0).toFixed(2)})` };
+  }
+  return { level: "未知", basis: "" };
+}
+
+const localDate = (ts) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+const localTime = (ts) => {
+  const d = new Date(ts);
+  return `${localDate(ts)} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+};
+
+function queryRows(from, to, task, level) {
+  const s = new Date(from + "T00:00:00");
+  const e = new Date(to + "T00:00:00"); e.setDate(e.getDate() + 1);
+  const agg = new Map(); // date|task|level -> {count,latSum}
+  let total = 0;
+  for (const raw of readLogs((d) => d >= s && d < e)) {
+    if (task && raw.task !== task) continue;
+    const { level: lv } = levelOf(raw);
+    if (level && lv !== level) continue;
+    const k = `${localDate(raw.ts)}|${raw.task}|${lv}`;
+    if (!agg.has(k)) agg.set(k, { count: 0, latSum: 0 });
+    const b = agg.get(k);
+    b.count++; b.latSum += raw.latencyMs || 0; total++;
+  }
+  const rows = [...agg.entries()].map(([k, b]) => {
+    const [date, t, lv] = k.split("|");
+    return { date, task: t, level: lv, count: b.count, avgLatency: +(b.latSum / b.count).toFixed(0) };
+  }).sort((a, c) => a.date < c.date ? -1 : a.date > c.date ? 1 : a.task < c.task ? -1 : a.level < c.level ? -1 : 1);
+  return { from, to, task: task || null, level: level || null, total, rows };
+}
+
+function drillEntries(date, task, level, limit = 200) {
+  let s, e;
+  if (date) {
+    s = new Date(date + "T00:00:00");
+    e = new Date(date + "T00:00:00"); e.setDate(e.getDate() + 1);
+  } else {
+    s = new Date("1970-01-01T00:00:00");
+    e = new Date(); e.setHours(24, 0, 0, 0);
+  }
+  const out = [];
+  for (const raw of readLogs((d) => d >= s && d < e).reverse()) {
+    if (task && raw.task !== task) continue;
+    const { level: lv, basis } = levelOf(raw);
+    if (level && lv !== level) continue;
+    const parts = [];
+    for (const a of Object.values(raw.answers || {})) {
+      if (a.type === "choice") parts.push(a.choice);
+      else if (a.type === "score") parts.push(`${(a.score ?? 0).toFixed(1)}分`);
+      else if (a.type === "noul") parts.push(a.noul >= 0.5 ? "需人工" : "自动");
+    }
+    out.push({ time: localTime(raw.ts), task: raw.task, level: lv, basis, summary: parts.join(" | "), state: raw.state, answers: raw.answers, latencyMs: raw.latencyMs });
+    if (out.length >= limit) break;
+  }
+  return { date: date || null, task: task || null, level: level || null, count: out.length, entries: out };
+}
+
+const REPORT_PAGE = `<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>决策详单 · 分业务分等级</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:12px;background:#f6f7fa;color:#1a1a2e;font-size:14px}
+h2{margin:14px 0 8px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#fff;padding:10px;border-radius:10px;border:1px solid #e1e4eb}
+select,input{padding:6px 8px;border:1px solid #cfd4de;border-radius:8px;background:#fff}
+button{padding:7px 16px;border:0;border-radius:8px;background:#4361ee;color:#fff}
+table{border-collapse:collapse;width:100%;background:#fff;border-radius:10px;overflow:hidden;margin-top:10px}
+th,td{border-bottom:1px solid #e9ecf2;padding:7px 10px;text-align:left;white-space:nowrap}
+th{background:#eef1f7}
+td.clk{cursor:pointer;color:#4361ee;font-weight:600}
+td.clk:hover{background:#f0f4ff}
+tr:hover td{background:#fafbfe}
+small{color:#6e7382}
+.lv-高{color:#d62828;font-weight:700}.lv-中{color:#e78a00;font-weight:700}.lv-低{color:#2a9d8f;font-weight:700}
+#drill{margin-top:8px}
+.card{background:#fff;border:1px solid #e9ecf2;border-radius:10px;padding:8px 10px;margin-top:8px}
+.card .l1{font-weight:700;font-size:13px}
+.card .l2{font-size:12px;color:#444a55;margin-top:2px}
+.card .l3{font-size:12px;color:#6e7382;margin-top:2px;word-break:break-all}
+details{margin-top:4px}details summary{cursor:pointer;color:#4361ee}
+pre{white-space:pre-wrap;word-break:break-all;background:#f2f4f8;padding:8px;border-radius:8px;font-size:12px}
+</style></head><body>
+<h2>决策详单 <small>分业务 × 决策等级 × 日期,点击数字下钻</small></h2>
+<div class="bar">
+<label>快捷 <select id="preset" onchange="preset()">
+<option value="7">近7天</option><option value="1">今天</option><option value="30">近30天</option><option value="0">全部</option>
+</select></label>
+<label>从 <input type="date" id="from"></label>
+<label>到 <input type="date" id="to"></label>
+<label>业务 <select id="task"><option value="">全部</option></select></label>
+<label>等级 <select id="level"><option value="">全部</option><option>高</option><option>中</option><option>低</option></select></label>
+<button onclick="load()">查询</button>
+<span id="sum"></span>
+</div>
+<div id="byLevel"></div>
+<div id="byDate"></div>
+<div id="drill"></div>
+<script>
+var LEVELS = ["高","中","低"];
+function pad(n){return (n<10?"0":"")+n}
+function iso(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
+function preset(){
+  var v=parseInt(document.getElementById("preset").value,10), t=new Date();
+  var s=new Date();
+  if(v>0)s.setDate(s.getDate()-(v-1));
+  document.getElementById("to").value=iso(t);
+  document.getElementById("from").value=v>0?iso(s):"2020-01-01";
+}
+function init(){
+  document.getElementById("preset").value="7"; preset();
+  fetch("/tasks").then(function(r){return r.json()}).then(function(j){
+    var sel=document.getElementById("task");
+    j.tasks.forEach(function(t){var o=document.createElement("option");o.value=t.id;o.textContent=t.label+" ("+t.id+")";sel.appendChild(o)});
+  });
+  load();
+}
+function esc(s){var d=document.createElement("div");d.textContent=s==null?"":String(s);return d.innerHTML}
+function load(){
+  var q="from="+document.getElementById("from").value+"&to="+document.getElementById("to").value;
+  var tk=document.getElementById("task").value, lv=document.getElementById("level").value;
+  if(tk)q+="&task="+encodeURIComponent(tk); if(lv)q+="&level="+encodeURIComponent(lv);
+  fetch("/report/query?"+q).then(function(r){return r.json()}).then(render);
+  document.getElementById("drill").innerHTML="";
+}
+function render(j){
+  document.getElementById("sum").textContent="共 "+j.total+" 条";
+  var tasks={},levels={},dates={};
+  j.rows.forEach(function(r){tasks[r.task]=1;dates[r.date]=1;levels[r.level]=1});
+  var tks=Object.keys(tasks).sort(), dts=Object.keys(dates).sort().reverse();
+  var lvs=LEVELS.filter(function(l){return levels[l]}).concat(Object.keys(levels).filter(function(l){return LEVELS.indexOf(l)<0}).sort());
+  // 聚合:表1 按 task(等级分列),表2 按 date(业务分列)——多等级/多业务都要累加
+  var byLevel={},byDate={};
+  j.rows.forEach(function(r){
+    var b1=(byLevel[r.task]=byLevel[r.task]||{}); b1[r.level]=(b1[r.level]||0)+r.count; b1.count=(b1.count||0)+r.count;
+    var b2=(byDate[r.date]=byDate[r.date]||{}); b2[r.task]=(b2[r.task]||0)+r.count; b2.count=(b2.count||0)+r.count;
+  });
+  // 表1:业务 × 等级
+  var h="<h2>业务 × 决策等级(区间合计,点击下钻)</h2><table><tr><th>业务</th>";
+  lvs.forEach(function(l){h+="<th>"+esc(l)+"</th>"}); h+="<th>合计</th></tr>";
+  tks.forEach(function(t){
+    var b=byLevel[t]||{},tot=0; h+="<tr><td>"+esc(t)+"</td>";
+    lvs.forEach(function(l){var n=b[l]||0;tot+=n;h+="<td class='clk' onclick=\\"drill(null,'"+esc(t)+"','"+esc(l)+"')\\">"+(n||"<span style='color:#ccc'>·</span>")+"</td>"});
+    h+="<td class='clk' onclick=\\"drill(null,'"+esc(t)+"',null)\\"><b>"+tot+"</b></td></tr>";
+  });
+  document.getElementById("byLevel").innerHTML=h+"</table>";
+  // 表2:日期 × 业务
+  h="<h2>按日期(点击下钻)</h2><table><tr><th>日期</th>";
+  tks.forEach(function(t){h+="<th>"+esc(t)+"</th>"}); h+="<th>合计</th></tr>";
+  dts.forEach(function(d){
+    var b=byDate[d]||{},tot=0; h+="<tr><td>"+esc(d)+"</td>";
+    tks.forEach(function(t){var n=b[t]||0;tot+=n;h+="<td class='clk' onclick=\\"drill('"+esc(d)+"','"+esc(t)+"',null)\\">"+(n||"<span style='color:#ccc'>·</span>")+"</td>"});
+    h+="<td class='clk' onclick=\\"drill('"+esc(d)+"',null,null)\\"><b>"+b.count||0+"</b></td></tr>";
+  });
+  document.getElementById("byDate").innerHTML=h+"</table>";
+}
+function ansSummary(a){
+  var parts=[];
+  for(var k in a){var x=a[k];if(!x||!x.type)continue;
+    if(x.type=="choice")parts.push(x.choice||"?");
+    else if(x.type=="score")parts.push((x.score!=null?x.score.toFixed(1):"?")+"分");
+    else if(x.type=="noul")parts.push(x.noul>=0.5?"需人工":"自动");}
+  return parts.join(" | ");
+}
+function drill(date,task,level){
+  var q=[], from=null, to=null;
+  if(date)q.push("date="+date); else {
+    from=document.getElementById("from").value; to=document.getElementById("to").value;
+    q.push("from="+from);q.push("to="+to);
+  }
+  if(task)q.push("task="+encodeURIComponent(task)); if(level)q.push("level="+encodeURIComponent(level));
+  document.getElementById("drill").innerHTML="<h2>详单加载中…</h2>";
+  fetch("/report/entries?"+q.join("&")).then(function(r){return r.json()}).then(function(j){
+    var h="<h2>详单 "+(date?esc(date):esc(from)+" ~ "+esc(to))+" · "+(task?esc(task):"全部业务")+" · "+(level?esc(level):"全部等级")+" · "+j.count+" 条</h2>";
+    if(!j.entries.length){document.getElementById("drill").innerHTML=h+"<p><small>无记录</small></p>";return}
+    var wrap="<div id='drill'>";
+    j.entries.forEach(function(e){
+      var lv=esc(e.level);
+      wrap+="<div class='card'><div class='l1'>"+esc(e.time)+"  ["+esc(e.task)+"]  <span class='lv-"+lv+"'>"+lv+"</span>  "+esc(e.latencyMs)+"ms</div>"+
+        "<div class='l2'>"+esc(e.summary||"")+(e.summary&&e.basis?" | ":"")+esc(e.basis||"")+"</div>"+
+        "<div class='l3'>"+esc((e.state||"").slice(0,80))+
+        "<details><summary> answers</summary><pre>"+esc(JSON.stringify(e.answers,null,1))+"</pre></details></div></div>";
+    });
+    document.getElementById("drill").innerHTML=h+wrap;
+  });
+}
+init();
+</script></body></html>`;
+
 
 // ---------- HTTP ----------
 const json = (res, code, obj) => {
@@ -251,6 +471,20 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname.startsWith("/report/")) {
       const [, , kind] = url.pathname.split("/");
+      if (kind === "page") {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        return res.end(REPORT_PAGE);
+      }
+      if (kind === "query") {
+        const p = url.searchParams;
+        const to = p.get("to") || localDate(Date.now());
+        const from = p.get("from") || localDate(Date.now() - 6 * 86400e3);
+        return json(res, 200, queryRows(from, to, p.get("task") || null, p.get("level") || null));
+      }
+      if (kind === "entries") {
+        const p = url.searchParams;
+        return json(res, 200, drillEntries(p.get("date"), p.get("task") || null, p.get("level") || null, parseInt(p.get("limit") || "200", 10)));
+      }
       if (kind === "detail") {
         const csv = detailFor(url.searchParams.get("period") || "daily", url.searchParams.get("date"));
         res.writeHead(200, { "Content-Type": "text/csv; charset=utf-8" });
@@ -260,8 +494,23 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { period: kind, report: reportFor(kind, url.searchParams.get("date")) });
     }
     if (req.method === "POST" && url.pathname === "/admin/reload") {
-      TASKS = scanModels();
-      return json(res, 200, { reloaded: true, tasks: Object.keys(TASKS) });
+      const next = scanModels();
+      const evicted = [];
+      // 停掉失效 client(业务被移除/禁用,或模型文件在加载后被重新导出);
+      // shutdown 会给 daemon 发 exit 帧,下次请求懒加载自动拉起新权重
+      for (const [id, c] of [...clients]) {
+        const t = next[id];
+        let mtime = 0;
+        try { mtime = fs.statSync(t.modelPath).mtimeMs; } catch {}
+        if (!t || !t.enabled || mtime > (c._loadedAt || 0)) {
+          try { c.shutdown(); } catch {}
+          clients.delete(id);
+          evicted.push(id);
+        }
+      }
+      for (const id of [...loadPromises.keys()]) if (!next[id]) loadPromises.delete(id);
+      TASKS = next;
+      return json(res, 200, { reloaded: true, tasks: Object.keys(TASKS), evicted });
     }
     // ---- 网关管理(APK 网关页) ----
     if (req.method === "GET" && url.pathname === "/admin/gateways") {
@@ -302,7 +551,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`[laya-svc] http://127.0.0.1:${PORT}  业务: ${Object.keys(TASKS).join(", ")}`);
-  console.log(`[laya-svc] 端点: GET /tasks | POST /task/:id | GET /report/{daily,monthly,yearly} | GET /report/detail | POST /admin/reload`);
+  console.log(`[laya-svc] 端点: GET /tasks | POST /task/:id | GET /report/{daily,monthly,yearly} | GET /report/page(详单页) | GET /report/detail | POST /admin/reload`);
   // 网关启动(配置存在才真正启动)
   gw.setDecideFn(async (task, text) => {
     const t = TASKS[task];
