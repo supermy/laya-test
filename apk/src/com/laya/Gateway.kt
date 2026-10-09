@@ -174,7 +174,7 @@ object Gateway {
           val r = DecisionCore.decide(ctx, task, text)
           val from = (msg.from.firstOrNull() as? InternetAddress)?.address
           if (from != null) sendMail(email, from,
-            ctx.getString(com.selfhost.layatest.R.string.mail_reply_subject, msg.subject ?: ""), DecisionCore.fmt(task, r.answers))
+            ctx.getString(com.selfhost.layatest.R.string.mail_reply_subject, msg.subject ?: ""), DecisionCore.fmt(ctx, task, r.answers))
           Log.i(TAG, "email decision $task ${r.latencyMs}ms")
         }
       } catch (t: Throwable) {

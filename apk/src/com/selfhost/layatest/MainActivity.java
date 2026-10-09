@@ -67,7 +67,7 @@ public class MainActivity extends Activity {
 
   private void refreshTasks() {
     taskIds.clear(); taskLabels.clear();
-    for (kotlin.Pair<String, String> t : com.laya.DecisionCore.scanTasks()) {
+    for (kotlin.Pair<String, String> t : com.laya.DecisionCore.scanTasks(this)) {
       taskIds.add(t.getFirst()); taskLabels.add(t.getSecond());
     }
     if (taskIdx >= taskIds.size()) taskIdx = 0;
@@ -439,7 +439,7 @@ public class MainActivity extends Activity {
       String reply;
       try {
         com.laya.DecisionCore.Result r = com.laya.DecisionCore.decide(this, taskIds.get(ti), text);
-        reply = fmtAnswers(taskIds.get(ti), r.answers, (int) r.latencyMs) + getString(R.string.backend_prefix, com.laya.DecisionCore.currentEngine());
+        reply = fmtAnswers(taskIds.get(ti), r.answers, (int) r.latencyMs) + getString(R.string.backend_prefix, com.laya.DecisionCore.currentEngine(this));
       } catch (Throwable e) {
         android.util.Log.e("LayaApp", "decision failed", e);
         reply = getString(R.string.infer_failed, e.getClass().getSimpleName(), e.getMessage());

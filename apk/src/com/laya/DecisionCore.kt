@@ -2,6 +2,7 @@ package com.laya
 
 import android.content.Context
 import android.util.Log
+import com.selfhost.layatest.R
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -19,11 +20,15 @@ object DecisionCore {
     "agent" to "Agent 工作流路由", "risk" to "金融风控前置",
     "multi" to "多语言工单分流(基础)",
   )
+  private val BUILTIN_RES = mapOf(
+    "ticket" to com.selfhost.layatest.R.string.biz_ticket, "ugc" to com.selfhost.layatest.R.string.biz_ugc, "agent" to com.selfhost.layatest.R.string.biz_agent,
+    "risk" to com.selfhost.layatest.R.string.biz_risk, "multi" to com.selfhost.layatest.R.string.biz_multi,
+  )
 
   /** 已安装业务:/sdcard/models 下 laya-litert-* 目录的 phone 子目录含全套模型文件;内置五业务 + 动态包 */
   @JvmStatic
   @JvmOverloads
-  fun scanTasks(sdRoot: String = "/sdcard/models"): List<Pair<String, String>> {
+  fun scanTasks(ctx: Context? = null, sdRoot: String = "/sdcard/models"): List<Pair<String, String>> {
     val out = LinkedHashMap<String, String>()
     val root = File(sdRoot)
     val dirs = root.listFiles { f -> f.isDirectory && f.name.startsWith("laya-litert-") } ?: emptyArray()
@@ -32,19 +37,20 @@ object DecisionCore {
       val pkg = File(d, "phone")
       val ready = pkg.isDirectory && (File(pkg, "laya_ml_s256_embeds_wfp16.tflite").isFile ||
           File(pkg, "laya_ml_s256_embeds_npu.tflite").isFile)
-      if (ready) out[task] = BUILTIN[task] ?: File(pkg, "label.txt").takeIf { it.isFile }?.readText()?.trim() ?: task
+      if (ready) out[task] = BUILTIN_RES[task]?.let { ctx?.getString(it) } ?: BUILTIN[task]
+          ?: File(pkg, "label.txt").takeIf { it.isFile }?.readText()?.trim() ?: task
     }
     // multi 基础模型:目录名为 laya-litert(无后缀),模型即多语言工单分流
     val multiPkg = File(root, "laya-litert/phone")
     if (multiPkg.isDirectory && File(multiPkg, "laya_ml_s256_embeds_npu.tflite").isFile)
-      out["multi"] = BUILTIN["multi"]!!
+      out["multi"] = BUILTIN_RES["multi"]?.let { ctx?.getString(it) } ?: BUILTIN["multi"]!!
     return out.toList()
   }
 
   private var jniEngine: DecisionEngine? = null
   private var runnerEngine: DecisionEngine? = null
   private var engineTask: String? = null
-  private var engineDesc: String = "未初始化(首次决策时自动选择)"
+  private var engineDesc: String? = null
 
   // ---- 硬件探测:引擎后端按装机手机资源自动确定(NPU → GPU → CPU 兜底) ----
 
@@ -78,31 +84,31 @@ object DecisionCore {
 
   /** 当前实际引擎描述(决策卡片/系统页展示) */
   @JvmStatic
-  fun currentEngine(): String = engineDesc
+  fun currentEngine(ctx: Context): String = engineDesc ?: ctx.getString(com.selfhost.layatest.R.string.engine_uninitialized)
 
   /** 引擎与硬件情况(系统页展示) */
   @JvmStatic
   fun backendInfo(ctx: Context): String {
     val soc = if (android.os.Build.VERSION.SDK_INT >= 31)
       "${android.os.Build.SOC_MANUFACTURER} ${android.os.Build.SOC_MODEL}" else android.os.Build.HARDWARE
-    val npu = if (npuAvailable(ctx)) "NPU 可用(QNN)"
-      else if (mtkNpuAvailable(ctx)) "NPU 可用(MTK MDLA,需模型包携带 dispatch 主图)"
-      else "NPU 不可用(非高通/MTK SoC 或缺 NPU 库)"
-    val gpu = if (openclPresent()) "GPU/OpenCL 可用" else "GPU/OpenCL 未检出(运行时尝试)"
-    return "硬件 $soc · $npu · $gpu\n当前引擎: $engineDesc"
+    val npu = if (npuAvailable(ctx)) ctx.getString(com.selfhost.layatest.R.string.npu_ok_qnn)
+      else if (mtkNpuAvailable(ctx)) ctx.getString(com.selfhost.layatest.R.string.npu_ok_mtk)
+      else ctx.getString(com.selfhost.layatest.R.string.npu_unavail)
+    val gpu = if (openclPresent()) ctx.getString(com.selfhost.layatest.R.string.gpu_opencl_ok) else ctx.getString(com.selfhost.layatest.R.string.gpu_opencl_try)
+    return ctx.getString(com.selfhost.layatest.R.string.backend_fmt, soc, npu, gpu, engineDesc ?: ctx.getString(com.selfhost.layatest.R.string.engine_uninitialized))
   }
 
   /** GPU→CPU 逐级尝试(runner 独立进程最快,JNI 进程内次之,CPU 兜底) */
   private fun gpuOrCpu(ctx: Context, base: File): DecisionEngine =
     try {
-      LayaRunnerEngine(ctx, base).also { engineDesc = "GPU(独立进程 runner)" }
+      LayaRunnerEngine(ctx, base).also { engineDesc = ctx.getString(com.selfhost.layatest.R.string.engine_gpu_runner) }
     } catch (t: Throwable) {
       Log.w("DecisionCore", "runner failed, fallback JNI GPU/CPU", t)
       try {
-        LayaNativeEngine(ctx, base, true).also { engineDesc = "GPU(JNI 进程内)" }
+        LayaNativeEngine(ctx, base, true).also { engineDesc = ctx.getString(com.selfhost.layatest.R.string.engine_gpu_jni) }
       } catch (t2: Throwable) {
         Log.w("DecisionCore", "jni gpu failed, fallback cpu", t2)
-        LayaNativeEngine(ctx, base, false).also { engineDesc = "CPU(兜底)" }
+        LayaNativeEngine(ctx, base, false).also { engineDesc = ctx.getString(com.selfhost.layatest.R.string.engine_cpu_fallback) }
       }
     }
 
@@ -124,9 +130,9 @@ object DecisionCore {
   private fun cl(vararg kv: String): Map<String, Any?> =
     LinkedHashMap<String, Any?>().apply { kv.forEach { put(it, null) } }
 
-  fun questionDefs(task: String): List<Pair<String, Map<String, Any?>>> {
+  fun questionDefs(ctx: Context?, task: String): List<Pair<String, Map<String, Any?>>> {
     if (task !in BUILTIN) return externalDefs(task)
-    return builtinDefs(task)
+    return builtinDefs(ctx, task)
   }
 
   /** 动态业务:从 /sdcard/models/laya-litert-<task>/phone/questions.json 读问题定义 */
@@ -150,28 +156,32 @@ object DecisionCore {
     return out
   }
 
-  private fun builtinDefs(task: String): List<Pair<String, Map<String, Any?>>> = when (task) {
+  private fun builtinDefs(ctx: Context?, task: String): List<Pair<String, Map<String, Any?>>> = when (task) {
+    // criteria/legend 为模型输出类别键,保持存储原值;仅 instructions(问题文本)本地化
     "ticket", "multi" -> listOf(
-      "q0" to q("choice", "分诊到售后部门", cl("技术支持", "账单计费", "销售咨询", "退换货", "故障维护", "其他")),
-      "q1" to q("score", "客户紧急度1-5", listOf("可忽略", "低", "中", "高", "紧急")),
-      "q2" to q("noul", "是否必须转人工处理(自动回复无法解决)"),
+      "q0" to q("choice", ctx.getString2(com.selfhost.layatest.R.string.q_ticket_0), cl("技术支持", "账单计费", "销售咨询", "退换货", "故障维护", "其他")),
+      "q1" to q("score", ctx.getString2(com.selfhost.layatest.R.string.q_ticket_1), listOf("可忽略", "低", "中", "高", "紧急")),
+      "q2" to q("noul", ctx.getString2(com.selfhost.layatest.R.string.q_ticket_2)),
     )
     "ugc" -> listOf(
-      "q0" to q("choice", "审核判定", cl("正常", "广告导流", "辱骂攻击", "色情低俗", "诈骗引流")),
-      "q1" to q("score", "违规严重度1-5", listOf("无违规", "轻微", "一般", "较重", "严重")),
-      "q2" to q("noul", "是否需要人工复核(机器置信不足或处置风险高)"),
+      "q0" to q("choice", ctx.getString2(com.selfhost.layatest.R.string.q_ugc_0), cl("正常", "广告导流", "辱骂攻击", "色情低俗", "诈骗引流")),
+      "q1" to q("score", ctx.getString2(com.selfhost.layatest.R.string.q_ugc_1), listOf("无违规", "轻微", "一般", "较重", "严重")),
+      "q2" to q("noul", ctx.getString2(com.selfhost.layatest.R.string.q_ugc_2)),
     )
     "agent" -> listOf(
-      "q0" to q("choice", "路由到工作流", cl("直接回答", "检索问答", "工具调用", "多步规划", "转人工")),
-      "q1" to q("score", "任务复杂度1-5", listOf("一句话", "简单", "中等", "复杂", "极复杂")),
-      "q2" to q("noul", "是否涉及多实体或多约束需要任务拆解"),
+      "q0" to q("choice", ctx.getString2(com.selfhost.layatest.R.string.q_agent_0), cl("直接回答", "检索问答", "工具调用", "多步规划", "转人工")),
+      "q1" to q("score", ctx.getString2(com.selfhost.layatest.R.string.q_agent_1), listOf("一句话", "简单", "中等", "复杂", "极复杂")),
+      "q2" to q("noul", ctx.getString2(com.selfhost.layatest.R.string.q_agent_2)),
     )
     else -> listOf(
-      "q0" to q("score", "风险信号强度1-5", listOf("无信号", "弱", "中", "强", "极强")),
-      "q1" to q("choice", "主要风险类型", cl("无风险信号", "信用风险", "欺诈风险", "合规风险")),
-      "q2" to q("noul", "是否命中强风控信号建议人工复核"),
+      "q0" to q("score", ctx.getString2(com.selfhost.layatest.R.string.q_risk_0), listOf("无信号", "弱", "中", "强", "极强")),
+      "q1" to q("choice", ctx.getString2(com.selfhost.layatest.R.string.q_risk_1), cl("无风险信号", "信用风险", "欺诈风险", "合规风险")),
+      "q2" to q("noul", ctx.getString2(com.selfhost.layatest.R.string.q_risk_2)),
     )
   }
+
+  /** ctx 可空的 getString(无 ctx 路径兜底空串) */
+  private fun Context?.getString2(id: Int): String = this?.getString(id) ?: ""
 
   @Synchronized
   private fun ensureRunner(ctx: Context, task: String): DecisionEngine {
@@ -189,7 +199,7 @@ object DecisionCore {
     )
     for (f in files) {
       val s = File(src, f)
-      check(s.isFile) { "缺少模型文件 $s(先在系统页安装模型)" }
+      check(s.isFile) { ctx.getString(com.selfhost.layatest.R.string.model_file_missing, s.absolutePath) }
       val d = File(base, f)
       if (!d.isFile || d.length() != s.length()) s.copyTo(d, overwrite = true)
     }
@@ -203,7 +213,7 @@ object DecisionCore {
         if (!d.isFile || d.length() != s.length()) s.copyTo(d, overwrite = true)
       }
     }
-    check(hasMain) { "缺少主图(dispatch/wfp16 至少其一): $src" }
+    check(hasMain) { ctx.getString(com.selfhost.layatest.R.string.main_graph_missing, src.absolutePath) }
     // NPU 附加文件(scorer bin)存在才复制(GPU 兜底不依赖)
     val sc = File(src, "laya_ml_scorer.bin")
     if (sc.isFile) {
@@ -214,7 +224,7 @@ object DecisionCore {
       if (npuAvailable(ctx)) {
         try {
           Log.i("DecisionCore", "NPU available, trying QNN engine first")
-          LayaFullEngine(ctx, base).also { engineDesc = "NPU(QNN HTP,进程内)" }
+          LayaFullEngine(ctx, base).also { engineDesc = ctx.getString(com.selfhost.layatest.R.string.engine_npu_qnn) }
         } catch (t: Throwable) {
           Log.w("DecisionCore", "npu engine failed, degrade to gpu/cpu", t)
           gpuOrCpu(ctx, base)
@@ -222,7 +232,7 @@ object DecisionCore {
       } else if (mtkNpuAvailable(ctx) && npuModelReady(base)) {
         try {
           Log.i("DecisionCore", "MTK NPU available, trying dispatch runner")
-          LayaRunnerEngine(ctx, base, npu = true).also { engineDesc = "NPU(MTK MDLA,独立进程)" }
+          LayaRunnerEngine(ctx, base, npu = true).also { engineDesc = ctx.getString(com.selfhost.layatest.R.string.engine_npu_mtk) }
         } catch (t: Throwable) {
           Log.w("DecisionCore", "mtk npu runner failed, degrade to gpu/cpu", t)
           gpuOrCpu(ctx, base)
@@ -238,8 +248,8 @@ object DecisionCore {
    */
   @JvmStatic
   fun importPackage(ctx: Context, source: String, task: String): String? {
-    if (!task.matches(Regex("[a-zA-Z0-9_-]{1,32}"))) return "业务名只允许字母/数字/下划线/中划线"
-    if (!source.lowercase().endsWith(".zip") && !File(source).isDirectory) return "源不存在或不是目录/zip: $source"
+    if (!task.matches(Regex("[a-zA-Z0-9_-]{1,32}"))) return ctx.getString(com.selfhost.layatest.R.string.import_name_invalid)
+    if (!source.lowercase().endsWith(".zip") && !File(source).isDirectory) return ctx.getString(com.selfhost.layatest.R.string.import_src_missing, source)
     val required = listOf(
       "laya_ml_s256_embeds_wfp16.tflite", "laya_ml_act_head_fp32.tflite",
       "token_embeddings_fp16.bin", "token_embeddings.json",
@@ -254,7 +264,7 @@ object DecisionCore {
           val outRoot = tmp.canonicalPath + "/"
           while (e != null) {
             val f = File(tmp, e.name)
-            if (!f.canonicalPath.startsWith(outRoot)) return "zip 内含非法路径: ${e.name}"
+            if (!f.canonicalPath.startsWith(outRoot)) return ctx.getString(com.selfhost.layatest.R.string.import_zip_path, e.name)
             if (e.isDirectory) f.mkdirs()
             else {
               f.parentFile?.mkdirs()
@@ -263,16 +273,16 @@ object DecisionCore {
             e = zis.nextEntry
           }
         }
-      } catch (t: Throwable) { tmp.deleteRecursively(); return "zip 解压失败: ${t.message}" }
+      } catch (t: Throwable) { tmp.deleteRecursively(); return ctx.getString(com.selfhost.layatest.R.string.import_unzip_failed, t.message ?: "") }
     } else tmp = File(source)
     val missing = required.filterNot { File(tmp, it).isFile() }
-    if (missing.isNotEmpty()) { if (source.lowercase().endsWith(".zip")) tmp.deleteRecursively(); return "缺文件: $missing" }
+    if (missing.isNotEmpty()) { if (source.lowercase().endsWith(".zip")) tmp.deleteRecursively(); return ctx.getString(com.selfhost.layatest.R.string.import_missing_files, missing.toString()) }
     // 命名/内容检测:questions.json(若携带)必须是 JSON 数组
     val qf = File(tmp, "questions.json")
     if (qf.isFile) {
       try { org.json.JSONArray(qf.readText()) } catch (t: Throwable) {
         if (source.lowercase().endsWith(".zip")) tmp.deleteRecursively()
-        return "questions.json 不是合法 JSON 数组: ${t.message}"
+        return ctx.getString(com.selfhost.layatest.R.string.import_questions_bad, t.message ?: "")
       }
     }
     val dst = File("/sdcard/models/laya-litert-$task/phone").apply { mkdirs() }
@@ -280,7 +290,7 @@ object DecisionCore {
       for (f in tmp.listFiles() ?: emptyArray()) {
         if (f.isFile) f.copyTo(File(dst, f.name), overwrite = true)
       }
-    } catch (t: Throwable) { return "复制失败: ${t.message}" }
+    } catch (t: Throwable) { return ctx.getString(com.selfhost.layatest.R.string.import_copy_failed, t.message ?: "") }
     if (source.lowercase().endsWith(".zip")) tmp.deleteRecursively()
     return null
   }
@@ -296,7 +306,7 @@ object DecisionCore {
     jniEngine?.let { try { it.close() } catch (_: Throwable) {} }
     jniEngine = null
     engineTask = null
-    engineDesc = "未初始化(首次决策时自动选择)"
+    engineDesc = null
   }
 
   /** 卸载业务:释放引擎(若是当前)并删除已拷贝的模型文件(/sdcard 源包保留,可重装) */
@@ -322,7 +332,7 @@ object DecisionCore {
     val eng = ensureRunner(ctx, task)
     val t0 = System.nanoTime()
     val answers = JSONObject()
-    for ((qid, qdef) in questionDefs(task)) {
+    for ((qid, qdef) in questionDefs(ctx, task)) {
       answers.put(qid, JSONObject(eng.answer(text, qdef, qid)))
     }
     val ms = (System.nanoTime() - t0) / 1_000_000
@@ -391,7 +401,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
         var err: String? = null
         val t0 = System.currentTimeMillis()
         try {
-          val prompt = "业务「$task」决策模型输出:\n${fmt(task, answers)}\n\n原始输入:${text.take(400)}\n\n" +
+          val prompt = "业务「$task」决策模型输出:\n${fmt(ctx, task, answers)}\n\n原始输入:${text.take(400)}\n\n" +
               "该单已被分流为重要+紧急,升级到 LLM 做决策后处理。请给出:1) 风险/影响判断 2) 建议处理动作 3) 是否需人工介入。中文,200 字内。"
           val c = (java.net.URL(base + "/chat/completions").openConnection() as java.net.HttpURLConnection)
           c.requestMethod = "POST"; c.connectTimeout = 8000; c.readTimeout = 240_000
@@ -470,8 +480,8 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
           val a = dec.optJSONObject(kit.next()) ?: continue
           when (a.optString("type")) {
             "choice" -> { parts.add(a.optString("choice")); if (result.isEmpty()) result = a.optString("choice") }
-            "score" -> { val s = String.format(Locale.US, "%.1f分", a.optDouble("score")); parts.add(s); if (score.isEmpty()) score = s }
-            "noul" -> { val v = if (a.optDouble("noul") >= 0.5) "需人工" else "自动"; parts.add(v); if (verdict.isEmpty()) verdict = v }
+            "score" -> { val s = ctx.getString(com.selfhost.layatest.R.string.score_fmt, a.optDouble("score")); parts.add(s); if (score.isEmpty()) score = s }
+            "noul" -> { val v = if (a.optDouble("noul") >= 0.5) ctx.getString(com.selfhost.layatest.R.string.verdict_human) else ctx.getString(com.selfhost.layatest.R.string.verdict_auto); parts.add(v); if (verdict.isEmpty()) verdict = v }
           }
         }
       }
@@ -480,7 +490,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
       if (cands != null) for (l in cands) {
         if (l.optLong("ts") >= e.optLong("ts") && l.optLong("ts") - e.optLong("ts") < 600_000L) {
           val lo = l.optJSONObject("llm")
-          llmTxt = if (lo != null) lo.optString("content") else "失败: " + l.optString("error")
+          llmTxt = if (lo != null) lo.optString("content") else ctx.getString(com.selfhost.layatest.R.string.llm_failed_prefix, l.optString("error"))
           break
         }
       }
@@ -552,10 +562,11 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
 
   /** 决策结果 → 可读文本(邮件回复/MQTT 消息共用) */
   @JvmStatic
-  fun fmt(task: String, answers: JSONObject): String {
-    val label = BUILTIN[task] ?: scanTasks().firstOrNull { it.first == task }?.second ?: task
+  fun fmt(ctx: Context?, task: String, answers: JSONObject): String {
+    val label = BUILTIN_RES[task]?.let { ctx?.getString(it) }
+      ?: scanTasks(ctx).firstOrNull { it.first == task }?.second ?: task
     val sb = StringBuilder("【").append(label).append("】\n")
-    for ((qid, def) in questionDefs(task)) {
+    for ((qid, def) in questionDefs(ctx, task)) {
       val a = answers.optJSONObject(qid) ?: continue
       when (a.optString("type")) {
         "choice" -> sb.append("• ").append(def["instructions"]).append(": ").append(a.optString("choice"))
@@ -563,7 +574,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
         "score" -> sb.append("• ").append(def["instructions"]).append(": ").append(a.optDouble("score"))
           .append("/5\n")
         "noul" -> sb.append("• ").append(def["instructions"]).append(": ")
-          .append(if (a.optDouble("noul") >= 0.5) "是" else "否").append("\n")
+          .append(if (a.optDouble("noul") >= 0.5) (ctx?.getString(com.selfhost.layatest.R.string.yes) ?: "是") else (ctx?.getString(com.selfhost.layatest.R.string.no) ?: "否")).append("\n")
       }
     }
     return sb.toString()
@@ -580,7 +591,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
         try { all.add(JSONObject(line)) } catch (_: Exception) {}
       }
     }
-    val names = arrayOf("日报", "月报", "年报", "详单")
+    val names = arrayOf(ctx.getString(com.selfhost.layatest.R.string.kind_daily), ctx.getString(com.selfhost.layatest.R.string.kind_monthly), ctx.getString(com.selfhost.layatest.R.string.kind_yearly), ctx.getString(com.selfhost.layatest.R.string.kind_detail))
     val df = when (kind) { 2 -> SimpleDateFormat("yyyy", Locale.US); 1 -> SimpleDateFormat("yyyy-MM", Locale.US); else -> SimpleDateFormat("yyyy-MM-dd", Locale.US) }
     val buckets = LinkedHashMap<String, MutableList<JSONObject>>()
     for (e in all) {
@@ -592,7 +603,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
       }
       buckets.computeIfAbsent(df.format(c.time)) { ArrayList() }.add(e)
     }
-    val sb = StringBuilder("== ").append(names[kind]).append("(共 ").append(all.size).append(" 条决策)==\n\n")
+    val sb = StringBuilder(ctx.getString(com.selfhost.layatest.R.string.report_header_fmt, names[kind], all.size)).append("\n\n")
     for ((key, list) in buckets) {
       var lat = 0L
       val labels = LinkedHashMap<String, Int>()
@@ -608,8 +619,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
           }
         }
       }
-      sb.append("【").append(key).append("】").append(list.size).append(" 条,平均 ")
-        .append(if (list.isEmpty()) 0 else lat / list.size).append("ms\n")
+      sb.append(ctx.getString(com.selfhost.layatest.R.string.report_group_fmt, key, list.size, if (list.isEmpty()) 0 else lat / list.size)).append("\n")
       for ((k, v) in labels) sb.append("   ").append(k).append(": ").append(v).append("\n")
       sb.append("\n")
       if (kind == 0) {
@@ -726,8 +736,8 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
           val a = dec.optJSONObject(it.next()) ?: continue
           when (a.optString("type")) {
             "choice" -> parts.add(a.optString("choice"))
-            "score" -> parts.add(String.format(Locale.US, "%.1f分", a.optDouble("score")))
-            "noul" -> parts.add(if (a.optDouble("noul") >= 0.5) "需人工" else "自动")
+            "score" -> parts.add(ctx.getString(com.selfhost.layatest.R.string.score_fmt, a.optDouble("score")))
+            "noul" -> parts.add(if (a.optDouble("noul") >= 0.5) ctx.getString(com.selfhost.layatest.R.string.verdict_human) else ctx.getString(com.selfhost.layatest.R.string.verdict_auto))
           }
         }
         o.put("answers", parts.joinToString(" | "))

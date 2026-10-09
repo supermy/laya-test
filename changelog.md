@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-10 — v1.4.5:DecisionCore.kt 文案资源化(i18n 收尾)
+
+- Kotlin 决策核心 54 条中文按"文案/数据键"分类处理:**34 处资源化**——业务名(BUILTIN→biz_* 资源,scanTasks/fmt 加 Context)、引擎描述 6 条(engineDesc 改可空 + currentEngine(ctx))、backendInfo 硬件 5 条、ensureRunner 校验 2 条、导入校验 7 条、内置业务问题文本 12 条(instructions 本地化)、格式词(评分/需人工/自动/是/否/报表头/分组行)
+- **数据键保留**(日志存储值,不随 locale 翻译):等级键(高/中/低/未知)、choice 选项 criteria/legend(模型输出类别)、noul basis、LLM prompt(任务指令)
+- 签名变更:`scanTasks(ctx?)`/`currentEngine(ctx)`/`fmt(ctx,...)`/`questionDefs(ctx,...)`;Gateway 邮件回复与 MainActivity 两处调用点同步
+- 真机验证:EN 下业务名(Customer ticket triage/Agent workflow routing/Financial risk pre-screen/Multilingual ticket triage)、backendInfo、真实决策结果(Backend: NPU (MTK MDLA, separate process),238ms 无回归)✓
+- 至此 APK 三层(MainActivity/Gateway/DecisionCore)UI 文案全部 zh/en 双语
+
 ## 2026-10-10 — v1.4.4:报表/网关/系统页左栏 tab 整词旋转 90°
 
 - 三页左栏 rail(日报/月报/年报/详单/下钻详单、邮件/队列/LLM、系统/架构图/流程图/数据流)由"逐字竖排"改为**整词旋转 90°**,与决策页业务 tab 同构

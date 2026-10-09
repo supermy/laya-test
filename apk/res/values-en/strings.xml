@@ -193,4 +193,53 @@
     <string name="notif_channel">Laya gateway</string>
     <string name="notif_title">Laya decision gateway</string>
     <string name="notif_text">Email/MQTT channels running</string>
+    <!-- DecisionCore: business names -->
+    <string name="biz_ticket">Customer ticket triage</string>
+    <string name="biz_ugc">UGC content moderation</string>
+    <string name="biz_agent">Agent workflow routing</string>
+    <string name="biz_risk">Financial risk pre-screen</string>
+    <string name="biz_multi">Multilingual ticket triage (base)</string>
+    <!-- DecisionCore: engine / hardware -->
+    <string name="engine_uninitialized">Uninitialized (auto-selected on first decision)</string>
+    <string name="engine_gpu_runner">GPU (separate-process runner)</string>
+    <string name="engine_gpu_jni">GPU (in-process JNI)</string>
+    <string name="engine_cpu_fallback">CPU (fallback)</string>
+    <string name="engine_npu_qnn">NPU (QNN HTP, in-process)</string>
+    <string name="engine_npu_mtk">NPU (MTK MDLA, separate process)</string>
+    <string name="npu_ok_qnn">NPU available (QNN)</string>
+    <string name="npu_ok_mtk">NPU available (MTK MDLA; model pack needs dispatch graph)</string>
+    <string name="npu_unavail">NPU unavailable (non-Qualcomm/MTK SoC or NPU libs missing)</string>
+    <string name="gpu_opencl_ok">GPU/OpenCL available</string>
+    <string name="gpu_opencl_try">GPU/OpenCL not detected (runtime attempt)</string>
+    <string name="backend_fmt">Hardware %1$s · %2$s · %3$s\nEngine: %4$s</string>
+    <string name="model_file_missing">Missing model file %1$s (install the model in System first)</string>
+    <string name="main_graph_missing">Missing main graph (dispatch/wfp16 at least one): %1$s</string>
+    <!-- DecisionCore: import validation -->
+    <string name="import_name_invalid">Business name: letters/digits/underscore/hyphen only</string>
+    <string name="import_src_missing">Source missing or not a dir/zip: %1$s</string>
+    <string name="import_zip_path">Illegal path in zip: %1$s</string>
+    <string name="import_unzip_failed">Zip extract failed: %1$s</string>
+    <string name="import_missing_files">Missing files: %1$s</string>
+    <string name="import_questions_bad">questions.json is not a valid JSON array: %1$s</string>
+    <string name="import_copy_failed">Copy failed: %1$s</string>
+    <!-- DecisionCore: builtin questions -->
+    <string name="q_ticket_0">Triage to after-sales</string>
+    <string name="q_ticket_1">Customer urgency 1-5</string>
+    <string name="q_ticket_2">Must escalate to human (auto-reply cannot resolve)</string>
+    <string name="q_ugc_0">Moderation verdict</string>
+    <string name="q_ugc_1">Violation severity 1-5</string>
+    <string name="q_ugc_2">Human review needed (low confidence or risky action)</string>
+    <string name="q_agent_0">Route to workflow</string>
+    <string name="q_agent_1">Task complexity 1-5</string>
+    <string name="q_agent_2">Multi-entity or multi-constraint decomposition needed</string>
+    <string name="q_risk_0">Risk signal strength 1-5</string>
+    <string name="q_risk_1">Main risk type</string>
+    <string name="q_risk_2">Strong risk signal hit — human review advised</string>
+    <!-- DecisionCore: format words -->
+    <string name="score_fmt">%1$.1f pts</string>
+    <string name="verdict_human">Human needed</string>
+    <string name="verdict_auto">Auto</string>
+    <string name="llm_failed_prefix">Failed: %1$s</string>
+    <string name="report_header_fmt">== %1$s (%2$d decisions in total) ==</string>
+    <string name="report_group_fmt">[%1$s] %2$d entries, avg %3$dms</string>
 </resources>
