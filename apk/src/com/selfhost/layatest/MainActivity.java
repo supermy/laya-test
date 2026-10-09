@@ -90,6 +90,11 @@ public class MainActivity extends Activity {
     super.onCreate(b);
     refreshTasks();
     buildUi();
+    // LLM 升级完成回调:决策页气泡展示风险分析(邮件/MQTT 渠道触发的也在此显示)
+    com.laya.DecisionCore.setLlmListener((task, content, err) -> runOnUiThread(() -> {
+      if (err != null) bot("🤖 LLM 升级失败 [" + task + "]: " + err);
+      else if (!content.isEmpty()) bot("🤖 LLM 风险分析 [" + task + "]\n" + content);
+    }));
     // 恢复内置网关(仅配置了 enabled 时)
     if (com.laya.Gateway.cfg(this).optBoolean("enabled")) {
       startForegroundService(new Intent(this, com.laya.GatewayService.class));
@@ -341,6 +346,15 @@ public class MainActivity extends Activity {
       bubble(h.optString("state"), true);
       String when = df.format(new java.util.Date(h.optLong("ts")));
       bot(fmtAnswers(task, h.optJSONObject("decoded"), (int) h.optLong("latencyMs")) + "\n· " + when);
+    }
+    // 回显最近一次 LLM 风险分析(升级通道产物)
+    org.json.JSONObject llm = com.laya.DecisionCore.lastLlm(this, task);
+    if (llm != null) {
+      String when = df.format(new java.util.Date(llm.optLong("ts")));
+      org.json.JSONObject l = llm.optJSONObject("llm");
+      String c = l != null ? l.optString("content") : "";
+      if (!c.isEmpty()) bot("🤖 最近 LLM 风险分析 · " + when + "\n" + c);
+      else if (llm.has("error")) bot("🤖 最近 LLM 升级失败(" + when + "): " + llm.optString("error"));
     }
     scroller.post(() -> scroller.scrollTo(0, scroller.getHeight()));
   }

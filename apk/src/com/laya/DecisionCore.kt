@@ -352,6 +352,28 @@ object DecisionCore {
     } catch (_: Exception) {}
   }
 
+/** LLM 升级完成回调(UI 展示风险分析) */
+fun interface LlmListener { fun onLlmDone(task: String, content: String, error: String?) }
+
+  @JvmStatic @Volatile var llmListener: LlmListener? = null
+
+  /** 最近一条 LLM 升级结果(业务维度,type=llm 行;无则 null) */
+  @JvmStatic
+  fun lastLlm(ctx: Context, task: String): JSONObject? {
+    var out: JSONObject? = null
+    try {
+      val f = logFile(ctx)
+      if (f.isFile) for (line in java.nio.file.Files.readAllBytes(f.toPath()).toString(Charsets.UTF_8).split("\n").asReversed()) {
+        if (line.isBlank()) continue
+        try {
+          val o = JSONObject(line)
+          if (o.optString("type") == "llm" && o.optString("task") == task) { out = o; break }
+        } catch (_: Exception) {}
+      }
+    } catch (_: Throwable) {}
+    return out
+  }
+
   /**
    * 决策后 LLM 升级通道:等级"高"(重要+紧急)且配置了 LLM 槽位时,
    * 异步调 OpenAI 兼容 /chat/completions 生成处理建议,追加独立日志行 {"type":"llm",...}。
@@ -397,6 +419,7 @@ object DecisionCore {
           if (err != null) o.put("error", err) else o.put("llm", out)
           java.io.FileOutputStream(logFile(ctx), true).use { it.write((o.toString() + "\n").toByteArray()) }
         } catch (_: Exception) {}
+        try { llmListener?.onLlmDone(task, out.optString("content"), err) } catch (_: Throwable) {}
       }.apply { isDaemon = true; name = "LlmFollowUp"; start() }
     } catch (_: Throwable) {}
   }
