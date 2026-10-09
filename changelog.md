@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-10 — v1.4.4:报表/网关/系统页左栏 tab 整词旋转 90°
+
+- 三页左栏 rail(日报/月报/年报/详单/下钻详单、邮件/队列/LLM、系统/架构图/流程图/数据流)由"逐字竖排"改为**整词旋转 90°**,与决策页业务 tab 同构
+- 抽公共 `railChip()`:slot 容器 + `setRotation(90)` + `measureText` 词长自适应;中英文统一渲染(英文 Daily/Month/Year/List/Drill、Mail/MQ/LLM、Sys/Arch/Flow/Data 不再逐字堆叠)
+- 删除 vert/gVert/subVert 逐字拼接数组
+- 真机验证:三页中文/英文 rail 旋转展示 + 词长自适应 ✓
+
 ## 2026-10-10 — v1.4.3:标题栏语言切换按钮 + Kotlin 侧网关文案 i18n
 
 - 标题栏右侧新增语言按钮:**🌐A(跟随系统)→ 中 → EN 循环**,点击即切 recreate 生效,与系统页选择器同一记忆键

@@ -556,19 +556,14 @@ public class MainActivity extends Activity {
     holder.addView(scroller);
     holder.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
     String[] kinds = {getString(R.string.kind_daily), getString(R.string.kind_monthly), getString(R.string.kind_yearly), getString(R.string.kind_detail), getString(R.string.kind_drill)};
-    String[] vert = new String[kinds.length]; // 名称逐字竖排
-    for (int i = 0; i < kinds.length; i++) vert[i] = String.join("\n", kinds[i].split(""));
     final Button[] chips = new Button[5];
     final LinearLayout rail = new LinearLayout(this);
     rail.setOrientation(LinearLayout.VERTICAL);
     for (int i = 0; i < 5; i++) {
       final int k = i;
       Button c = new Button(this);
-      c.setText(vert[i]); c.setAllCaps(false); c.setTextSize(13);
-      c.setPadding(dp(2), dp(10), dp(2), dp(10));
+      c.setText(kinds[i]); c.setAllCaps(false); c.setTextSize(12);
       c.setMinHeight(0); c.setMinimumHeight(0);
-      LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-      clp.bottomMargin = dp(4); c.setLayoutParams(clp);
       c.setOnClickListener(v -> {
         reportKind = k;
         renderReport(k);
@@ -578,7 +573,7 @@ public class MainActivity extends Activity {
         }
       });
       chips[i] = c;
-      rail.addView(c);
+      rail.addView(railChip(c));
     }
     final LinearLayout leftCol = new LinearLayout(this);
     leftCol.setOrientation(LinearLayout.VERTICAL);
@@ -606,6 +601,19 @@ public class MainActivity extends Activity {
   private LinearLayout reportList;
   private LinearLayout drillPane, drillTables, drillOut;
   private Spinner spinTask, spinLevel, spinRange;
+
+  /** 左栏竖排 tab chip:整词旋转 90°(slot 定尺寸,词长自适应;中英文同构,与决策页业务 tab 同款) */
+  private FrameLayout railChip(Button c) {
+    int visW = dp(40);
+    int visH = (int) c.getPaint().measureText(c.getText().toString()) + dp(28);
+    c.setRotation(90); c.setPadding(0, dp(10), 0, dp(10));
+    FrameLayout slot = new FrameLayout(this);
+    slot.addView(c, new FrameLayout.LayoutParams(visH, visW, Gravity.CENTER));
+    LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(visW, visH);
+    slp.bottomMargin = dp(6);
+    slot.setLayoutParams(slp);
+    return slot;
+  }
 
   private TextView dCell(String t, boolean bold, int color, View.OnClickListener oc, float weight) {
     TextView c = new TextView(this);
@@ -1116,19 +1124,14 @@ public class MainActivity extends Activity {
     gHolder.addView(scrolls[0]);
     gHolder.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
     String[] gkinds = {getString(R.string.gw_mail), getString(R.string.gw_mq), "LLM"};
-    String[] gVert = new String[gkinds.length]; // 名称逐字竖排
-    for (int i = 0; i < gkinds.length; i++) gVert[i] = String.join("\n", gkinds[i].split(""));
     final Button[] gchips = new Button[3];
     final LinearLayout grail = new LinearLayout(this);
     grail.setOrientation(LinearLayout.VERTICAL);
     for (int i = 0; i < 3; i++) {
       final int k = i;
       Button c = new Button(this);
-      c.setText(gVert[i]); c.setAllCaps(false); c.setTextSize(13);
-      c.setPadding(dp(2), dp(10), dp(2), dp(10));
+      c.setText(gkinds[i]); c.setAllCaps(false); c.setTextSize(12);
       c.setMinHeight(0); c.setMinimumHeight(0);
-      LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-      clp.bottomMargin = dp(4); c.setLayoutParams(clp);
       c.setOnClickListener(v -> {
         gHolder.removeAllViews();
         gHolder.addView(scrolls[k]);
@@ -1139,7 +1142,7 @@ public class MainActivity extends Activity {
         }
       });
       gchips[i] = c;
-      grail.addView(c);
+      grail.addView(railChip(c));
     }
     final LinearLayout gLeft = new LinearLayout(this);
     gLeft.setOrientation(LinearLayout.VERTICAL);
@@ -1538,8 +1541,6 @@ public class MainActivity extends Activity {
     p2.addView(new DiagramView(this, 3));
 
     String[] subNames = {getString(R.string.sub_sys), getString(R.string.sub_arch), getString(R.string.sub_flow), getString(R.string.sub_data)};
-    String[] subVert = new String[subNames.length]; // 竖排文字
-    for (int i = 0; i < subNames.length; i++) subVert[i] = String.join("\n", subNames[i].split(""));
     LinearLayout[] subPanels = {l, p1, p2, p3};
     final ScrollView[] subScrolls = new ScrollView[4];
     for (int i = 0; i < 4; i++) {
@@ -1554,11 +1555,8 @@ public class MainActivity extends Activity {
     for (int i = 0; i < 4; i++) {
       final int k = i;
       Button c = new Button(this);
-      c.setText(subVert[i]); c.setAllCaps(false); c.setTextSize(13);
-      c.setPadding(dp(2), dp(10), dp(2), dp(10));
+      c.setText(subNames[i]); c.setAllCaps(false); c.setTextSize(12);
       c.setMinHeight(0); c.setMinimumHeight(0);
-      LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-      clp.bottomMargin = dp(4); c.setLayoutParams(clp);
       c.setOnClickListener(v -> {
         subHolder.removeAllViews();
         subHolder.addView(subScrolls[k]);
@@ -1569,7 +1567,7 @@ public class MainActivity extends Activity {
         }
       });
       chips[i] = c;
-      rail.addView(c);
+      rail.addView(railChip(c));
     }
     final LinearLayout leftCol = new LinearLayout(this);
     leftCol.setOrientation(LinearLayout.VERTICAL);
