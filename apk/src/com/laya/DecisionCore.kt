@@ -400,6 +400,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
           if (key.isNotEmpty()) c.setRequestProperty("Authorization", "Bearer $key")
           c.outputStream.use { os ->
             os.write(JSONObject().put("model", model).put("max_tokens", 700)
+              .put("chat_template_kwargs", JSONObject().put("enable_thinking", false)) // Qwen3 系思考模型免思维链,不支持的服务端忽略此字段
               .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
               .toString().toByteArray())
           }
