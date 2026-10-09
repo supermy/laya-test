@@ -10,30 +10,26 @@ import android.view.View;
 /**
  * 系统页示意图(零依赖 Canvas 自绘)。
  * mode 0 = 架构图(分层决策:云端微调 + LLM 升级通道);
- * mode 1 = 泳道图(横向,5 泳道);mode 2 = 泳道图(竖向转置,5 行);
+ * mode 1/2 = 数据流泳道(横带 = 参与方,一次决策请求自上而下;两 mode 同布局);
  * mode 3 = 业务流程图(决策分流 → 本端处理/交付 LLM → 日志 → 微调闭环)。
- * 泳道图数据驱动:lanes × flows,双布局共用一套数据。
- * 竖向模式箭头标签偏向起点(t=0.32)且泳道标题最后绘制,避免标签遮挡标题文字。
  */
 public class DiagramView extends View {
   private final int mode;
   private static final int PRIMARY = 0xFF3E7BFA;
+  private static final int GREEN_LINE = 0xFF2A9D8F;
+  private static final int ORANGE_LINE = 0xFFD97706;
   private static final int GREEN_BG = 0xFFE9F7EE;
   private static final int BLUE_BG = 0xFFEAF1FF;
   private static final int ORANGE_BG = 0xFFFFF3E0;
   private static final int PURPLE_BG = 0xFFF5F0FF;
 
-  // ---- 泳道图数据(5 泳道,LLM 决策后处理独立泳道) ----
-  private static final String[] LANES = {"发起方", "网关(app)", "DecisionCore", "runner 独立进程", "LLM 后处理"};
-  private static final int[] LANE_BG = {0xFFEAF1FF, 0xFFE9F7EE, 0xFFFFF3E0, 0xFFF5F0FF, 0xFFFAE8F0};
-  /** 每条流 = 依序的步骤(lane, 标题, 副行);行5 为日志→报表。竖向=横向布局放大行距 */
-  private static final Object[][][] FLOWS = {
-    { {0, "输入文本", null}, {2, "三问编排", "choice/score/noul"}, {3, "NPU 3问", "~0.23s 端到端"} },
-    { {0, "指令邮件", "laya+业务+文本"}, {1, "IMAP 取件", "取件→转发决策→SMTP回复"}, {2, "三问编排", null}, {3, "NPU 3问", null} },
-    { {0, "laya/req", "{task,text}"}, {1, "MQTT 网关", "publish laya/resp"}, {2, "三问编排", null}, {3, "NPU 3问", null} },
-    { {2, "决策分流", "高/中/低·39.1% 升级"}, {4, "重要+紧急", "决策后进一步处理"} },
-    { {2, "决策日志", "JSONL"}, {1, "日报/月报/年报+详单", "邮件推送/页面下钻"} },
+  // ---- 数据流泳道(fig5 同构):横带 = 参与方,箭头 = 一次决策请求的路径 ----
+  private static final String[] SW_LANES = {
+    "① 用户 / 业务系统", "② APK 端侧 · DecisionCore", "③ runner 独立进程",
+    "④ 加速器(NPU · GPU · CPU)", "⑤ 云端 LLM(决策后处理)"
   };
+  private static final float[][] SW_BANDS = {{4, 58}, {62, 222}, {226, 316}, {320, 384}, {388, 454}};
+  private static final int[] SW_BAND_BG = {0xFFF3F6FB, 0xFFF0F7F2, 0xFFF7F4FC, 0xFFFCF6EC, 0xFFFBF0F4};
 
   public DiagramView(Context c, int mode) {
     super(c);
@@ -44,7 +40,7 @@ public class DiagramView extends View {
   protected void onMeasure(int wSpec, int hSpec) {
     int w = MeasureSpec.getSize(wSpec);
     float scale = w / 360f;
-    int logicalH = mode == 0 ? 508 : mode == 1 ? 455 : mode == 3 ? 415 : 575;
+    int logicalH = mode == 0 ? 508 : mode == 1 || mode == 2 ? 472 : mode == 3 ? 415 : 575;
     setMeasuredDimension(w, (int) (logicalH * scale) + 1);
   }
 
@@ -95,13 +91,21 @@ public class DiagramView extends View {
 
   /** t = 标签沿线位置(0 起点 1 终点) */
   private void arrow(Canvas c, float x1, float y1, float x2, float y2, String label, float t) {
-    arrowLine(c, x1, y1, x2, y2);
-    if (label != null) arrowLabel(c, x1 + (x2 - x1) * t, y1 + (y2 - y1) * t - 4, label);
+    arrow(c, x1, y1, x2, y2, label, t, PRIMARY);
+  }
+
+  private void arrow(Canvas c, float x1, float y1, float x2, float y2, String label, float t, int color) {
+    arrowLine(c, x1, y1, x2, y2, color);
+    if (label != null) arrowLabel(c, x1 + (x2 - x1) * t, y1 + (y2 - y1) * t - 4, label, color);
   }
 
   private void arrowLine(Canvas c, float x1, float y1, float x2, float y2) {
+    arrowLine(c, x1, y1, x2, y2, PRIMARY);
+  }
+
+  private void arrowLine(Canvas c, float x1, float y1, float x2, float y2, int color) {
     Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-    p.setColor(PRIMARY);
+    p.setColor(color);
     p.setStyle(Paint.Style.STROKE);
     p.setStrokeWidth(1.6f);
     c.drawLine(x1, y1, x2, y2, p);
@@ -113,9 +117,13 @@ public class DiagramView extends View {
 
   /** 白底标签单独绘制:泳道图中在标题带之后再画,保证不被切 */
   private void arrowLabel(Canvas c, float lx, float ly, String label) {
+    arrowLabel(c, lx, ly, label, PRIMARY);
+  }
+
+  private void arrowLabel(Canvas c, float lx, float ly, String label, int color) {
     Paint t = new Paint(Paint.ANTI_ALIAS_FLAG);
     t.setTextSize(9);
-    t.setColor(0xFF3E7BFA);
+    t.setColor(color);
     t.setTextAlign(Paint.Align.CENTER);
     float tw = t.measureText(label);
     Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -192,93 +200,48 @@ public class DiagramView extends View {
     c.drawText("算力账:全 LLM 22 TFLOP/单 → 分层 9.5,↓57%(升级率 39.1%)", 180, 400, foot);
   }
 
-  private void laneHeader(Canvas c, float x, float y, float w, String title, int fill) {
-    Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-    p.setColor(fill);
-    c.drawRect(x, y, x + w, y + 32, p);
-    Paint t = new Paint(Paint.ANTI_ALIAS_FLAG);
-    t.setColor(0xFF1A2B4C);
-    t.setTextAlign(Paint.Align.CENTER);
-    t.setFakeBoldText(true);
-    t.setTextSize(11);
-    drawFitted(c, title, x + w / 2, y + 20, w - 6, t);
-  }
-
-  /** 泳道图:横向 = 泳道为行、步骤自左向右(同泳道多步骤不重叠);
-   *  竖向(转置)= 泳道为行、数据流自上而下。
-   *  标题带先于标签绘制:带压线、标签压带,文字互不遮挡。 */
+  /** 数据流泳道(fig5 同构):横带 = 参与方,自上而下画一次决策请求的端到端路径。
+   *  蓝箭头 = 主流程;绿 = 张量数据(hidden/logits);橙 = 决策后升级 LLM(39.1%)。 */
   private void drawSwim(Canvas c, boolean vertical) {
     c.drawColor(Color.WHITE);
-    int nL = LANES.length, nF = FLOWS.length;
-    int[][][] pos = new int[nF][][];
-    int bw, bh;
-    if (!vertical) {
-      // 紧凑变体:同为「流为列」,行距更小(横向与竖向均无同格重叠)
-      bw = 62; bh = 50;
-      for (int f = 0; f < nF; f++) {
-        pos[f] = new int[FLOWS[f].length][];
-        for (int st = 0; st < FLOWS[f].length; st++) {
-          int lane = (Integer) FLOWS[f][st][0];
-          pos[f][st] = new int[]{6 + f * 70, 8 + lane * 76 + 40};
-        }
-      }
-    } else {
-      bw = 62; bh = 54;
-      float bhRow = 104;
-      for (int f = 0; f < nF; f++) {
-        pos[f] = new int[FLOWS[f].length][];
-        for (int st = 0; st < FLOWS[f].length; st++) {
-          int lane = (Integer) FLOWS[f][st][0];
-          pos[f][st] = new int[]{6 + f * 70, (int) (8 + lane * bhRow + 40)};
-        }
-      }
+    // 参与方横带 + 左上角标题
+    for (int i = 0; i < SW_BANDS.length; i++) {
+      Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+      p.setColor(SW_BAND_BG[i]);
+      c.drawRoundRect(new RectF(4, SW_BANDS[i][0], 356, SW_BANDS[i][1]), 6, 6, p);
+      Paint t = new Paint(Paint.ANTI_ALIAS_FLAG);
+      t.setColor(0xFF1A2B4C);
+      t.setFakeBoldText(true);
+      t.setTextSize(9);
+      c.drawText(SW_LANES[i], 8, SW_BANDS[i][0] + 11, t);
     }
-    // 画盒子与箭头;标签先收集,泳道标题带画完后再统一绘制(最后一层,不被切)
-    java.util.ArrayList<float[]> lblPos = new java.util.ArrayList<>();
-    java.util.ArrayList<String> lblText = new java.util.ArrayList<>();
-    for (int f = 0; f < nF; f++) {
-      int n = FLOWS[f].length;
-      for (int st = 0; st < n; st++) {
-        int lane = (Integer) FLOWS[f][st][0];
-        String title = (String) FLOWS[f][st][1];
-        String sub = (String) FLOWS[f][st][2];
-        int x = pos[f][st][0], y = pos[f][st][1];
-        box(c, x, y, bw, bh, title, sub != null ? new String[]{sub} : null, LANE_BG[lane]);
-        if (st < n - 1) {
-          int x2 = pos[f][st + 1][0], y2 = pos[f][st + 1][1];
-          boolean logFlow = f == nF - 1;
-          String lbl = logFlow ? "读取聚合" : (st == 0 ? "decide()" : null);
-          if (lbl == null) {
-            if (!vertical) arrowLine(c, x + bw, y + bh / 2f, x2, y2 + bh / 2f);
-            else arrowLine(c, x + bw / 2f, y + bh, x2 + bw / 2f, y2);
-          } else if (!vertical) {
-            arrowLine(c, x + bw, y + bh / 2f, x2, y2 + bh / 2f);
-            // 标签放盒子上方空隙,列间无横向空间
-            lblPos.add(new float[]{(x + bw + x2) / 2f, Math.min(y, y2) - 8});
-            lblText.add(lbl);
-          } else {
-            arrowLine(c, x + bw / 2f, y + bh, x2 + bw / 2f, y2);
-            lblPos.add(new float[]{x + bw / 2f, (y + bh + y2) / 2f - 4});
-            lblText.add(lbl);
-          }
-        }
-      }
-    }
-    // 泳道标题带先于标签绘制:带压线、标签压带,文字互不遮挡
-    if (!vertical) {
-      for (int l = 0; l < nL; l++) laneHeader(c, 2, 8 + l * 76, 356, LANES[l], LANE_BG[l]);
-    } else {
-      float bhRow = 104;
-      for (int l = 0; l < nL; l++) laneHeader(c, 2, 8 + l * bhRow, 356, LANES[l], LANE_BG[l]);
-    }
-    for (int i = 0; i < lblText.size(); i++) {
-      float[] lp = lblPos.get(i);
-      arrowLabel(c, lp[0], lp[1], lblText.get(i));
-    }
+    // 步骤盒
+    box(c, 130, 8, 120, 44, "业务输入", new String[]{"工单/短信/UGC/风控"}, BLUE_BG);
+    box(c, 80, 76, 100, 44, "tokenize", new String[]{"分词/编码"}, 0xFFFFFFFF);
+    box(c, 200, 76, 145, 44, "引擎链选择", new String[]{"NPU→GPU→CPU 自动选"}, 0xFFFFFFFF);
+    box(c, 74, 166, 136, 54, "温度校准·解码·分流", new String[]{"60.9% 本端自动处理", "39.1% 决策后升级 LLM"}, GREEN_BG);
+    box(c, 112, 244, 122, 44, "主图前向", new String[]{"dispatch 54-59ms/问"}, 0xFFFFFFFF);
+    box(c, 244, 244, 108, 44, "scorer 头", new String[]{"C 实现 <1ms"}, 0xFFFFFFFF);
+    box(c, 118, 336, 174, 44, "加速器", new String[]{"MDLA / OpenCL / ORT int8"}, 0xFFFFFFFF);
+    box(c, 86, 406, 206, 44, "云端 LLM", new String[]{"重要+紧急 · 生成回复 · token ↓~60%"}, ORANGE_BG);
+    // 主流程(蓝)
+    arrow(c, 180, 54, 135, 74, null);
+    arrow(c, 180, 98, 198, 98, null);
+    // 引擎链 → 主图前向:折线绕开温度校准盒
+    arrowLine(c, 272, 122, 272, 142, PRIMARY);
+    arrowLine(c, 272, 142, 218, 142, PRIMARY);
+    arrowLine(c, 218, 142, 218, 242, PRIMARY);
+    arrowLabel(c, 245, 136, "下发推理");
+    arrow(c, 140, 290, 148, 334, null);
+    // 张量数据(绿):加速器 → scorer(hidden)、scorer → 温度校准(logits)
+    arrow(c, 260, 334, 292, 290, "hidden states", 0.5f, GREEN_LINE);
+    arrow(c, 258, 242, 196, 218, "logits", 0.55f, GREEN_LINE);
+    // 决策后升级(橙):温度校准 → 云端 LLM
+    arrow(c, 86, 222, 86, 404, "39.1% 升级", 0.45f, ORANGE_LINE);
     Paint foot = new Paint(Paint.ANTI_ALIAS_FLAG);
     foot.setTextSize(9);
     foot.setColor(0xFF8894A6);
     foot.setTextAlign(Paint.Align.CENTER);
-    c.drawText("三条通道并发到达时由 DecisionCore 串行化(单引擎,任务切换即卸载)", 180, vertical ? 556 : 418, foot);
+    c.drawText("NPU ~0.23s/3问 · 常规 60.9% 本端处理 · 重要+紧急 39.1% 升级 LLM", 180, 464, foot);
   }
 }

@@ -2,10 +2,13 @@ package com.selfhost.layatest;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.OpenableColumns;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -56,6 +59,7 @@ public class MainActivity extends Activity {
   private static final int CHIP_OFF = 0xFFF0F1F5;
   private static final int WX_PAGE_BG = 0xFFF5F5F5; // 页面浅灰底
   private static final int WX_GREEN = 0xFF07C160;   // 微信选中绿
+  private static final int REQ_PICK_ZIP = 41;       // SAF 选 zip 返回码
 
   // ---- 业务注册表(动态:内置四业务 + /sdcard 上传的扩展包,系统页重扫生效) ----
   private final java.util.ArrayList<String> taskIds = new java.util.ArrayList<>();
@@ -174,6 +178,49 @@ public class MainActivity extends Activity {
 
     setTab(0);
     setContentView(root);
+  }
+
+  // SAF 选 zip 回调:拷贝到 cache,回填包路径,业务名按文件名预填
+  @Override
+  protected void onActivityResult(int req, int res, Intent data) {
+    super.onActivityResult(req, res, data);
+    if (req != REQ_PICK_ZIP || res != RESULT_OK || data == null || data.getData() == null) return;
+    final Uri uri = data.getData();
+    String name = null;
+    try (Cursor c = getContentResolver().query(uri, null, null, null, null)) {
+      if (c != null && c.moveToFirst()) {
+        int i = c.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+        if (i >= 0) name = c.getString(i);
+      }
+    } catch (Throwable ignored) { }
+    if (name == null) name = uri.getLastPathSegment();
+    if (name == null) name = "picked.zip";
+    final String fname = name;
+    upStatus.setText("读取所选 zip…");
+    new Thread(() -> {
+      try {
+        File dst = new File(getCacheDir(), "picked-upload.zip");
+        long total = 0;
+        try (InputStream in = getContentResolver().openInputStream(uri);
+             OutputStream out = new FileOutputStream(dst)) {
+          byte[] buf = new byte[256 * 1024];
+          int n;
+          while ((n = in.read(buf)) > 0) { out.write(buf, 0, n); total += n; }
+        }
+        final long mb = total / 1048576;
+        final String dstPath = dst.getAbsolutePath();
+        runOnUiThread(() -> {
+          upSrc.setText(dstPath);
+          if (upTask.getText().toString().trim().isEmpty()) {
+            String guess = fname.replaceFirst("(?i)\\.zip$", "").replaceFirst("^laya-litert-", "");
+            if (guess.matches("[a-zA-Z0-9_-]{1,32}")) upTask.setText(guess);
+          }
+          upStatus.setText("已选择 " + fname + "(" + mb + "MB),点「上传并注册」完成校验");
+        });
+      } catch (Throwable e) {
+        runOnUiThread(() -> upStatus.setText("❌ 读取失败: " + e.getMessage()));
+      }
+    }).start();
   }
 
 
@@ -1015,8 +1062,6 @@ public class MainActivity extends Activity {
   // ================= ④ 系统 =================
   private TextView sysView;
   private TextView gwBarText;
-  private boolean swimVertical = true; // 泳道图默认竖向展示(转置按钮可切横向)
-  private FrameLayout swimHolder;   // 泳道图容器(转置时局部替换,保持滚动位置)
 
   private void buildSysTab() {
     refreshTasks();
@@ -1035,11 +1080,19 @@ public class MainActivity extends Activity {
     TextView upHead = new TextView(this);
     upHead.setText("⬆ 手动上传模型包"); upHead.setTextSize(14); upHead.setTypeface(Typeface.DEFAULT_BOLD);
     up.addView(upHead);
-    upSrc = fieldU(up, "包路径(目录或 zip,如 /sdcard/Download/laya-litert-demo.zip)");
+    upSrc = fieldU(up, "包路径(目录或 zip;可点下方按钮选择)");
+    Button pickBtn = button(up, "📁 选择 zip 文件…");
+    pickBtn.setOnClickListener(v -> {
+      Intent it = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+      it.addCategory(Intent.CATEGORY_OPENABLE);
+      it.setType("*/*");
+      it.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream"});
+      startActivityForResult(it, REQ_PICK_ZIP);
+    });
     upTask = fieldU(up, "业务名(英文,如 demo)");
     upStatus = new TextView(this);
     upStatus.setTextSize(11); upStatus.setTextColor(0xFF66707E);
-    upStatus.setText("六文件校验通过后注册为新业务;zip 内路径任意,校验自动完成");
+    upStatus.setText("选择 zip 或手填路径;六文件校验通过后注册为新业务,zip 内路径任意");
     up.addView(upStatus);
     Button impBtn = button(up, "上传并注册");
     impBtn.setOnClickListener(v -> {
@@ -1049,6 +1102,8 @@ public class MainActivity extends Activity {
       upStatus.setText("上传中…(zip 约 250MB,校验六文件)");
       new Thread(() -> {
         String err = com.laya.DecisionCore.importPackage(getApplicationContext(), src, task);
+        if (err == null && src.equals(new File(getCacheDir(), "picked-upload.zip").getAbsolutePath()))
+          new File(getCacheDir(), "picked-upload.zip").delete(); // 选择器中转 zip 用完即删
         runOnUiThread(() -> {
           if (err == null) {
             upStatus.setText("✅ 上传成功,已注册业务 [" + task + "]");
@@ -1115,36 +1170,12 @@ public class MainActivity extends Activity {
     sysView.setTextSize(13);
     l.addView(sysView);
 
-    // 泳道数据流独立成「数据流」子页
+    // 泳道数据流独立成「数据流」子页(fig5 同构:一次决策请求的端到端路径)
     LinearLayout p3 = new LinearLayout(this);
     p3.setOrientation(LinearLayout.VERTICAL);
     p3.setPadding(dp(12), dp(8), dp(12), dp(8));
-    LinearLayout sh = new LinearLayout(this);
-    sh.setOrientation(LinearLayout.HORIZONTAL);
-    sh.setGravity(Gravity.CENTER_VERTICAL);
-    TextView sht = hint("业务数据流(泳道):三条通道由 DecisionCore 串行化(NPU ~0.23s/3问)");
-    sht.setPadding(0, 0, 0, 0);
-    LinearLayout.LayoutParams shlp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-    sht.setLayoutParams(shlp);
-    sh.addView(sht);
-    Button transpose = new Button(this);
-    transpose.setText(swimVertical ? "⇄ 横向显示" : "⇅ 竖向显示");
-    transpose.setAllCaps(false); transpose.setTextSize(11);
-    transpose.setPadding(dp(10), dp(2), dp(10), dp(2));
-    transpose.setMinHeight(0); transpose.setMinimumHeight(0);
-    transpose.setOnClickListener(v -> {
-      swimVertical = !swimVertical;
-      transpose.setText(swimVertical ? "⇄ 横向显示" : "⇅ 竖向显示");
-      if (swimHolder != null) {
-        swimHolder.removeAllViews();
-        swimHolder.addView(new DiagramView(this, swimVertical ? 2 : 1));
-      }
-    });
-    sh.addView(transpose);
-    p3.addView(sh);
-    swimHolder = new FrameLayout(this);
-    swimHolder.addView(new DiagramView(this, swimVertical ? 2 : 1));
-    p3.addView(swimHolder);
+    p3.addView(hint("数据流泳道:一次决策请求的端到端路径 — 业务输入 → 引擎链(NPU→GPU→CPU)→ 主图+scorer → 分流(60.9% 本端 / 39.1% 升级 LLM)"));
+    p3.addView(new DiagramView(this, 1));
 
     // ---- 子标签页:左侧竖排(系统/架构图/流程图/数据流)+ 显隐开关 ----
     LinearLayout p1 = new LinearLayout(this);
