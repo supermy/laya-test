@@ -454,16 +454,12 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
     val p = page.coerceIn(0, pages - 1)
     val slice = all2.drop(p * pageSize).take(pageSize)
     val df = SimpleDateFormat("MM-dd HH:mm:ss", Locale.US)
-    val sb = StringBuilder("== 详单(共 ").append(all2.size).append(" 条 · 第 ").append(p + 1).append("/").append(pages).append(" 页)==\n\n")
-    if (slice.isEmpty()) sb.append("(本页无数据)\n")
+    val rows = JSONArray()
     for (e in slice) {
       val st = e.optString("state")
-      sb.append("• ").append(df.format(Date(e.optLong("ts")))).append(" [").append(e.optString("task")).append("] ")
-        .append(st, 0, minOf(48, st.length))
-      // 处理结果:各问答案摘要
+      val parts = ArrayList<String>()
       val dec = e.optJSONObject("decoded")
       if (dec != null) {
-        val parts = ArrayList<String>()
         val kit = dec.keys()
         while (kit.hasNext()) {
           val a = dec.optJSONObject(kit.next()) ?: continue
@@ -473,13 +469,65 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
             "noul" -> parts.add(if (a.optDouble("noul") >= 0.5) "需人工" else "自动")
           }
         }
-        if (parts.isNotEmpty()) sb.append(" → ").append(parts.joinToString(" | "))
       }
-      sb.append("\n")
+      rows.put(JSONObject()
+        .put("time", df.format(Date(e.optLong("ts"))))
+        .put("task", e.optString("task"))
+        .put("level", levelOf(e).optString("level"))
+        .put("summary", parts.joinToString(" | "))
+        .put("state", if (st.length > 60) st.substring(0, 60) + "…" else st))
     }
     val o = JSONObject()
-    o.put("text", sb.toString()); o.put("page", p + 1); o.put("pages", pages)
+    o.put("rows", rows)
+    o.put("page", p + 1); o.put("pages", pages)
     return o
+  }
+
+  /** 报表表格数据:kind 0日报 1月报 2年报 → {total, rows:[{period,count,avgLatency,top,dist}]} */
+  @JvmStatic
+  fun reportTable(ctx: Context, kind: Int): JSONObject {
+    val f = logFile(ctx)
+    val all = ArrayList<JSONObject>()
+    if (f.isFile) {
+      for (line in java.nio.file.Files.readAllBytes(f.toPath()).toString(Charsets.UTF_8).split("\n")) {
+        if (line.isBlank()) continue
+        try { all.add(JSONObject(line)) } catch (_: Exception) {}
+      }
+    }
+    val df = if (kind == 2) SimpleDateFormat("yyyy-MM", Locale.US) else SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val buckets = LinkedHashMap<String, MutableList<JSONObject>>()
+    for (e in all) {
+      val c = Calendar.getInstance().apply {
+        timeInMillis = e.optLong("ts")
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        if (kind == 1) set(Calendar.DAY_OF_MONTH, 1)
+        if (kind == 2) set(Calendar.DAY_OF_YEAR, 1)
+      }
+      buckets.computeIfAbsent(df.format(c.time)) { ArrayList() }.add(e)
+    }
+    val rows = JSONArray()
+    for ((key, list) in buckets) {
+      var lat = 0L
+      val labels = LinkedHashMap<String, Int>()
+      for (e in list) {
+        lat += e.optLong("latencyMs")
+        val dec = e.optJSONObject("decoded") ?: continue
+        val it = dec.keys()
+        while (it.hasNext()) {
+          val a = dec.optJSONObject(it.next()) ?: continue
+          if ("choice" == a.optString("type")) {
+            val k = a.optString("choice")
+            labels[k] = (labels[k] ?: 0) + 1
+          }
+        }
+      }
+      val dist = labels.entries.joinToString(" · ") { "${it.key} ${it.value}" }
+      rows.put(JSONObject().put("period", key).put("count", list.size)
+        .put("avgLatency", if (list.isEmpty()) 0 else lat / list.size)
+        .put("top", labels.maxByOrNull { it.value }?.key ?: "-")
+        .put("dist", if (dist.isEmpty()) "-" else dist))
+    }
+    return JSONObject().put("total", all.size).put("rows", rows)
   }
 
   /** 决策结果 → 可读文本(邮件回复/MQTT 消息共用) */

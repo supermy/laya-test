@@ -480,12 +480,12 @@ public class MainActivity extends Activity {
     drillPane.setVisibility(View.GONE);
     l.addView(drillPane);
 
-    TextView tv = new TextView(this);
-    tv.setTextSize(13); tv.setPadding(0, dp(10), 0, 0);
-    l.addView(tv);
+    reportList = new LinearLayout(this);
+    reportList.setOrientation(LinearLayout.VERTICAL);
+    reportList.setPadding(0, dp(10), 0, 0);
+    l.addView(reportList);
     scroller = new ScrollView(this);
     scroller.addView(l);
-    reportView = tv;
     renderReport(reportKind);
 
     // ---- 左侧竖排 tab(与系统页同款):日报/月报/年报/详单/下钻详单 ----
@@ -537,7 +537,7 @@ public class MainActivity extends Activity {
     chips[reportKind].setTextColor(Color.WHITE);
     chips[reportKind].setBackground(pill(PRIMARY, dp(12)));
   }
-  private TextView reportView;
+  private LinearLayout reportList;
   private LinearLayout drillPane, drillTables, drillOut;
   private Spinner spinTask, spinLevel, spinRange;
 
@@ -703,30 +703,98 @@ public class MainActivity extends Activity {
     final boolean isDrill = kind == 4;
     runOnUiThread(() -> {
       pagerRow.setVisibility(isDetail ? View.VISIBLE : View.GONE);
-      reportView.setVisibility(isDrill ? View.GONE : View.VISIBLE);
+      reportList.setVisibility(isDrill ? View.GONE : View.VISIBLE);
       drillPane.setVisibility(isDrill ? View.VISIBLE : View.GONE);
     });
     if (isDrill) { runOnUiThread(this::renderDrill); return; }
+    final android.app.Activity act = this;
     new Thread(() -> {
-      String s0;
       try {
         if (isDetail) {
-          org.json.JSONObject d = com.laya.DecisionCore.detail(this, detailPage, 20);
+          org.json.JSONObject d = com.laya.DecisionCore.detail(act, detailPage, 20);
           detailPages = d.optInt("pages", 1);
-          s0 = d.optString("text");
-          final String fin = s0;
+          JSONArray rows = d.optJSONArray("rows");
+          String[] heads = {"时间", "业务", "等级", "摘要", "内容"};
+          float[] ws = {1.5f, 0.9f, 0.6f, 1.1f, 2.1f};
+          java.util.List<String[]> data = new ArrayList<>();
+          if (rows != null) for (int i = 0; i < rows.length(); i++) {
+            JSONObject e = rows.optJSONObject(i); if (e == null) continue;
+            data.add(new String[]{e.optString("time"), e.optString("task"), e.optString("level"),
+                e.optString("summary"), e.optString("state")});
+          }
+          final java.util.List<String[]> fin = data;
           final int pg = d.optInt("page", 1), pgs = d.optInt("pages", 1);
           runOnUiThread(() -> {
-            reportView.setText(fin);
+            showTable(heads, ws, fin);
             pagerLabel.setText("第 " + pg + " / " + pgs + " 页");
           });
           return;
         }
-        s0 = com.laya.DecisionCore.report(this, kind);
-      } catch (Exception e) { s0 = "生成失败: " + e.getMessage(); }
-      final String s = s0;
-      runOnUiThread(() -> reportView.setText(s));
+        JSONObject rt = com.laya.DecisionCore.reportTable(act, kind);
+        JSONArray rows = rt.optJSONArray("rows");
+        String[] heads = {"时段", "决策数", "平均耗时", "主要分类", "分类分布"};
+        float[] ws = {1.2f, 0.8f, 0.9f, 1.1f, 2.0f};
+        java.util.List<String[]> data = new ArrayList<>();
+        if (rows != null) for (int i = 0; i < rows.length(); i++) {
+          JSONObject e = rows.optJSONObject(i); if (e == null) continue;
+          data.add(new String[]{e.optString("period"), String.valueOf(e.optInt("count")),
+              e.optInt("avgLatency") + "ms", e.optString("top"), e.optString("dist")});
+        }
+        final java.util.List<String[]> fin = data;
+        final int tot = rt.optInt("total");
+        runOnUiThread(() -> {
+          if (fin.isEmpty()) {
+            reportList.removeAllViews();
+            TextView empty = new TextView(act);
+            empty.setText("(暂无决策数据)"); empty.setTextSize(12); empty.setTextColor(0xFF66707E);
+            reportList.addView(empty);
+          } else {
+            String[] heads2 = new String[heads.length];
+            for (int i = 0; i < heads.length; i++) heads2[i] = i == 1 ? heads[i] + "(共" + tot + ")" : heads[i];
+            showTable(heads2, ws, fin);
+          }
+        });
+      } catch (Exception e) {
+        final String msg = "生成失败: " + e.getMessage();
+        runOnUiThread(() -> {
+          reportList.removeAllViews();
+          TextView err = new TextView(act);
+          err.setText(msg); err.setTextSize(12); err.setTextColor(0xFFD62828);
+          reportList.addView(err);
+        });
+      }
     }).start();
+  }
+
+  /** 通用数据表(白底圆角卡 + 灰底表头 + 权重列宽) */
+  private void showTable(String[] heads, float[] ws, java.util.List<String[]> rows) {
+    reportList.removeAllViews();
+    LinearLayout t = new LinearLayout(this);
+    t.setOrientation(LinearLayout.VERTICAL);
+    t.setBackground(pill(0xFFFFFFFF, dp(10)));
+    t.setPadding(dp(6), dp(4), dp(6), dp(4));
+    LinearLayout h = new LinearLayout(this);
+    h.setBackground(pill(0xFFEFF2F7, dp(6)));
+    for (int i = 0; i < heads.length; i++) h.addView(tCell(heads[i], true, ws[i]));
+    t.addView(h);
+    for (int r = 0; r < rows.size(); r++) {
+      LinearLayout row = new LinearLayout(this);
+      String[] cells = rows.get(r);
+      for (int i = 0; i < cells.length; i++) row.addView(tCell(cells[i], i == 0, ws[i]));
+      t.addView(row);
+    }
+    reportList.addView(t);
+  }
+
+  private TextView tCell(String s, boolean bold, float w) {
+    TextView c = new TextView(this);
+    c.setText(s == null || s.isEmpty() ? "-" : s);
+    c.setTextSize(11);
+    c.setTypeface(bold ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+    c.setTextColor(bold ? 0xFF1A2B4C : 0xFF444A55);
+    c.setPadding(dp(6), dp(5), dp(6), dp(5));
+    c.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, w));
+    return c;
   }
 
   // ================= ③ 网关 =================
