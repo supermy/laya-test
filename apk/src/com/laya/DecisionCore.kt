@@ -458,13 +458,14 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
     for (e in slice) {
       val st = e.optString("state")
       val parts = ArrayList<String>()
+      var result = ""
       val dec = e.optJSONObject("decoded")
       if (dec != null) {
         val kit = dec.keys()
         while (kit.hasNext()) {
           val a = dec.optJSONObject(kit.next()) ?: continue
           when (a.optString("type")) {
-            "choice" -> parts.add(a.optString("choice"))
+            "choice" -> { parts.add(a.optString("choice")); if (result.isEmpty()) result = a.optString("choice") }
             "score" -> parts.add(String.format(Locale.US, "%.1f分", a.optDouble("score")))
             "noul" -> parts.add(if (a.optDouble("noul") >= 0.5) "需人工" else "自动")
           }
@@ -473,7 +474,9 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
       rows.put(JSONObject()
         .put("time", df.format(Date(e.optLong("ts"))))
         .put("task", e.optString("task"))
+        .put("result", if (result.isEmpty()) "-" else result)
         .put("level", levelOf(e).optString("level"))
+        .put("latencyMs", e.optLong("latencyMs"))
         .put("summary", parts.joinToString(" | "))
         .put("state", if (st.length > 60) st.substring(0, 60) + "…" else st))
     }
@@ -494,7 +497,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
         try { all.add(JSONObject(line)) } catch (_: Exception) {}
       }
     }
-    val df = if (kind == 2) SimpleDateFormat("yyyy-MM", Locale.US) else SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val df = if (kind == 2) SimpleDateFormat("yyyy", Locale.US) else SimpleDateFormat("yyyy-MM-dd", Locale.US)
     val buckets = LinkedHashMap<String, MutableList<JSONObject>>()
     for (e in all) {
       val c = Calendar.getInstance().apply {
@@ -561,7 +564,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
       }
     }
     val names = arrayOf("日报", "月报", "年报", "详单")
-    val df = if (kind == 2) SimpleDateFormat("yyyy-MM", Locale.US) else SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val df = if (kind == 2) SimpleDateFormat("yyyy", Locale.US) else SimpleDateFormat("yyyy-MM-dd", Locale.US)
     val buckets = LinkedHashMap<String, MutableList<JSONObject>>()
     for (e in all) {
       val c = Calendar.getInstance().apply {
