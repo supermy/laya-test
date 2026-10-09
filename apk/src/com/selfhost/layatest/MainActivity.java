@@ -714,13 +714,14 @@ public class MainActivity extends Activity {
           org.json.JSONObject d = com.laya.DecisionCore.detail(act, detailPage, 20);
           detailPages = d.optInt("pages", 1);
           JSONArray rows = d.optJSONArray("rows");
-          String[] heads = {"时间", "业务", "等级", "摘要", "内容"};
-          float[] ws = {1.5f, 0.9f, 0.6f, 1.1f, 2.1f};
+          String[] heads = {"决策时间", "业务", "决策结果", "评分", "判定", "等级", "耗时", "内容"};
+          float[] ws = {1.4f, 0.7f, 1.0f, 0.6f, 0.7f, 0.6f, 0.8f, 1.9f};
           java.util.List<String[]> data = new ArrayList<>();
           if (rows != null) for (int i = 0; i < rows.length(); i++) {
             JSONObject e = rows.optJSONObject(i); if (e == null) continue;
-            data.add(new String[]{e.optString("time"), e.optString("task"), e.optString("level"),
-                e.optString("summary"), e.optString("state")});
+            data.add(new String[]{e.optString("time"), e.optString("task"), e.optString("result"),
+                e.optString("score"), e.optString("verdict"), e.optString("level"),
+                e.optLong("latencyMs") + "ms", e.optString("state")});
           }
           final java.util.List<String[]> fin = data;
           final int pg = d.optInt("page", 1), pgs = d.optInt("pages", 1);

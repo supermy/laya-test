@@ -459,6 +459,8 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
       val st = e.optString("state")
       val parts = ArrayList<String>()
       var result = ""
+      var score = ""
+      var verdict = ""
       val dec = e.optJSONObject("decoded")
       if (dec != null) {
         val kit = dec.keys()
@@ -466,8 +468,8 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
           val a = dec.optJSONObject(kit.next()) ?: continue
           when (a.optString("type")) {
             "choice" -> { parts.add(a.optString("choice")); if (result.isEmpty()) result = a.optString("choice") }
-            "score" -> parts.add(String.format(Locale.US, "%.1f分", a.optDouble("score")))
-            "noul" -> parts.add(if (a.optDouble("noul") >= 0.5) "需人工" else "自动")
+            "score" -> { val s = String.format(Locale.US, "%.1f分", a.optDouble("score")); parts.add(s); if (score.isEmpty()) score = s }
+            "noul" -> { val v = if (a.optDouble("noul") >= 0.5) "需人工" else "自动"; parts.add(v); if (verdict.isEmpty()) verdict = v }
           }
         }
       }
@@ -475,6 +477,8 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
         .put("time", df.format(Date(e.optLong("ts"))))
         .put("task", e.optString("task"))
         .put("result", if (result.isEmpty()) "-" else result)
+        .put("score", if (score.isEmpty()) "-" else score)
+        .put("verdict", if (verdict.isEmpty()) "-" else verdict)
         .put("level", levelOf(e).optString("level"))
         .put("latencyMs", e.optLong("latencyMs"))
         .put("summary", parts.joinToString(" | "))
