@@ -1,6 +1,7 @@
 package com.selfhost.layatest;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Color;
@@ -1059,6 +1060,55 @@ public class MainActivity extends Activity {
   }
 
 
+  // ---- 模型详情:八文件清单 + 大小 + 齐全度(主图 NPU/GPU 二选一,scorer.bin 仅 NPU 用) ----
+  private static final String[] MODEL_FILES = {
+    "laya_ml_s256_embeds_npu.tflite", "laya_ml_s256_embeds_wfp16.tflite",
+    "laya_ml_scorer.bin", "laya_ml_act_head_fp32.tflite",
+    "token_embeddings_fp16.bin", "token_embeddings.json",
+    "laya_ml_calibration.json", "tokenizer.json",
+  };
+
+  /** 业务模型源包目录(multi 基础包目录名无后缀) */
+  private File srcDir(String task) {
+    return new File("multi".equals(task)
+        ? "/sdcard/models/laya-litert/phone" : "/sdcard/models/laya-litert-" + task + "/phone");
+  }
+
+  private static void deleteQuiet(File f) {
+    if (f == null || !f.exists()) return;
+    File[] kids = f.isDirectory() ? f.listFiles() : null;
+    if (kids != null) for (File k : kids) deleteQuiet(k);
+    f.delete();
+  }
+
+  private static String human(long b) {
+    return b >= 1048576L ? (b / 1048576L) + "MB" : (b / 1024L) + "KB";
+  }
+
+  private String modelDetail(String task) {
+    File src = srcDir(task);
+    File inst = new File(getFilesDir(), "laya-" + task);
+    StringBuilder sb = new StringBuilder();
+    long total = 0; int have = 0; String npu = null, gpu = null;
+    for (String f : MODEL_FILES) {
+      File s = new File(src, f);
+      if (s.isFile()) {
+        have++; total += s.length();
+        if (f.endsWith("embeds_npu.tflite")) npu = human(s.length());
+        if (f.endsWith("embeds_wfp16.tflite")) gpu = human(s.length());
+        sb.append("✓ ").append(f).append("  ").append(human(s.length())).append('\n');
+      } else sb.append("✗ ").append(f).append("  缺\n");
+    }
+    String main = npu != null && gpu != null ? "NPU dispatch(" + npu + ")+GPU wfp16(" + gpu + ")"
+        : npu != null ? "NPU dispatch(" + npu + ")(纯 NPU 包)" : "GPU wfp16(" + gpu + ")(无 NPU 主图)";
+    sb.insert(0, "格式: " + main + "\n齐全: " + have + "/8 · 共 " + human(total)
+        + "\n源包: " + src.getAbsolutePath() + "\n");
+    long it = 0; int ih = 0;
+    for (String f : MODEL_FILES) { File d = new File(inst, f); if (d.isFile()) { ih++; it += d.length(); } }
+    sb.append("装入副本: ").append(ih == 0 ? "未装入" : ih + "/8 文件 · " + human(it));
+    return sb.toString();
+  }
+
   // ================= ④ 系统 =================
   private TextView sysView;
   private TextView gwBarText;
@@ -1116,12 +1166,13 @@ public class MainActivity extends Activity {
 
     Button rescan = button(l, "⟳ 重新扫描业务");
     rescan.setOnClickListener(v -> { refreshTasks(); setTab(3); });
-    l.addView(hint("已注册业务列表如下;加载=装入 app 可决策;卸载=释放空间(源包保留)"));
+    l.addView(hint("已注册业务列表;加载=装入 app 可决策;模型详情=展开八文件清单(点清单收起);删除=移除源包与副本(不可恢复)"));
 
     for (int i = 0; i < taskIds.size(); i++) {
       final String task = taskIds.get(i);
       final String label = taskLabels.get(i);
-      boolean loaded = new File(getFilesDir(), "laya-" + task + "/laya_ml_s256_embeds_wfp16.tflite").isFile();
+      boolean loaded = new File(getFilesDir(), "laya-" + task + "/laya_ml_s256_embeds_wfp16.tflite").isFile()
+          || new File(getFilesDir(), "laya-" + task + "/laya_ml_s256_embeds_npu.tflite").isFile();
 
       LinearLayout card = new LinearLayout(this);
       card.setOrientation(LinearLayout.VERTICAL);
@@ -1162,6 +1213,54 @@ public class MainActivity extends Activity {
         }
       });
       card.addView(toggle);
+
+      // 模型详情(展开/收起)+ 删除业务
+      LinearLayout row2 = new LinearLayout(this);
+      row2.setOrientation(LinearLayout.HORIZONTAL);
+      Button detailBtn = new Button(this);
+      detailBtn.setText("模型详情"); detailBtn.setAllCaps(false); detailBtn.setTextSize(12);
+      detailBtn.setTextColor(0xFF444A55); detailBtn.setBackground(pill(CHIP_OFF, dp(14)));
+      detailBtn.setPadding(dp(8), dp(6), dp(8), dp(6));
+      Button delBtn = new Button(this);
+      delBtn.setText("删除业务"); delBtn.setAllCaps(false); delBtn.setTextSize(12);
+      delBtn.setTextColor(0xFFB3261E); delBtn.setBackground(pill(0xFFFCEAEA, dp(14)));
+      delBtn.setPadding(dp(8), dp(6), dp(8), dp(6));
+      LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+      half.rightMargin = dp(6);
+      detailBtn.setLayoutParams(half);
+      delBtn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+      row2.addView(detailBtn); row2.addView(delBtn);
+      row2.setPadding(0, dp(6), 0, 0);
+      card.addView(row2);
+
+      TextView detail = new TextView(this);
+      detail.setText(modelDetail(task));
+      detail.setTextSize(9);
+      detail.setTypeface(Typeface.MONOSPACE);
+      detail.setTextColor(0xFF444A55);
+      detail.setBackground(pill(0xFFFFFFFF, dp(8)));
+      detail.setPadding(dp(8), dp(6), dp(8), dp(6));
+      detail.setVisibility(View.GONE);
+      detail.setOnClickListener(v -> detail.setVisibility(View.GONE));
+      card.addView(detail);
+      detailBtn.setOnClickListener(v ->
+          detail.setVisibility(detail.getVisibility() == View.GONE ? View.VISIBLE : View.GONE));
+
+      delBtn.setOnClickListener(v -> {
+        String srcPath = srcDir(task).getAbsolutePath();
+        new AlertDialog.Builder(this)
+            .setTitle("删除业务 [" + task + "]")
+            .setMessage("将删除源包 " + srcPath + " 与装入副本(files/laya-" + task + "),不可恢复。确定删除?")
+            .setNegativeButton("取消", null)
+            .setPositiveButton("删除", (d, w) -> {
+              com.laya.DecisionCore.unload(this, task);
+              new Thread(() -> {
+                deleteQuiet(srcDir(task).getParentFile());
+                deleteQuiet(new File(getFilesDir(), "laya-" + task));
+                runOnUiThread(() -> { refreshTasks(); setTab(3); });
+              }).start();
+            }).show();
+      });
       l.addView(card);
     }
 
