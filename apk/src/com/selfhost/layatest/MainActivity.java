@@ -106,6 +106,15 @@ public class MainActivity extends Activity {
   }
 
   // ---- UI 语言(应用内切换):attachBaseContext 包裹目标 locale,选择记忆在 prefs("ui"/"locale") ----
+  private TextView langBtn;
+
+  /** 标题栏语言按钮显示当前选择:A=跟随系统 / 中 / EN */
+  private void paintLangBtn() {
+    if (langBtn == null) return;
+    String cur = uiLocale();
+    langBtn.setText("en".equals(cur) ? "EN" : "zh".equals(cur) ? "中" : "🌐A");
+  }
+
   private String uiLocale() { return getSharedPreferences("ui", MODE_PRIVATE).getString("locale", "sys"); }
 
   @Override
@@ -164,6 +173,23 @@ public class MainActivity extends Activity {
     title.setPadding(0, dp(10), 0, dp(10));
     titleHolder.addView(title);
     titleHolder.addView(menuBtn);
+    // 标题右侧语言切换按钮:点击循环 跟随系统→中文→English(与系统页选择器同一记忆键)
+    langBtn = new TextView(this);
+    langBtn.setTextSize(13); langBtn.setTypeface(Typeface.DEFAULT_BOLD);
+    langBtn.setTextColor(0xFF1A2B4C);
+    langBtn.setBackground(pill(0xFFE7EAF2, dp(12)));
+    langBtn.setPadding(dp(10), dp(5), dp(10), dp(5));
+    FrameLayout.LayoutParams llblp = new FrameLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, Gravity.END | Gravity.CENTER_VERTICAL);
+    llblp.rightMargin = dp(10); llblp.topMargin = dp(6);
+    langBtn.setLayoutParams(llblp);
+    paintLangBtn();
+    langBtn.setOnClickListener(v -> {
+      String cur = uiLocale();
+      String next = "sys".equals(cur) ? "zh" : "zh".equals(cur) ? "en" : "sys";
+      getSharedPreferences("ui", MODE_PRIVATE).edit().putString("locale", next).apply();
+      recreate();
+    });
+    titleHolder.addView(langBtn);
     titleBar.addView(titleHolder);
     View titleDiv = new View(this);
     titleDiv.setBackgroundColor(0xFFE0E0E0);
@@ -892,7 +918,7 @@ public class MainActivity extends Activity {
       new Thread(() -> {
         String r;
         try {
-          r = com.laya.Gateway.testEmail(new JSONObject()
+          r = com.laya.Gateway.testEmail(this, new JSONObject()
               .put("host", gwEmailHost.getText().toString())
               .put("user", gwEmailUser.getText().toString())
               .put("pass", gwEmailPass.getText().toString())
@@ -915,7 +941,7 @@ public class MainActivity extends Activity {
               .put("pass", gwEmailPass.getText().toString())
               .put("smtpPort", parsePort(gwSmtpPort.getText().toString(), gwSsl.isChecked() ? 465 : 25))
               .put("ssl", gwSsl.isChecked());
-          r = com.laya.Gateway.testSmtp(ec, gwReportTo.getText().toString());
+          r = com.laya.Gateway.testSmtp(this, ec, gwReportTo.getText().toString());
         } catch (Exception e) { r = "❌ SMTP: " + e.getMessage(); }
         final String fr = r;
         runOnUiThread(() -> gwStatus.setText(fr));
@@ -947,7 +973,7 @@ public class MainActivity extends Activity {
         try {
           JSONObject mc = new JSONObject().put("url", gwMqUrl.getText().toString());
           JSONObject tc = new JSONObject().put("sub", gwMqSub.getText().toString()).put("pub", gwMqPub.getText().toString());
-          r = com.laya.Gateway.testMqtt(mc, tc);
+          r = com.laya.Gateway.testMqtt(this, mc, tc);
         } catch (Exception e) { r = "❌ MQTT: " + e.getMessage(); }
         final String fr = r;
         runOnUiThread(() -> gwStatus.setText(fr));
@@ -958,7 +984,7 @@ public class MainActivity extends Activity {
     upTestBtn.setOnClickListener(v -> {
       gwStatus.setText(getString(R.string.upload_testing));
       new Thread(() -> {
-        final String r = com.laya.Gateway.testUpload();
+        final String r = com.laya.Gateway.testUpload(this);
         runOnUiThread(() -> gwStatus.setText(r));
       }).start();
     });

@@ -13,12 +13,12 @@ class GatewayService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     val nm = getSystemService(NotificationManager::class.java)
-    val ch = NotificationChannel("gateway", "Laya 网关", NotificationManager.IMPORTANCE_LOW)
+    val ch = NotificationChannel("gateway", getString(com.selfhost.layatest.R.string.notif_channel), NotificationManager.IMPORTANCE_LOW)
     nm.createNotificationChannel(ch)
     val n = Notification.Builder(this, "gateway")
       .setSmallIcon(android.R.drawable.stat_notify_sync)
-      .setContentTitle("Laya 决策网关")
-      .setContentText("邮件/MQTT 通道运行中")
+      .setContentTitle(getString(com.selfhost.layatest.R.string.notif_title))
+      .setContentText(getString(com.selfhost.layatest.R.string.notif_text))
       .setOngoing(true)
       .build()
     startForeground(1, n)

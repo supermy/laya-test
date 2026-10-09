@@ -45,19 +45,19 @@ clang++ -shared "$OUT/laya-jni.o" "$OUT/absl_stub.o" "$OUT/litert_gpu_options.o"
   -L"$JNI_LIB" -lLiteRt -llog -lm -o "$OUT/liblayajni.so"
 echo "   liblayajni.so: $(du -h $OUT/liblayajni.so | cut -f1)"
 
+echo "== [0.9/6] 资源 + R(Gateway.kt 等 Kotlin 引用 R,须先于 kotlinc) =="
+mkdir -p "$OUT/gen"
+aapt2 compile --dir "$HERE/res" -o "$OUT/res.zip"
+aapt2 link -o "$OUT/res.apk" -I "$SDK" --manifest "$MANIFEST" --java "$OUT/gen" "$OUT/res.zip"
+javac --release 11 -cp "$SDK" -d "$OUT/classes" $(find "$OUT/gen" -name '*.java')
+
 echo "== [1/6] kotlinc (com.laya host) =="
-$KOTLINC -jvm-target 11 -cp "$SDK:$OUT/aar/classes-rt.jar:$OUT/aar/classes-api.jar:$GWJARS/android-mail-1.6.7.jar:$GWJARS/android-activation-1.6.7.jar:$GWJARS/paho-mqttv3-1.2.5.jar:$NANOJAR" \
+$KOTLINC -jvm-target 11 -cp "$SDK:$OUT/classes:$OUT/aar/classes-rt.jar:$OUT/aar/classes-api.jar:$GWJARS/android-mail-1.6.7.jar:$GWJARS/android-activation-1.6.7.jar:$GWJARS/paho-mqttv3-1.2.5.jar:$NANOJAR" \
   -d "$OUT/classes" $(find "$HERE/src" -name '*.kt')
 
 echo "== [2/6] javac =="
-# 资源(res/values*):aapt2 编译 + link 生成 R.java,随源码一起编译
-mkdir -p "$OUT/gen"
-if [ -d "$HERE/res" ]; then
-  aapt2 compile --dir "$HERE/res" -o "$OUT/res.zip"
-  aapt2 link -o "$OUT/res.apk" -I "$SDK" --manifest "$MANIFEST" --java "$OUT/gen" "$OUT/res.zip"
-fi
 javac --release 11 -cp "$SDK:$OUT/classes:$OUT/aar/classes-rt.jar:$OUT/aar/classes-api.jar:$GWJARS/android-mail-1.6.7.jar:$GWJARS/android-activation-1.6.7.jar:$GWJARS/paho-mqttv3-1.2.5.jar:$NANOJAR:$STDLIB" \
-  -d "$OUT/classes" $(find "$HERE/src" -name '*.java') $(find "$OUT/gen" -name '*.java' 2>/dev/null)
+  -d "$OUT/classes" $(find "$HERE/src" -name '*.java')
 
 echo "== [3/6] d8 =="
 jar cf "$OUT/classes.jar" -C "$OUT/classes" .

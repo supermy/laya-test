@@ -67,7 +67,7 @@ object Gateway {
     mqtt = null; mqttRunning = false
     UploadServer.stopServer()
     ctx.stopService(Intent(ctx, GatewayService::class.java))
-    return "网关已停止(含模型上传服务)"
+    return ctx.getString(com.selfhost.layatest.R.string.gw_stopped)
   }
 
   // ---- LLM 设置(重要+紧急升级通道,3 槽位供可选) ----
@@ -76,7 +76,8 @@ object Gateway {
     ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit()
       .putString("cfg", cfg(ctx).put("llm", llm).toString()).apply()
     val a = llm.optJSONObject("slots")?.optJSONObject(llm.optString("active"))
-    return "LLM 设置已保存;当前选中: " + (a?.optString("name")?.ifBlank { null } ?: llm.optString("active", "?"))
+    return ctx.getString(com.selfhost.layatest.R.string.llm_saved_prefix,
+        a?.optString("name")?.ifBlank { null } ?: llm.optString("active", "?"))
   }
 
   /** 当前选中的 LLM 槽位(含 id),未配置返回 null */
@@ -91,12 +92,12 @@ object Gateway {
   @JvmStatic
   fun status(ctx: Context): String {
     val c = cfg(ctx)
-    if (!c.optBoolean("enabled")) return "网关未启用"
+    if (!c.optBoolean("enabled")) return ctx.getString(com.selfhost.layatest.R.string.gw_disabled)
     val parts = ArrayList<String>()
-    if (c.optJSONObject("email")?.optBoolean("enabled") == true) parts.add("邮件网关运行中(60s 轮询)")
-    if (c.optJSONObject("mqtt")?.optBoolean("enabled") == true) parts.add("MQTT 已连接 " + c.optJSONObject("mqtt")?.optString("url"))
-    if (UploadServer.running()) parts.add("模型上传服务 " + UploadServer.url())
-    return if (parts.isEmpty()) "已启用(无通道)" else parts.joinToString(";")
+    if (c.optJSONObject("email")?.optBoolean("enabled") == true) parts.add(ctx.getString(com.selfhost.layatest.R.string.mail_running))
+    if (c.optJSONObject("mqtt")?.optBoolean("enabled") == true) parts.add(ctx.getString(com.selfhost.layatest.R.string.mqtt_connected, c.optJSONObject("mqtt")?.optString("url")))
+    if (UploadServer.running()) parts.add(ctx.getString(com.selfhost.layatest.R.string.upload_running, UploadServer.url()))
+    return if (parts.isEmpty()) ctx.getString(com.selfhost.layatest.R.string.gw_enabled_no_ch) else parts.joinToString(";")
   }
 
   /** app 启动时恢复(仅 enabled 时拉起) */
@@ -130,7 +131,7 @@ object Gateway {
           val to = report?.optString("to") ?: ""
           val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
           if (to.isNotEmpty() && day != lastReportDay) {
-            sendMail(email, to, "Laya 日报 $day", DecisionCore.report(ctx, 0))
+            sendMail(email, to, ctx.getString(com.selfhost.layatest.R.string.mail_daily_subject, day), DecisionCore.report(ctx, 0))
             lastReportDay = day
             ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString("lastReportDay", day).apply()
             Log.i(TAG, "daily report sent to $to")
@@ -173,7 +174,7 @@ object Gateway {
           val r = DecisionCore.decide(ctx, task, text)
           val from = (msg.from.firstOrNull() as? InternetAddress)?.address
           if (from != null) sendMail(email, from,
-            "Re: ${msg.subject ?: ""} — Laya 决策结果", DecisionCore.fmt(task, r.answers))
+            ctx.getString(com.selfhost.layatest.R.string.mail_reply_subject, msg.subject ?: ""), DecisionCore.fmt(task, r.answers))
           Log.i(TAG, "email decision $task ${r.latencyMs}ms")
         }
       } catch (t: Throwable) {
@@ -211,10 +212,10 @@ object Gateway {
 
   /** IMAP 登录 + 打开收件箱,返回邮件数 */
   @JvmStatic
-  fun testEmail(email: JSONObject): String {
+  fun testEmail(ctx: Context, email: JSONObject): String {
     return try {
       val host = email.optString("host"); val user = email.optString("user"); val pass = email.optString("pass")
-      if (host.isEmpty() || user.isEmpty()) return "❌ IMAP: 请先填服务器与账号"
+      if (host.isEmpty() || user.isEmpty()) return ctx.getString(com.selfhost.layatest.R.string.imap_fill_host)
       val ssl = email.optBoolean("ssl", true)
       val port = email.optInt("imapPort", if (ssl) 993 else 143)
       val t0 = android.os.SystemClock.elapsedRealtime()
@@ -227,27 +228,30 @@ object Gateway {
       val inbox = store.getFolder("INBOX"); inbox.open(Folder.READ_ONLY)
       val n = inbox.messageCount
       inbox.close(false); store.close()
-      "✅ IMAP 连通 ${host}:${port},收件箱 ${n} 封(${android.os.SystemClock.elapsedRealtime() - t0}ms)"
-    } catch (t: Throwable) { "❌ IMAP: ${t.message}" }
+      ctx.getString(com.selfhost.layatest.R.string.imap_ok, host, port, n,
+          (android.os.SystemClock.elapsedRealtime() - t0).toInt())
+    } catch (t: Throwable) { ctx.getString(com.selfhost.layatest.R.string.err_imap, t.message ?: "") }
   }
 
   /** SMTP 发一封测试邮件 */
   @JvmStatic
-  fun testSmtp(email: JSONObject, to: String): String {
+  fun testSmtp(ctx: Context, email: JSONObject, to: String): String {
     return try {
-      if (to.isEmpty()) return "❌ SMTP: 请先填日报收件箱"
+      if (to.isEmpty()) return ctx.getString(com.selfhost.layatest.R.string.smtp_fill_to)
       val t0 = android.os.SystemClock.elapsedRealtime()
-      sendMail(email, to, "Laya 测试邮件", "这是一封手动测试邮件,收到即 SMTP 通道正常。")
-      "✅ SMTP 已发至 $to(${android.os.SystemClock.elapsedRealtime() - t0}ms)"
-    } catch (t: Throwable) { "❌ SMTP: ${t.message}" }
+      sendMail(email, to, ctx.getString(com.selfhost.layatest.R.string.mail_test_subject),
+          ctx.getString(com.selfhost.layatest.R.string.mail_test_body))
+      ctx.getString(com.selfhost.layatest.R.string.smtp_ok, to,
+          (android.os.SystemClock.elapsedRealtime() - t0).toInt())
+    } catch (t: Throwable) { ctx.getString(com.selfhost.layatest.R.string.err_smtp, t.message ?: "") }
   }
 
   /** MQTT 连接 + 订阅 + 发布 ping */
   @JvmStatic
-  fun testMqtt(mq: JSONObject, topics: JSONObject?): String {
+  fun testMqtt(ctx: Context, mq: JSONObject, topics: JSONObject?): String {
     return try {
       val url = mq.optString("url")
-      if (url.isEmpty()) return "❌ MQTT: 请先填 Broker 地址"
+      if (url.isEmpty()) return ctx.getString(com.selfhost.layatest.R.string.mqtt_fill_url)
       val sub = topics?.optString("sub")?.ifEmpty { "laya/req/+" } ?: "laya/req/+"
       val pub = topics?.optString("pub")?.ifEmpty { "laya/resp" } ?: "laya/resp"
       val t0 = android.os.SystemClock.elapsedRealtime()
@@ -257,24 +261,26 @@ object Gateway {
       c.subscribe(sub)
       c.publish(pub, MqttMessage(JSONObject().put("task", "__test").put("text", "ping").toString().toByteArray()))
       c.disconnect()
-      "✅ MQTT 连通 $url,sub=$sub pub=$pub(${android.os.SystemClock.elapsedRealtime() - t0}ms)"
-    } catch (t: Throwable) { "❌ MQTT: ${t.message}" }
+      ctx.getString(com.selfhost.layatest.R.string.mqtt_ok, url, sub, pub,
+          (android.os.SystemClock.elapsedRealtime() - t0).toInt())
+    } catch (t: Throwable) { ctx.getString(com.selfhost.layatest.R.string.err_mqtt, t.message ?: "") }
   }
 
   /** 上传服务 HTTP 自探 */
   @JvmStatic
-  fun testUpload(): String {
+  fun testUpload(ctx: Context): String {
     return try {
-      if (!UploadServer.running()) return "❌ 上传服务未运行(先保存并启动网关)"
+      if (!UploadServer.running()) return ctx.getString(com.selfhost.layatest.R.string.upload_not_running)
       val u = uploadUrl()
       val t0 = android.os.SystemClock.elapsedRealtime()
       val c = (java.net.URL(u).openConnection() as java.net.HttpURLConnection).apply {
         requestMethod = "GET"; connectTimeout = 4000; readTimeout = 4000
       }
       val code = c.responseCode; c.disconnect()
-      if (code < 400) "✅ 上传服务 HTTP $code @ $u(${android.os.SystemClock.elapsedRealtime() - t0}ms)"
-      else "❌ 上传服务 HTTP $code @ $u"
-    } catch (t: Throwable) { "❌ 上传服务: ${t.message}" }
+      if (code < 400) ctx.getString(com.selfhost.layatest.R.string.upload_ok_msg, code, u,
+          (android.os.SystemClock.elapsedRealtime() - t0).toInt())
+      else ctx.getString(com.selfhost.layatest.R.string.upload_http_err, code, u)
+    } catch (t: Throwable) { ctx.getString(com.selfhost.layatest.R.string.upload_err, t.message ?: "") }
   }
 
   // ---- MQTT 网关 ----

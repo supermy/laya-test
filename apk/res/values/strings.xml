@@ -164,4 +164,33 @@
     <string name="read_failed">❌ 读取失败: %1$s</string>
     <string name="last_llm_analysis">🤖 最近 LLM 风险分析 · %1$s\n%2$s</string>
     <string name="last_llm_fail">🤖 最近 LLM 升级失败(%1$s): %2$s</string>
+    <!-- 网关状态/测试(Gateway.kt) -->
+    <string name="gw_stopped">网关已停止(含模型上传服务)</string>
+    <string name="llm_saved_prefix">LLM 设置已保存;当前选中: %1$s</string>
+    <string name="gw_disabled">网关未启用</string>
+    <string name="mail_running">邮件网关运行中(60s 轮询)</string>
+    <string name="mqtt_connected">MQTT 已连接 %1$s</string>
+    <string name="upload_running">模型上传服务 %1$s</string>
+    <string name="gw_enabled_no_ch">已启用(无通道)</string>
+    <string name="imap_fill_host">❌ IMAP: 请先填服务器与账号</string>
+    <string name="imap_ok">✅ IMAP 连通 %1$s:%2$d,收件箱 %3$d 封(%4$dms)</string>
+    <string name="smtp_fill_to">❌ SMTP: 请先填日报收件箱</string>
+    <string name="mail_test_subject">Laya 测试邮件</string>
+    <string name="mail_test_body">这是一封手动测试邮件,收到即 SMTP 通道正常。</string>
+    <string name="smtp_ok">✅ SMTP 已发至 %1$s(%2$dms)</string>
+    <string name="mqtt_fill_url">❌ MQTT: 请先填 Broker 地址</string>
+    <string name="mqtt_ok">✅ MQTT 连通 %1$s,sub=%2$s pub=%3$s(%4$dms)</string>
+    <string name="upload_not_running">❌ 上传服务未运行(先保存并启动网关)</string>
+    <string name="upload_ok_msg">✅ 上传服务 HTTP %1$d @ %2$s(%3$dms)</string>
+    <string name="upload_http_err">❌ 上传服务 HTTP %1$d @ %2$s</string>
+    <string name="upload_err">❌ 上传服务: %1$s</string>
+    <string name="err_imap">❌ IMAP: %1$s</string>
+    <string name="err_smtp">❌ SMTP: %1$s</string>
+    <string name="err_mqtt">❌ MQTT: %1$s</string>
+    <string name="mail_daily_subject">Laya 日报 %1$s</string>
+    <string name="mail_reply_subject">Re: %1$s — Laya 决策结果</string>
+    <!-- 通知(GatewayService) -->
+    <string name="notif_channel">Laya 网关</string>
+    <string name="notif_title">Laya 决策网关</string>
+    <string name="notif_text">邮件/MQTT 通道运行中</string>
 </resources>

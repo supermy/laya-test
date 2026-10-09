@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-10 — v1.4.3:标题栏语言切换按钮 + Kotlin 侧网关文案 i18n
+
+- 标题栏右侧新增语言按钮:**🌐A(跟随系统)→ 中 → EN 循环**,点击即切 recreate 生效,与系统页选择器同一记忆键
+- `Gateway.kt` 全部用户可见文案资源化(18 处):`status()`/`stop()`/`saveLlm()` 状态、IMAP/SMTP/MQTT/上传四组测试结果、日报与决策回复邮件主题;`testEmail/testSmtp/testMqtt/testUpload` 签名加 `Context` 参数
+- `GatewayService.kt` 前台通知(渠道名/标题/正文)资源化
+- build.sh:资源与 R.java 生成提前到 kotlinc 之前(`com.laya` Kotlin 代码引用 app R 需要)
+- 真机验证:标题按钮三态循环、EN 下 `Gateway: Email gateway running (60s poll);MQTT connected…;Model upload service…` 全英文、循环切回跟随系统 ✓
+- 保留:`DecisionCore.kt` 推理/业务侧文案(54 条,后续)、业务名与等级数据键
+
 ## 2026-10-10 — v1.4.2:深层文案 i18n 全量抽取(报表/网关/系统页)
 
 - v1.4.0 遗留的"报表/网关/系统三页深层文案"全部抽取至 strings.xml(zh/en 各 ~110 条):报表表头/翻页/下钻矩阵、网关邮件/MQTT/LLM 三面板表单与测试按钮、系统页上传/重扫/业务卡片/模型详情/删除确认对话框

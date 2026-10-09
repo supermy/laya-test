@@ -164,4 +164,33 @@
     <string name="read_failed">❌ Read failed: %1$s</string>
     <string name="last_llm_analysis">🤖 Latest LLM risk analysis · %1$s\n%2$s</string>
     <string name="last_llm_fail">🤖 Latest LLM escalation failed (%1$s): %2$s</string>
+    <!-- Gateway status / tests (Gateway.kt) -->
+    <string name="gw_stopped">Gateway stopped (incl. model upload service)</string>
+    <string name="llm_saved_prefix">LLM settings saved; active: %1$s</string>
+    <string name="gw_disabled">Gateway disabled</string>
+    <string name="mail_running">Email gateway running (60s poll)</string>
+    <string name="mqtt_connected">MQTT connected %1$s</string>
+    <string name="upload_running">Model upload service %1$s</string>
+    <string name="gw_enabled_no_ch">Enabled (no channel)</string>
+    <string name="imap_fill_host">❌ IMAP: fill in server &amp; account first</string>
+    <string name="imap_ok">✅ IMAP OK %1$s:%2$d, inbox %3$d messages (%4$dms)</string>
+    <string name="smtp_fill_to">❌ SMTP: fill in report inbox first</string>
+    <string name="mail_test_subject">Laya test mail</string>
+    <string name="mail_test_body">This is a manual test mail — receiving it means the SMTP channel works.</string>
+    <string name="smtp_ok">✅ SMTP sent to %1$s (%2$dms)</string>
+    <string name="mqtt_fill_url">❌ MQTT: fill in broker address first</string>
+    <string name="mqtt_ok">✅ MQTT OK %1$s, sub=%2$s pub=%3$s (%4$dms)</string>
+    <string name="upload_not_running">❌ Upload service not running (save &amp; start gateway first)</string>
+    <string name="upload_ok_msg">✅ Upload service HTTP %1$d @ %2$s (%3$dms)</string>
+    <string name="upload_http_err">❌ Upload service HTTP %1$d @ %2$s</string>
+    <string name="upload_err">❌ Upload service: %1$s</string>
+    <string name="err_imap">❌ IMAP: %1$s</string>
+    <string name="err_smtp">❌ SMTP: %1$s</string>
+    <string name="err_mqtt">❌ MQTT: %1$s</string>
+    <string name="mail_daily_subject">Laya daily report %1$s</string>
+    <string name="mail_reply_subject">Re: %1$s — Laya decision result</string>
+    <!-- Notification (GatewayService) -->
+    <string name="notif_channel">Laya gateway</string>
+    <string name="notif_title">Laya decision gateway</string>
+    <string name="notif_text">Email/MQTT channels running</string>
 </resources>
