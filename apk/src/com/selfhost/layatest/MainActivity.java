@@ -53,32 +53,32 @@ import com.laya.LayaDecoder;
  * intent: am start ... --es tab decision|report|gateway|sys --es task ticket --es text "..."
  */
 public class MainActivity extends Activity {
-  private static final int PRIMARY = 0xFF3E7BFA;
+  static final int PRIMARY = 0xFF3E7BFA;
   private static final int USER_BG = 0xFF95EC69;   // 微信绿气泡
   private static final int BOT_BG = 0xFFFFFFFF;     // 白色气泡
-  private static final int CHIP_OFF = 0xFFF0F1F5;
+  static final int CHIP_OFF = 0xFFF0F1F5;
   private static final int WX_PAGE_BG = 0xFFF5F5F5; // 页面浅灰底
   private static final int WX_GREEN = 0xFF07C160;   // 微信选中绿
-  private static final int REQ_PICK_ZIP = 41;       // SAF 选 zip 返回码
+  static final int REQ_PICK_ZIP = 41;       // SAF 选 zip 返回码
 
   // ---- 业务注册表(动态:内置四业务 + /sdcard 上传的扩展包,系统页重扫生效) ----
-  private final java.util.ArrayList<String> taskIds = new java.util.ArrayList<>();
-  private final java.util.ArrayList<String> taskLabels = new java.util.ArrayList<>();
+  final java.util.ArrayList<String> taskIds = new java.util.ArrayList<>();
+  final java.util.ArrayList<String> taskLabels = new java.util.ArrayList<>();
 
-  private void refreshTasks() {
+  void refreshTasks() {
     taskIds.clear(); taskLabels.clear();
     for (kotlin.Pair<String, String> t : com.laya.DecisionCore.scanTasks(this)) {
       taskIds.add(t.getFirst()); taskLabels.add(t.getSecond());
     }
     if (taskIdx >= taskIds.size()) taskIdx = 0;
   }
-
+  private final SystemPage systemPage = new SystemPage(this);
   private int tab = 0; // 0决策 1报表 2网关 3系统
   private int taskIdx = 0;
-  private LinearLayout body;
-  private Button menuBtn;
+  LinearLayout body;
+  Button menuBtn;
   private LinearLayout msgList;
-  private ScrollView scroller;
+  ScrollView scroller;
   private EditText input;
   private TextView[] tabBtns = new TextView[4];
   private boolean busy = false;
@@ -115,7 +115,7 @@ public class MainActivity extends Activity {
     langBtn.setText("en".equals(cur) ? "EN" : "zh".equals(cur) ? "中" : "🌐A");
   }
 
-  private String uiLocale() { return getSharedPreferences("ui", MODE_PRIVATE).getString("locale", "sys"); }
+  String uiLocale() { return getSharedPreferences("ui", MODE_PRIVATE).getString("locale", "sys"); }
 
   @Override
   protected void attachBaseContext(android.content.Context base) {
@@ -145,8 +145,8 @@ public class MainActivity extends Activity {
     if (text != null && !text.isEmpty()) sendDecision(text);
   }
 
-  private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
-  private GradientDrawable pill(int c, float r) { GradientDrawable g = new GradientDrawable(); g.setColor(c); g.setCornerRadius(r); return g; }
+  int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
+  GradientDrawable pill(int c, float r) { GradientDrawable g = new GradientDrawable(); g.setColor(c); g.setCornerRadius(r); return g; }
 
   private void buildUi() {
     LinearLayout root = new LinearLayout(this);
@@ -244,33 +244,8 @@ public class MainActivity extends Activity {
     if (name == null) name = uri.getLastPathSegment();
     if (name == null) name = "picked.zip";
     final String fname = name;
-    upStatus.setText(getString(R.string.picking_zip));
-    new Thread(() -> {
-      try {
-        File dst = new File(getCacheDir(), "picked-upload.zip");
-        long total = 0;
-        try (InputStream in = getContentResolver().openInputStream(uri);
-             OutputStream out = new FileOutputStream(dst)) {
-          byte[] buf = new byte[256 * 1024];
-          int n;
-          while ((n = in.read(buf)) > 0) { out.write(buf, 0, n); total += n; }
-        }
-        final long mb = total / 1048576;
-        final String dstPath = dst.getAbsolutePath();
-        runOnUiThread(() -> {
-          upSrc.setText(dstPath);
-          if (upTask.getText().toString().trim().isEmpty()) {
-            String guess = fname.replaceFirst("(?i)\\.zip$", "").replaceFirst("^laya-litert-", "");
-            if (guess.matches("[a-zA-Z0-9_-]{1,32}")) upTask.setText(guess);
-          }
-          upStatus.setText(getString(R.string.picked_msg, fname, mb));
-        });
-      } catch (Throwable e) {
-        runOnUiThread(() -> upStatus.setText(getString(R.string.read_failed, e.getMessage())));
-      }
-    }).start();
+    systemPage.applyPicked(uri, fname);
   }
-
 
   private void refreshGatewayBar() {
     if (gwBarText != null) gwBarText.setText(getString(R.string.gateway_bar, com.laya.Gateway.status(this)));
@@ -292,7 +267,7 @@ public class MainActivity extends Activity {
     if (k == 0) buildDecisionTab();
     else if (k == 1) buildReportTab();
     else if (k == 2) buildGatewayTab();
-    else buildSysTab();
+    else systemPage.build();
   }
 
   // ================= ① 决策 =================
@@ -603,7 +578,7 @@ public class MainActivity extends Activity {
   private Spinner spinTask, spinLevel, spinRange;
 
   /** 左栏竖排 tab chip:整词旋转 90°(slot 定尺寸,词长自适应;中英文同构,与决策页业务 tab 同款) */
-  private FrameLayout railChip(Button c) {
+  FrameLayout railChip(Button c) {
     int visW = dp(40);
     int visH = (int) c.getPaint().measureText(c.getText().toString()) + dp(28);
     c.setRotation(90); c.setPadding(0, dp(10), 0, dp(10));
@@ -875,7 +850,6 @@ public class MainActivity extends Activity {
   // ================= ③ 网关 =================
   private EditText gwEmailHost, gwEmailUser, gwEmailPass, gwReportTo;
   private EditText gwImapPort, gwSmtpPort; private CheckBox gwSsl;
-  private EditText upSrc, upTask; private TextView upStatus;
   private EditText gwMqUrl, gwMqSub, gwMqPub;
   private TextView gwStatus;
 
@@ -1194,8 +1168,8 @@ public class MainActivity extends Activity {
   }
 
   /** 下划线输入框(网关页):不带 pill 背景,走系统默认下划线 */
-  private EditText fieldU(LinearLayout parent, String hint) { return fieldU(parent, hint, ""); }
-  private EditText fieldU(LinearLayout parent, String hint, String text) {
+  EditText fieldU(LinearLayout parent, String hint) { return fieldU(parent, hint, ""); }
+  EditText fieldU(LinearLayout parent, String hint, String text) {
     EditText e = new EditText(this);
     e.setHint(hint); e.setTextSize(13); e.setText(text); e.setSingleLine(true);
     e.setPadding(dp(4), dp(10), dp(4), dp(10));
@@ -1206,13 +1180,13 @@ public class MainActivity extends Activity {
     try { int v = Integer.parseInt(s.trim()); return (v > 0 && v < 65536) ? v : def; } catch (Exception e) { return def; }
   }
 
-  private TextView hint(String s) {
+  TextView hint(String s) {
     TextView t = new TextView(this);
     t.setText(s); t.setTextSize(12); t.setTextColor(0xFF666C77); t.setPadding(0, dp(8), 0, dp(4));
     return t;
   }
-  private EditText field(LinearLayout parent, String hint) { return field(parent, hint, ""); }
-  private EditText field(LinearLayout parent, String hint, String text) {
+  EditText field(LinearLayout parent, String hint) { return field(parent, hint, ""); }
+  EditText field(LinearLayout parent, String hint, String text) {
     EditText e = new EditText(this);
     e.setHint(hint); e.setTextSize(13); e.setText(text); e.setSingleLine(true);
     e.setBackground(pill(Color.WHITE, dp(10)));
@@ -1220,7 +1194,7 @@ public class MainActivity extends Activity {
     parent.addView(e, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
     return e;
   }
-  private Button button(LinearLayout parent, String label) {
+  Button button(LinearLayout parent, String label) {
     Button b = new Button(this);
     b.setText(label); b.setAllCaps(false); b.setTextColor(Color.WHITE); b.setTextSize(13);
     b.setBackground(pill(PRIMARY, dp(16)));
@@ -1241,24 +1215,24 @@ public class MainActivity extends Activity {
   };
 
   /** 业务模型源包目录(multi 基础包目录名无后缀) */
-  private File srcDir(String task) {
+  File srcDir(String task) {
     return new File("multi".equals(task)
         ? "/sdcard/models/laya-litert/phone" : "/sdcard/models/laya-litert-" + task + "/phone");
   }
 
-  private static void deleteQuiet(File f) {
+  static void deleteQuiet(File f) {
     if (f == null || !f.exists()) return;
     File[] kids = f.isDirectory() ? f.listFiles() : null;
     if (kids != null) for (File k : kids) deleteQuiet(k);
     f.delete();
   }
 
-  private static String human(long b) {
+  static String human(long b) {
     return b >= 1048576L ? (b / 1048576L) + "MB" : (b / 1024L) + "KB";
   }
 
   /** 目录内全部文件打包为 zip(文件位于 zip 根,importPackage 可直接校验导入);ZIP 根含 label.txt 等附加文件也一并带上 */
-  private void zipDir(File dir, File dst) throws Exception {
+  void zipDir(File dir, File dst) throws Exception {
     File[] files = dir.listFiles();
     if (files == null || files.length == 0) throw new IllegalStateException(getString(R.string.src_empty_err, String.valueOf(dir)));
     java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(
@@ -1280,7 +1254,7 @@ public class MainActivity extends Activity {
     }
   }
 
-  private String modelDetail(String task) {
+  String modelDetail(String task) {
     File src = srcDir(task);
     File inst = new File(getFilesDir(), "laya-" + task);
     StringBuilder sb = new StringBuilder();
@@ -1307,330 +1281,8 @@ public class MainActivity extends Activity {
   }
 
   // ================= ④ 系统 =================
-  private TextView sysView;
   private TextView gwBarText;
 
-  private void buildSysTab() {
-    refreshTasks();
-    LinearLayout l = new LinearLayout(this);
-    l.setOrientation(LinearLayout.VERTICAL);
-    l.setPadding(dp(12), dp(8), dp(12), dp(8));
-
-    // ---- 语言 / Language(应用内切换,立即生效) ----
-    LinearLayout langRow = new LinearLayout(this);
-    langRow.setOrientation(LinearLayout.VERTICAL);
-    langRow.setBackground(pill(0xFFF0F4FF, dp(10)));
-    langRow.setPadding(dp(10), dp(8), dp(10), dp(8));
-    LinearLayout.LayoutParams langLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    langLp.bottomMargin = dp(10);
-    langRow.setLayoutParams(langLp);
-    TextView langHead = new TextView(this);
-    langHead.setText(getString(R.string.lang_label)); langHead.setTextSize(14); langHead.setTypeface(Typeface.DEFAULT_BOLD);
-    langRow.addView(langHead);
-    LinearLayout langBtns = new LinearLayout(this);
-    langBtns.setOrientation(LinearLayout.HORIZONTAL);
-    LinearLayout.LayoutParams btnsLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    btnsLp.topMargin = dp(4);
-    langBtns.setLayoutParams(btnsLp);
-    String curLoc = uiLocale();
-    String[] locIds = {"sys", "zh", "en"};
-    for (String id : locIds) {
-      final String fid = id;
-      Button b = new Button(this);
-      b.setText("sys".equals(id) ? getString(R.string.lang_follow) : "zh".equals(id) ? getString(R.string.lang_zh) : getString(R.string.lang_en));
-      b.setAllCaps(false); b.setTextSize(12);
-      b.setMinHeight(0); b.setMinimumWidth(0); b.setMinimumHeight(0);
-      b.setPadding(dp(12), dp(6), dp(12), dp(6));
-      boolean on = id.equals(curLoc);
-      b.setTextColor(on ? Color.WHITE : 0xFF1A2B4C);
-      b.setBackground(pill(on ? PRIMARY : 0xFFE7EAF2, dp(14)));
-      LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-      blp.leftMargin = dp(8);
-      b.setLayoutParams(blp);
-      b.setOnClickListener(v -> {
-        if (!fid.equals(uiLocale())) {
-          getSharedPreferences("ui", MODE_PRIVATE).edit().putString("locale", fid).apply();
-          recreate(); // attachBaseContext 读取新 locale 重建整套 UI
-        }
-      });
-      langBtns.addView(b);
-    }
-    langRow.addView(langBtns);
-    l.addView(langRow);
-
-    // ---- 手动上传模型包输入界面 ----
-    LinearLayout up = new LinearLayout(this);
-    up.setOrientation(LinearLayout.VERTICAL);
-    up.setBackground(pill(0xFFF0F4FF, dp(10)));
-    up.setPadding(dp(10), dp(8), dp(10), dp(10));
-    LinearLayout.LayoutParams ulp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    ulp.bottomMargin = dp(10);
-    up.setLayoutParams(ulp);
-    TextView upHead = new TextView(this);
-    upHead.setText(getString(R.string.upload_head)); upHead.setTextSize(14); upHead.setTypeface(Typeface.DEFAULT_BOLD);
-    up.addView(upHead);
-    upSrc = fieldU(up, getString(R.string.pkg_path_hint));
-    Button pickBtn = button(up, getString(R.string.pick_zip));
-    pickBtn.setOnClickListener(v -> {
-      Intent it = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-      it.addCategory(Intent.CATEGORY_OPENABLE);
-      it.setType("*/*");
-      it.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream"});
-      startActivityForResult(it, REQ_PICK_ZIP);
-    });
-    upTask = fieldU(up, getString(R.string.task_name_hint));
-    upStatus = new TextView(this);
-    upStatus.setTextSize(11); upStatus.setTextColor(0xFF66707E);
-    upStatus.setText(getString(R.string.upload_note));
-    up.addView(upStatus);
-    Button impBtn = button(up, getString(R.string.upload_register));
-    impBtn.setOnClickListener(v -> {
-      String src = upSrc.getText().toString().trim();
-      String task = upTask.getText().toString().trim();
-      if (src.isEmpty() || task.isEmpty()) { upStatus.setText(getString(R.string.fill_path_task)); return; }
-      upStatus.setText(getString(R.string.uploading));
-      new Thread(() -> {
-        String err = com.laya.DecisionCore.importPackage(getApplicationContext(), src, task);
-        if (err == null && src.equals(new File(getCacheDir(), "picked-upload.zip").getAbsolutePath()))
-          new File(getCacheDir(), "picked-upload.zip").delete(); // 选择器中转 zip 用完即删
-        runOnUiThread(() -> {
-          if (err == null) {
-            upStatus.setText(getString(R.string.upload_ok, task));
-            rebuildBizList();
-          } else upStatus.setText("❌ " + err);
-        });
-      }).start();
-    });
-    l.addView(up);
-
-    Button rescan = button(l, getString(R.string.rescan));
-    rescan.setOnClickListener(v -> rebuildBizList());
-    l.addView(hint(getString(R.string.biz_list_hint)));
-    bizListPanel = new LinearLayout(this);
-    bizListPanel.setOrientation(LinearLayout.VERTICAL);
-    l.addView(bizListPanel);
-    rebuildBizList();
-
-    bizListPanel = new LinearLayout(this);
-    bizListPanel.setOrientation(LinearLayout.VERTICAL);
-    l.addView(bizListPanel);
-    rebuildBizList();
-
-    sysView = new TextView(this);
-    sysView.setText(com.laya.DecisionCore.backendInfo(this) + getString(R.string.sys_tail));
-    sysView.setTextSize(13);
-    l.addView(sysView);
-
-    // 泳道数据流独立成「数据流」子页(fig5 同构:一次决策请求的端到端路径)
-    LinearLayout p3 = new LinearLayout(this);
-    p3.setOrientation(LinearLayout.VERTICAL);
-    p3.setPadding(dp(12), dp(8), dp(12), dp(8));
-    p3.addView(hint(getString(R.string.flow_hint_data)));
-    p3.addView(new DiagramView(this, 1));
-
-    // ---- 子标签页:左侧竖排(系统/架构图/流程图/数据流)+ 显隐开关 ----
-    LinearLayout p1 = new LinearLayout(this);
-    p1.setOrientation(LinearLayout.VERTICAL);
-    p1.setPadding(dp(12), dp(8), dp(12), dp(8));
-    p1.addView(hint(getString(R.string.flow_hint_arch)));
-    p1.addView(new DiagramView(this, 0));
-    LinearLayout p2 = new LinearLayout(this);
-    p2.setOrientation(LinearLayout.VERTICAL);
-    p2.setPadding(dp(12), dp(8), dp(12), dp(8));
-    p2.addView(hint(getString(R.string.flow_hint_proc)));
-    p2.addView(new DiagramView(this, 3));
-
-    String[] subNames = {getString(R.string.sub_sys), getString(R.string.sub_arch), getString(R.string.sub_flow), getString(R.string.sub_data)};
-    LinearLayout[] subPanels = {l, p1, p2, p3};
-    final ScrollView[] subScrolls = new ScrollView[4];
-    for (int i = 0; i < 4; i++) {
-      ScrollView sv = new ScrollView(this);
-      sv.addView(subPanels[i]);
-      subScrolls[i] = sv;
-    }
-    final FrameLayout subHolder = new FrameLayout(this);
-    final Button[] chips = new Button[4];
-    final LinearLayout rail = new LinearLayout(this);
-    rail.setOrientation(LinearLayout.VERTICAL);
-    for (int i = 0; i < 4; i++) {
-      final int k = i;
-      Button c = new Button(this);
-      c.setText(subNames[i]); c.setAllCaps(false); c.setTextSize(12);
-      c.setMinHeight(0); c.setMinimumHeight(0);
-      c.setOnClickListener(v -> {
-        subHolder.removeAllViews();
-        subHolder.addView(subScrolls[k]);
-        scroller = subScrolls[k];
-        for (int j = 0; j < 4; j++) {
-          chips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
-          chips[j].setBackground(pill(j == k ? PRIMARY : 0xFFE7EAF2, dp(12)));
-        }
-      });
-      chips[i] = c;
-      rail.addView(railChip(c));
-    }
-    final LinearLayout leftCol = new LinearLayout(this);
-    leftCol.setOrientation(LinearLayout.VERTICAL);
-    leftCol.setPadding(dp(4), dp(4), dp(0), dp(0));
-    ScrollView railScroll = new ScrollView(this);
-    railScroll.addView(rail); // 左侧 tab 菜单可上下滑动(小屏防截断)
-    leftCol.addView(railScroll);
-    LinearLayout.LayoutParams lclp = new LinearLayout.LayoutParams(dp(40), LinearLayout.LayoutParams.MATCH_PARENT);
-    lclp.rightMargin = dp(2);
-    leftCol.setLayoutParams(lclp);
-    // 显隐开关在标题栏左侧(☰),点击收起/展开左栏
-    menuBtn.setOnClickListener(v -> {
-      boolean show = leftCol.getVisibility() == View.GONE;
-      leftCol.setVisibility(show ? View.VISIBLE : View.GONE);
-    });
-    LinearLayout sysTop = new LinearLayout(this);
-    sysTop.setOrientation(LinearLayout.HORIZONTAL);
-    sysTop.addView(leftCol);
-    subHolder.addView(subScrolls[0]);
-    scroller = subScrolls[0];
-    subHolder.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
-    sysTop.addView(subHolder);
-    sysTop.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
-    body.addView(sysTop);
-    chips[0].performClick();
-  }
-  private LinearLayout bizListPanel;
-
-  /** 单个业务卡片(加载态/操作按钮/详情/导出/删除) */
-  private LinearLayout bizCard(String task, String label) {
-    boolean loaded = new File(getFilesDir(), "laya-" + task + "/laya_ml_s256_embeds_wfp16.tflite").isFile()
-        || new File(getFilesDir(), "laya-" + task + "/laya_ml_s256_embeds_npu.tflite").isFile();
-
-    LinearLayout card = new LinearLayout(this);
-    card.setOrientation(LinearLayout.VERTICAL);
-    card.setBackground(pill(loaded ? 0xFFEAF3FF : 0xFFF7F8FA, dp(10)));
-    card.setPadding(dp(10), dp(8), dp(10), dp(10));
-    LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    clp.bottomMargin = dp(8);
-    card.setLayoutParams(clp);
-
-    TextView head = new TextView(this);
-    head.setText((loaded ? "✅ " : "📦 ") + label + "  [" + task + "]");
-    head.setTextSize(14); head.setTypeface(Typeface.DEFAULT_BOLD); head.setTextColor(0xFF1A2B4C);
-    card.addView(head);
-    TextView st = new TextView(this);
-    st.setText(getString(loaded ? R.string.loaded_state : R.string.not_loaded_state));
-    st.setTextSize(11); st.setTextColor(0xFF66707E);
-    st.setPadding(0, dp(2), 0, dp(4));
-    card.addView(st);
-
-    // 单按钮动态切换:未加载=加载(装入 app);已加载=卸载(释放空间)
-    Button toggle = new Button(this);
-    toggle.setText(getString(loaded ? R.string.uninstall : R.string.load_btn));
-    toggle.setAllCaps(false); toggle.setTextSize(12);
-    toggle.setTextColor(loaded ? 0xFF444A55 : Color.WHITE);
-    toggle.setBackground(pill(loaded ? CHIP_OFF : PRIMARY, dp(14)));
-    toggle.setPadding(dp(8), dp(6), dp(8), dp(6));
-    toggle.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-    toggle.setOnClickListener(v -> {
-      if (loaded) {
-        com.laya.DecisionCore.unload(this, task);
-        rebuildBizList();
-      } else {
-        st.setText(getString(R.string.loading_model));
-        new Thread(() -> {
-          try { com.laya.DecisionCore.preload(this, task); runOnUiThread(() -> rebuildBizList()); }
-          catch (Throwable e) { runOnUiThread(() -> st.setText(getString(R.string.load_failed, e.getMessage()))); }
-        }).start();
-      }
-    });
-    card.addView(toggle);
-
-    // 模型详情(展开/收起)+ 导出 zip + 删除业务
-    LinearLayout row2 = new LinearLayout(this);
-    row2.setOrientation(LinearLayout.HORIZONTAL);
-    Button detailBtn = new Button(this);
-    detailBtn.setText(getString(R.string.detail_btn)); detailBtn.setAllCaps(false); detailBtn.setTextSize(12);
-    detailBtn.setTextColor(0xFF444A55); detailBtn.setBackground(pill(CHIP_OFF, dp(14)));
-    detailBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
-    Button expBtn = new Button(this);
-    expBtn.setText(getString(R.string.export_zip)); expBtn.setAllCaps(false); expBtn.setTextSize(12);
-    expBtn.setTextColor(0xFF444A55); expBtn.setBackground(pill(CHIP_OFF, dp(14)));
-    expBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
-    Button delBtn = new Button(this);
-    delBtn.setText(getString(R.string.delete_biz)); delBtn.setAllCaps(false); delBtn.setTextSize(12);
-    delBtn.setTextColor(0xFFB3261E); delBtn.setBackground(pill(0xFFFCEAEA, dp(14)));
-    delBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
-    LinearLayout.LayoutParams half1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-    half1.rightMargin = dp(6);
-    detailBtn.setLayoutParams(half1);
-    LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-    half2.rightMargin = dp(6);
-    expBtn.setLayoutParams(half2);
-    delBtn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-    row2.addView(detailBtn); row2.addView(expBtn); row2.addView(delBtn);
-    row2.setPadding(0, dp(6), 0, 0);
-    card.addView(row2);
-
-    TextView detail = new TextView(this);
-    detail.setText(modelDetail(task));
-    detail.setTextSize(9);
-    detail.setTypeface(Typeface.MONOSPACE);
-    detail.setTextColor(0xFF444A55);
-    detail.setBackground(pill(0xFFFFFFFF, dp(8)));
-    detail.setPadding(dp(8), dp(6), dp(8), dp(6));
-    detail.setVisibility(View.GONE);
-    detail.setOnClickListener(v -> detail.setVisibility(View.GONE));
-    card.addView(detail);
-    detailBtn.setOnClickListener(v ->
-        detail.setVisibility(detail.getVisibility() == View.GONE ? View.VISIBLE : View.GONE));
-
-    expBtn.setOnClickListener(v -> {
-      final File dst = new File("/sdcard/Download", "laya-litert-" + task + ".zip");
-      expBtn.setText(getString(R.string.packing)); expBtn.setEnabled(false);
-      new Thread(() -> {
-        String err = null;
-        try {
-          dst.getParentFile().mkdirs();
-          zipDir(srcDir(task), dst);
-        } catch (Throwable e) {
-          err = e.getMessage() != null ? e.getMessage() : e.toString();
-          dst.delete();
-        }
-        final String ferr = err;
-        runOnUiThread(() -> {
-          expBtn.setText(getString(R.string.export_zip)); expBtn.setEnabled(true);
-          if (ferr == null)
-            new AlertDialog.Builder(this).setTitle(getString(R.string.export_done_title))
-                .setMessage(getString(R.string.export_done_msg, dst.getAbsolutePath(), human(dst.length())))
-                .setPositiveButton(getString(R.string.ok_btn), null).show();
-          else
-            new AlertDialog.Builder(this).setTitle(getString(R.string.export_failed_title)).setMessage(ferr).setPositiveButton(getString(R.string.ok_btn), null).show();
-        });
-      }).start();
-    });
-
-    delBtn.setOnClickListener(v -> {
-      String srcPath = srcDir(task).getAbsolutePath();
-      new AlertDialog.Builder(this)
-          .setTitle(getString(R.string.delete_title, task))
-          .setMessage(getString(R.string.delete_msg, srcPath, task))
-          .setNegativeButton(getString(R.string.cancel), null)
-          .setPositiveButton(getString(R.string.delete_btn), (d, w) -> {
-            com.laya.DecisionCore.unload(this, task);
-            new Thread(() -> {
-              deleteQuiet(srcDir(task).getParentFile());
-              deleteQuiet(new File(getFilesDir(), "laya-" + task));
-              runOnUiThread(() -> rebuildBizList());
-            }).start();
-          }).show();
-    });
-
-    return card;
-  }
-
-  /** 局部刷新:仅重建业务卡片列表(替代整页 setTab(3) 重建,避免闪烁) */
-  private void rebuildBizList() {
-    refreshTasks();
-    if (bizListPanel == null) return;
-    bizListPanel.removeAllViews();
-    for (int i = 0; i < taskIds.size(); i++) bizListPanel.addView(bizCard(taskIds.get(i), taskLabels.get(i)));
-  }
 
   // ================= 通用 =================
   private void bot(String t) { bubble(t, false); }

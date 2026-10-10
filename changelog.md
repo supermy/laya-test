@@ -244,3 +244,11 @@
 - 新增 `apk/smoke.sh`:真机冒烟测试(安装/主页四 tab/网关页/API health 与 /decide/系统页卡片,PASS/FAIL 统计)
 - 新增 `apk/test/levelOf_test.kt` + `apk/run_tests.sh`:levelOf 纯逻辑单测 14 例全 PASS(Termux JVM 直跑:边界 0.33/0.66、noul 翻转口径、choice 直通、basis 格式)
 - 实测:后台挂起 → 前台解冻后 /decide 立即恢复(171ms);MIUI 等厂商省电白名单建议写入 readme
+
+## 2026-10-10 — v1.4.9:P1 重构第一步(SystemPage 拆出)
+
+- MainActivity 1652 行 → 拆出 `SystemPage.java`(382 行):语言切换/模型包上传/业务卡片管理/模型详情/图表子页,host 委托模式(`m.` 前缀访问共享 chrome)
+- **修复 git 事故遗留 bug**:bizListPanel 重复创建两遍 → 真机业务卡片显示两份(冒烟断言未覆盖数量,本次代码层修复)
+- MainActivity 瘦身至 ~1270 行;后续页面(决策/报表/网关)按同模式拆分
+- 工程护栏回归:smoke 10/10、levelOf 单测 ALL PASS
+- 待办:Gateway cfg 键常量化(P1 后半)
