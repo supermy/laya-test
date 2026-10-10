@@ -47,18 +47,18 @@ object Gateway {
 
   @JvmStatic
   fun cfg(ctx: Context): JSONObject =
-    JSONObject(ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString("cfg", "{}") ?: "{}")
+    JSONObject(ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString(Cfg.DOC, "{}") ?: "{}")
 
   /** 仅保存配置(不启停);供 UI 细粒度开关使用 */
   @JvmStatic
   fun saveCfg(ctx: Context, cfg: JSONObject) {
-    ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString("cfg", cfg.toString()).apply()
+    ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString(Cfg.DOC, cfg.toString()).apply()
   }
 
   @JvmStatic
   fun saveAndStart(ctx: Context, cfg: JSONObject): String {
-    cfg.put("enabled", true)
-    ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString("cfg", cfg.toString()).apply()
+    cfg.put(Cfg.ENABLED, true)
+    ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString(Cfg.DOC, cfg.toString()).apply()
     start(ctx)
     ctx.startForegroundService(Intent(ctx, GatewayService::class.java))
     return status(ctx)
@@ -67,7 +67,7 @@ object Gateway {
   @JvmStatic
   fun stop(ctx: Context): String {
     ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit()
-      .putString("cfg", cfg(ctx).put("enabled", false).toString()).apply()
+      .putString(Cfg.DOC, cfg(ctx).put(Cfg.ENABLED, false).toString()).apply()
     emailRunning = false
     try { mqtt?.disconnect() } catch (_: Exception) {}
     mqtt = null; mqttRunning = false
@@ -81,28 +81,28 @@ object Gateway {
   @JvmStatic
   fun saveLlm(ctx: Context, llm: JSONObject): String {
     ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit()
-      .putString("cfg", cfg(ctx).put("llm", llm).toString()).apply()
-    val a = llm.optJSONObject("slots")?.optJSONObject(llm.optString("active"))
+      .putString(Cfg.DOC, cfg(ctx).put(Cfg.LLM, llm).toString()).apply()
+    val a = llm.optJSONObject(Cfg.SLOTS)?.optJSONObject(llm.optString(Cfg.ACTIVE))
     return ctx.getString(com.selfhost.layatest.R.string.llm_saved_prefix,
-        a?.optString("name")?.ifBlank { null } ?: llm.optString("active", "?"))
+        a?.optString("name")?.ifBlank { null } ?: llm.optString(Cfg.ACTIVE, "?"))
   }
 
   /** 当前选中的 LLM 槽位(含 id),未配置返回 null */
   @JvmStatic
   fun llmActive(ctx: Context): JSONObject? {
-    val llm = cfg(ctx).optJSONObject("llm") ?: return null
-    val id = llm.optString("active").ifBlank { "llm1" }
-    val s = llm.optJSONObject("slots")?.optJSONObject(id) ?: return null
+    val llm = cfg(ctx).optJSONObject(Cfg.LLM) ?: return null
+    val id = llm.optString(Cfg.ACTIVE).ifBlank { "llm1" }
+    val s = llm.optJSONObject(Cfg.SLOTS)?.optJSONObject(id) ?: return null
     return s.put("id", id)
   }
 
   @JvmStatic
   fun status(ctx: Context): String {
     val c = cfg(ctx)
-    if (!c.optBoolean("enabled")) return ctx.getString(com.selfhost.layatest.R.string.gw_disabled)
+    if (!c.optBoolean(Cfg.ENABLED)) return ctx.getString(com.selfhost.layatest.R.string.gw_disabled)
     val parts = ArrayList<String>()
-    if (c.optJSONObject("email")?.optBoolean("enabled") == true) parts.add(ctx.getString(com.selfhost.layatest.R.string.mail_running))
-    if (c.optJSONObject("mqtt")?.optBoolean("enabled") == true) parts.add(ctx.getString(com.selfhost.layatest.R.string.mqtt_connected, c.optJSONObject("mqtt")?.optString("url")))
+    if (c.optJSONObject(Cfg.EMAIL)?.optBoolean(Cfg.ENABLED) == true) parts.add(ctx.getString(com.selfhost.layatest.R.string.mail_running))
+    if (c.optJSONObject(Cfg.MQTT)?.optBoolean(Cfg.ENABLED) == true) parts.add(ctx.getString(com.selfhost.layatest.R.string.mqtt_connected, c.optJSONObject(Cfg.MQTT)?.optString(Cfg.URL)))
     if (UploadServer.running()) parts.add(ctx.getString(com.selfhost.layatest.R.string.upload_running, UploadServer.url()))
     if (DecisionApiServer.running()) parts.add(ctx.getString(com.selfhost.layatest.R.string.api_running, DecisionApiServer.url()))
     return if (parts.isEmpty()) ctx.getString(com.selfhost.layatest.R.string.gw_enabled_no_ch) else parts.joinToString(";")
@@ -111,26 +111,26 @@ object Gateway {
   /** app 启动时恢复(仅 enabled 时拉起) */
   @JvmStatic
   fun autoStart(ctx: Context) {
-    if (cfg(ctx).optBoolean("enabled")) start(ctx)
+    if (cfg(ctx).optBoolean(Cfg.ENABLED)) start(ctx)
   }
 
   @Synchronized
   fun start(ctx: Context) {
     UploadServer.start(ctx) // 上传服务随网关常驻(局域网页面/接口)
     val c = cfg(ctx)
-    val api = c.optJSONObject("api")
-    if (api?.optBoolean("enabled") == true) DecisionApiServer.start(ctx, api.optInt("port", DecisionApiServer.PORT), /*ensureFgs=*/false)
-    val email = c.optJSONObject("email")
-    if (email?.optBoolean("enabled") == true && !emailRunning) startEmail(ctx, email, c.optJSONObject("report"))
-    val mq = c.optJSONObject("mqtt")
-    if (mq?.optBoolean("enabled") == true && !mqttRunning) startMqtt(ctx, mq, c.optJSONObject("topics"))
+    val api = c.optJSONObject(Cfg.API)
+    if (api?.optBoolean(Cfg.ENABLED) == true) DecisionApiServer.start(ctx, api.optInt(Cfg.PORT, DecisionApiServer.PORT), /*ensureFgs=*/false)
+    val email = c.optJSONObject(Cfg.EMAIL)
+    if (email?.optBoolean(Cfg.ENABLED) == true && !emailRunning) startEmail(ctx, email, c.optJSONObject(Cfg.REPORT))
+    val mq = c.optJSONObject(Cfg.MQTT)
+    if (mq?.optBoolean(Cfg.ENABLED) == true && !mqttRunning) startMqtt(ctx, mq, c.optJSONObject(Cfg.TOPICS))
   }
 
   // ---- 邮件网关 ----
   private fun startEmail(ctx: Context, email: JSONObject, report: JSONObject?) {
     emailRunning = true
     Thread {
-      var lastReportDay = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString("lastReportDay", "") ?: ""
+      var lastReportDay = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString(Cfg.LAST_REPORT_DAY, "") ?: ""
       while (emailRunning) {
         try {
           pollEmail(ctx, email)
@@ -138,12 +138,12 @@ object Gateway {
           Log.w(TAG, "email poll: ${t.message}")
         }
         try {
-          val to = report?.optString("to") ?: ""
+          val to = report?.optString(Cfg.TO) ?: ""
           val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
           if (to.isNotEmpty() && day != lastReportDay) {
             sendMail(email, to, ctx.getString(com.selfhost.layatest.R.string.mail_daily_subject, day), DecisionCore.report(ctx, 0))
             lastReportDay = day
-            ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString("lastReportDay", day).apply()
+            ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString(Cfg.LAST_REPORT_DAY, day).apply()
             Log.i(TAG, "daily report sent to $to")
           }
         } catch (t: Throwable) {
@@ -155,9 +155,9 @@ object Gateway {
   }
 
   private fun pollEmail(ctx: Context, email: JSONObject) {
-    val host = email.optString("host"); val user = email.optString("user"); val pass = email.optString("pass")
+    val host = email.optString(Cfg.HOST); val user = email.optString(Cfg.USER); val pass = email.optString(Cfg.PASS)
     if (host.isEmpty() || user.isEmpty()) return
-    val ssl = email.optBoolean("ssl", true)
+    val ssl = email.optBoolean(Cfg.SSL, true)
     val port = email.optInt("imapPort", if (ssl) 993 else 143)
     val props = Properties().apply {
       put("mail.store.protocol", if (ssl) "imaps" else "imap")
@@ -197,8 +197,8 @@ object Gateway {
   }
 
   private fun sendMail(email: JSONObject, to: String, subject: String, text: String) {
-    val host = email.optString("host"); val user = email.optString("user"); val pass = email.optString("pass")
-    val useSsl = email.optBoolean("ssl", true)
+    val host = email.optString(Cfg.HOST); val user = email.optString(Cfg.USER); val pass = email.optString(Cfg.PASS)
+    val useSsl = email.optBoolean(Cfg.SSL, true)
     val port = email.optInt("smtpPort", if (useSsl) 465 else 25)
     val props = Properties().apply {
       put("mail.smtp.auth", "true")
@@ -224,9 +224,9 @@ object Gateway {
   @JvmStatic
   fun testEmail(ctx: Context, email: JSONObject): String {
     return try {
-      val host = email.optString("host"); val user = email.optString("user"); val pass = email.optString("pass")
+      val host = email.optString(Cfg.HOST); val user = email.optString(Cfg.USER); val pass = email.optString(Cfg.PASS)
       if (host.isEmpty() || user.isEmpty()) return ctx.getString(com.selfhost.layatest.R.string.imap_fill_host)
-      val ssl = email.optBoolean("ssl", true)
+      val ssl = email.optBoolean(Cfg.SSL, true)
       val port = email.optInt("imapPort", if (ssl) 993 else 143)
       val t0 = android.os.SystemClock.elapsedRealtime()
       val props = Properties().apply {
@@ -260,10 +260,10 @@ object Gateway {
   @JvmStatic
   fun testMqtt(ctx: Context, mq: JSONObject, topics: JSONObject?): String {
     return try {
-      val url = mq.optString("url")
+      val url = mq.optString(Cfg.URL)
       if (url.isEmpty()) return ctx.getString(com.selfhost.layatest.R.string.mqtt_fill_url)
-      val sub = topics?.optString("sub")?.ifEmpty { "laya/req/+" } ?: "laya/req/+"
-      val pub = topics?.optString("pub")?.ifEmpty { "laya/resp" } ?: "laya/resp"
+      val sub = topics?.optString(Cfg.SUB)?.ifEmpty { "laya/req/+" } ?: "laya/req/+"
+      val pub = topics?.optString(Cfg.PUB)?.ifEmpty { "laya/resp" } ?: "laya/resp"
       val t0 = android.os.SystemClock.elapsedRealtime()
       val c = MqttClient(url, "laya-test-" + UUID.randomUUID().toString().take(6), MemoryPersistence())
       val opts = MqttConnectOptions().apply { isCleanSession = true; connectionTimeout = 8; keepAliveInterval = 30 }
@@ -298,9 +298,9 @@ object Gateway {
     mqttRunning = true
     Thread {
       try {
-        val sub = topics?.optString("sub")?.ifEmpty { "laya/req/+" } ?: "laya/req/+"
-        val pub = topics?.optString("pub")?.ifEmpty { "laya/resp" } ?: "laya/resp"
-        val client = MqttClient(mq.optString("url"), "laya-apk-" + UUID.randomUUID().toString().take(8), MemoryPersistence())
+        val sub = topics?.optString(Cfg.SUB)?.ifEmpty { "laya/req/+" } ?: "laya/req/+"
+        val pub = topics?.optString(Cfg.PUB)?.ifEmpty { "laya/resp" } ?: "laya/resp"
+        val client = MqttClient(mq.optString(Cfg.URL), "laya-apk-" + UUID.randomUUID().toString().take(8), MemoryPersistence())
         client.setCallback(object : MqttCallbackExtended {
           override fun connectComplete(reconnect: Boolean, serverURI: String?) {
             Log.i(TAG, "mqtt connected $serverURI")

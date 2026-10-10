@@ -283,3 +283,10 @@
 - `dp`/`pill`/`button`/`fieldU`/`field`/`hint` 从 MainActivity 抽成静态工具类 `Ui.java`(Context 由调用方传入)
 - 全部调用点改写:四 Page(282 处)+ MainActivity 自身(裸调用)+ RailChip;MainActivity 瘦身至 **372 行**
 - 回归:冒烟 10/10、levelOf 单测 ALL PASS
+
+## 2026-10-10 — v1.4.15:Gateway cfg 键常量化(P1 收尾)
+
+- 新增 `com.laya.Cfg` 常量对象:cfg JSON 全部键(顶层 enabled/email/report/mqtt/topics/llm/api + 子键 host/user/pass/ssl/url/sub/pub/port/key/to/active/name/slots + 存储键 cfg/lastReportDay),附结构文档注释
+- 替换散落字符串:Gateway.kt 52 处、DecisionApiServer.kt 2 处、GatewayPage.java 36 处、MainActivity 1 处;协议值(.put("role","user"))与消息键(task/text/answers)不涉及
+- smoke.sh「决策 API 按钮」等价判定加固:前台化解冻 + health 4 次重试(消除启动竞态);连跑两遍 10/10
+- 回归:levelOf 单测 ALL PASS

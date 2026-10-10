@@ -95,7 +95,7 @@ public class MainActivity extends Activity {
       else if (!content.isEmpty()) decisionPage.bot(getString(R.string.llm_analysis_msg, task, content));
     }));
     // 恢复内置网关(仅配置了 enabled 时)
-    if (com.laya.Gateway.cfg(this).optBoolean("enabled")) {
+    if (com.laya.Gateway.cfg(this).optBoolean(com.laya.Cfg.ENABLED)) {
       startForegroundService(new Intent(this, com.laya.GatewayService.class));
       com.laya.Gateway.autoStart(this);
     }

@@ -15,6 +15,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import com.laya.Cfg;
 import org.json.JSONObject;
 
 /** ③ 网关页(从 MainActivity 拆出):邮件/MQTT/LLM 三面板 + 决策 API 开关 + 底栏 */
@@ -58,16 +59,16 @@ class GatewayPage {
     emailBtn.setOnClickListener(v -> {
       try {
         JSONObject cfg = com.laya.Gateway.cfg(m.getApplicationContext());
-        cfg.put("enabled", true);
-        cfg.put("email", new JSONObject().put("enabled", true)
-            .put("host", gwEmailHost.getText().toString())
-            .put("user", gwEmailUser.getText().toString())
-            .put("pass", gwEmailPass.getText().toString())
+        cfg.put(Cfg.ENABLED, true);
+        cfg.put(Cfg.EMAIL, new JSONObject().put(Cfg.ENABLED, true)
+            .put(Cfg.HOST, gwEmailHost.getText().toString())
+            .put(Cfg.USER, gwEmailUser.getText().toString())
+            .put(Cfg.PASS, gwEmailPass.getText().toString())
             .put("imapPort", parsePort(gwImapPort.getText().toString(), gwSsl.isChecked() ? 993 : 143))
             .put("smtpPort", parsePort(gwSmtpPort.getText().toString(), gwSsl.isChecked() ? 465 : 25))
-            .put("ssl", gwSsl.isChecked()));
+            .put(Cfg.SSL, gwSsl.isChecked()));
         String to = gwReportTo.getText().toString();
-        if (!to.isEmpty()) cfg.put("report", new JSONObject().put("to", to));
+        if (!to.isEmpty()) cfg.put(Cfg.REPORT, new JSONObject().put(Cfg.TO, to));
         gwStatus.setText(com.laya.Gateway.saveAndStart(m.getApplicationContext(), cfg));
         m.refreshGatewayBar();
       } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
@@ -79,11 +80,11 @@ class GatewayPage {
         String r;
         try {
           r = com.laya.Gateway.testEmail(m, new JSONObject()
-              .put("host", gwEmailHost.getText().toString())
-              .put("user", gwEmailUser.getText().toString())
-              .put("pass", gwEmailPass.getText().toString())
+              .put(Cfg.HOST, gwEmailHost.getText().toString())
+              .put(Cfg.USER, gwEmailUser.getText().toString())
+              .put(Cfg.PASS, gwEmailPass.getText().toString())
               .put("imapPort", parsePort(gwImapPort.getText().toString(), gwSsl.isChecked() ? 993 : 143))
-              .put("ssl", gwSsl.isChecked()));
+              .put(Cfg.SSL, gwSsl.isChecked()));
         } catch (Exception e) { r = "❌ IMAP: " + e.getMessage(); }
         final String fr = r;
         m.runOnUiThread(() -> gwStatus.setText(fr));
@@ -96,11 +97,11 @@ class GatewayPage {
         String r;
         try {
           JSONObject ec = new JSONObject()
-              .put("host", gwEmailHost.getText().toString())
-              .put("user", gwEmailUser.getText().toString())
-              .put("pass", gwEmailPass.getText().toString())
+              .put(Cfg.HOST, gwEmailHost.getText().toString())
+              .put(Cfg.USER, gwEmailUser.getText().toString())
+              .put(Cfg.PASS, gwEmailPass.getText().toString())
               .put("smtpPort", parsePort(gwSmtpPort.getText().toString(), gwSsl.isChecked() ? 465 : 25))
-              .put("ssl", gwSsl.isChecked());
+              .put(Cfg.SSL, gwSsl.isChecked());
           r = com.laya.Gateway.testSmtp(m, ec, gwReportTo.getText().toString());
         } catch (Exception e) { r = "❌ SMTP: " + e.getMessage(); }
         final String fr = r;
@@ -119,9 +120,9 @@ class GatewayPage {
     mqBtn.setOnClickListener(v -> {
       try {
         JSONObject cfg = com.laya.Gateway.cfg(m.getApplicationContext());
-        cfg.put("enabled", true);
-        cfg.put("mqtt", new JSONObject().put("enabled", true).put("url", gwMqUrl.getText().toString()));
-        cfg.put("topics", new JSONObject().put("sub", gwMqSub.getText().toString()).put("pub", gwMqPub.getText().toString()));
+        cfg.put(Cfg.ENABLED, true);
+        cfg.put(Cfg.MQTT, new JSONObject().put(Cfg.ENABLED, true).put(Cfg.URL, gwMqUrl.getText().toString()));
+        cfg.put(Cfg.TOPICS, new JSONObject().put(Cfg.SUB, gwMqSub.getText().toString()).put(Cfg.PUB, gwMqPub.getText().toString()));
         gwStatus.setText(com.laya.Gateway.saveAndStart(m.getApplicationContext(), cfg));
       } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
     });
@@ -131,8 +132,8 @@ class GatewayPage {
       new Thread(() -> {
         String r;
         try {
-          JSONObject mc = new JSONObject().put("url", gwMqUrl.getText().toString());
-          JSONObject tc = new JSONObject().put("sub", gwMqSub.getText().toString()).put("pub", gwMqPub.getText().toString());
+          JSONObject mc = new JSONObject().put(Cfg.URL, gwMqUrl.getText().toString());
+          JSONObject tc = new JSONObject().put(Cfg.SUB, gwMqSub.getText().toString()).put(Cfg.PUB, gwMqPub.getText().toString());
           r = com.laya.Gateway.testMqtt(m, mc, tc);
         } catch (Exception e) { r = "❌ MQTT: " + e.getMessage(); }
         final String fr = r;
@@ -157,7 +158,7 @@ class GatewayPage {
       boolean next = !com.laya.DecisionApiServer.running();
       try {
         JSONObject cfg = com.laya.Gateway.cfg(m.getApplicationContext());
-        cfg.put("api", new JSONObject().put("enabled", next));
+        cfg.put(Cfg.API, new JSONObject().put(Cfg.ENABLED, next));
         com.laya.Gateway.saveCfg(m.getApplicationContext(), cfg);
       } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); return; }
       if (next) com.laya.DecisionApiServer.start(m.getApplicationContext(), com.laya.DecisionApiServer.PORT, /*ensureFgs=*/true);
@@ -172,9 +173,9 @@ class GatewayPage {
     pLlm.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
     l = pLlm;
     l.addView(Ui.hint(m,m.getString(R.string.llm_hint)));
-    JSONObject llmCfg = com.laya.Gateway.cfg(m).optJSONObject("llm");
-    JSONObject llmSlots = llmCfg != null ? llmCfg.optJSONObject("slots") : null;
-    String actId = llmCfg != null ? llmCfg.optString("active", "llm1") : "llm1";
+    JSONObject llmCfg = com.laya.Gateway.cfg(m).optJSONObject(Cfg.LLM);
+    JSONObject llmSlots = llmCfg != null ? llmCfg.optJSONObject(Cfg.SLOTS) : null;
+    String actId = llmCfg != null ? llmCfg.optString(Cfg.ACTIVE, "llm1") : "llm1";
     String[] slotIds = {"llm1", "llm2", "llm3"};
     String[] defNames = {"DeepSeek", "Qwen(通义)", "GLM(智谱)"};
     String[] defUrls = {"https://api.deepseek.com", "https://dashscope.aliyuncs.com/compatible-mode/v1", "https://open.bigmodel.cn/api/paas/v4"};
@@ -200,7 +201,7 @@ class GatewayPage {
       head.addView(llmRb[i]);
       llmName[i] = Ui.fieldU(m,head, m.getString(R.string.name_hint));
       JSONObject fs = s;
-      String nm = s != null ? s.optString("name", defNames[i]) : defNames[i];
+      String nm = s != null ? s.optString(Cfg.NAME, defNames[i]) : defNames[i];
       llmName[i].setText(nm);
       llmName[i].setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
       slot.addView(head);
@@ -232,13 +233,13 @@ class GatewayPage {
         for (int i = 0; i < 3; i++) {
           if (llmRb[i].isChecked()) checked = i;
           slots.put(slotIds[i], new JSONObject()
-              .put("name", llmName[i].getText().toString())
+              .put(Cfg.NAME, llmName[i].getText().toString())
               .put("baseURL", llmUrl[i].getText().toString().trim())
               .put("model", llmModel[i].getText().toString().trim())
               .put("apiKey", llmKey[i].getText().toString().trim()));
         }
         gwStatus.setText(com.laya.Gateway.saveLlm(m,
-            new JSONObject().put("active", checked < 0 ? "llm1" : slotIds[checked]).put("slots", slots)));
+            new JSONObject().put(Cfg.ACTIVE, checked < 0 ? "llm1" : slotIds[checked]).put(Cfg.SLOTS, slots)));
       } catch (Exception e) { gwStatus.setText(m.getString(R.string.llm_cfg_failed, e.getMessage())); }
     });
     Button llmTest = Ui.button(m,l, m.getString(R.string.test_llm_btn));

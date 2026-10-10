@@ -33,7 +33,7 @@ class DecisionApiServer private constructor(private val ctx: Context, port: Int)
   override fun serve(session: IHTTPSession): Response {
     val uri = session.uri ?: ""
     // 可选 Token:cfg api.key 非空时校验 header X-Laya-Key 或 ?key=
-    val key = Gateway.cfg(ctx).optJSONObject("api")?.optString("key").orEmpty()
+    val key = Gateway.cfg(ctx).optJSONObject(Cfg.API)?.optString(Cfg.KEY).orEmpty()
     if (key.isNotEmpty()) {
       val given = session.parameters["key"]?.firstOrNull()
           ?: session.headers["x-laya-key"]

@@ -71,10 +71,19 @@ done
 GW_XML=$(dumpfile smoke_gw.xml)
 if grep -q "启动决策 API\|停止决策 API" "$GW_XML"; then
   echo "PASS: 决策 API 按钮"; PASS=$((PASS+1))
-elif curl -s --max-time 5 http://127.0.0.1:8790/health | grep -q '"ok":true'; then
-  echo "PASS: 决策 API 按钮(等价:health 通,按钮滚出可视区)"; PASS=$((PASS+1))
 else
-  echo "FAIL: 决策 API 按钮"; FAIL=$((FAIL+1))
+  # 等价判定:前台化解冻 + health 重试(服务器启动/冻结恢复有延迟)
+  $A shell "am start -n com.selfhost.layatest/.MainActivity" >/dev/null 2>&1; sleep 2
+  OK=0
+  for t in 1 2 3 4; do
+    if curl -s --max-time 5 http://127.0.0.1:8790/health | grep -q '"ok":true'; then OK=1; break; fi
+    sleep 2
+  done
+  if [ "$OK" = "1" ]; then
+    echo "PASS: 决策 API 按钮(等价:health 通,按钮滚出可视区)"; PASS=$((PASS+1))
+  else
+    echo "FAIL: 决策 API 按钮"; FAIL=$((FAIL+1))
+  fi
 fi
 [ "$API_TOUCHED" = "1" ] && echo "API 已触碰启动"
 
