@@ -250,4 +250,9 @@
     <string name="metric_latency">Avg latency</string>
     <string name="metric_score">Avg score</string>
     <string name="metric_human">Human rate</string>
+    <string name="kind_explore">Explore</string>
+    <string name="exp_by_task">By business</string>
+    <string name="exp_by_date">By date</string>
+    <string name="exp_by_level">By level</string>
+    <string name="col_high_rate">High rate</string>
 </resources>

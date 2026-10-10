@@ -750,6 +750,49 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
     return JSONObject().put("total", total).put("rows", outRows)
   }
 
+  /** 数据探索:按维度聚合全指标。dim = task|date|level → rows:[{key,count,latSum,scoreSum,scoreCnt,humanCnt,highCnt}] */
+  @JvmStatic
+  fun explore(ctx: Context, rangeDays: Int, dim: String): JSONObject {
+    val start = if (rangeDays > 0) System.currentTimeMillis() - rangeDays * 86_400_000L else 0L
+    val df = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    // 桶:[count, latSum, scoreSum(×1000), scoreCnt, humanCnt, highCnt]
+    val rows = LinkedHashMap<String, LongArray>()
+    var total = 0
+    for (e in readLogEntries(ctx)) {
+      if (e.optLong("ts") < start) continue
+      val lv = levelOf(e)
+      val lvs = lv.optString("level")
+      val key = when (dim) {
+        "date" -> df.format(Date(e.optLong("ts")))
+        "level" -> lvs
+        else -> e.optString("task")
+      }
+      val arr = rows[key] ?: LongArray(6)
+      arr[0]++; arr[1] += e.optLong("latencyMs")
+      val dec = e.optJSONObject("decoded")
+      if (dec != null) {
+        var scoreN = 0; var scoreS = 0.0; var human = false
+        for (k in dec.keys()) {
+          val a = dec.optJSONObject(k) ?: continue
+          when (a.optString("type")) {
+            "score" -> { scoreS += a.optDouble("score"); scoreN++ }
+            "noul" -> if (a.optDouble("noul") >= 0.5) human = true
+          }
+        }
+        if (scoreN > 0) { arr[2] += Math.round(scoreS / scoreN * 1000); arr[3]++ }
+        if (human) arr[4]++
+      }
+      if (lvs == "高") arr[5]++
+      rows[key] = arr
+      total++
+    }
+    val out = JSONArray()
+    for ((k, a) in rows) out.put(JSONObject().put("key", k)
+      .put("count", a[0]).put("latSum", a[1]).put("scoreSum", a[2])
+      .put("scoreCnt", a[3]).put("humanCnt", a[4]).put("highCnt", a[5]))
+    return JSONObject().put("total", total).put("dim", dim).put("rows", out)
+  }
+
   /** 下钻明细(最新优先,limit 条):time/task/level/basis/state/answers/latencyMs */
   @JvmStatic
   fun drillList(ctx: Context, date: String?, task: String?, level: String?, limit: Int): JSONArray {

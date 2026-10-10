@@ -28,6 +28,11 @@ class ReportPage {
   private android.widget.Spinner spinMetric;
   private int drillMetric = 0; // 0决策数 1平均耗时 2平均评分 3需人工率
   private org.json.JSONObject lastPiv; // 最近一次下钻查询结果(指标切换免重查)
+  private LinearLayout explorePane, exploreTable, exploreOut;
+  private android.widget.Spinner expRange, expDim;
+  private org.json.JSONObject expData;
+  private int expSortCol = 1;   // 排序列:1决策数 2平均耗时 3平均评分 4需人工率 5高占比
+  private boolean expSortAsc = false;
   private int detailPage = 0;   // 详单当前页(0 基)
   private int detailPages = 1;
   private LinearLayout pagerRow;
@@ -117,6 +122,35 @@ class ReportPage {
     drillPane.setVisibility(View.GONE);
     l.addView(drillPane);
 
+    // ---- 数据探索面板(仅 reportKind==5):维度切换 + 多指标并列 + 点表头排序 + 点行下钻 ----
+    explorePane = new LinearLayout(m);
+    explorePane.setOrientation(LinearLayout.VERTICAL);
+    explorePane.setPadding(0, Ui.dp(m,6), 0, 0);
+    LinearLayout eRow = new LinearLayout(m);
+    eRow.setGravity(Gravity.CENTER_VERTICAL);
+    expRange = new Spinner(m);
+    expRange.setAdapter(new ArrayAdapter<>(m, android.R.layout.simple_spinner_dropdown_item, new String[]{m.getString(R.string.range_7d), m.getString(R.string.range_today), m.getString(R.string.range_30d), m.getString(R.string.range_all)}));
+    expRange.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.4f));
+    eRow.addView(expRange);
+    expDim = new Spinner(m);
+    expDim.setAdapter(new ArrayAdapter<>(m, android.R.layout.simple_spinner_dropdown_item, new String[]{m.getString(R.string.exp_by_task), m.getString(R.string.exp_by_date), m.getString(R.string.exp_by_level)}));
+    expDim.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.4f));
+    eRow.addView(expDim);
+    explorePane.addView(eRow);
+    Button eBtn = new Button(m);
+    eBtn.setText(m.getString(R.string.drill_query));
+    eBtn.setAllCaps(false); eBtn.setTextSize(13);
+    eBtn.setOnClickListener(v -> queryExplore());
+    explorePane.addView(eBtn);
+    exploreTable = new LinearLayout(m);
+    exploreTable.setOrientation(LinearLayout.VERTICAL);
+    explorePane.addView(exploreTable);
+    exploreOut = new LinearLayout(m);
+    exploreOut.setOrientation(LinearLayout.VERTICAL);
+    explorePane.addView(exploreOut);
+    explorePane.setVisibility(View.GONE);
+    l.addView(explorePane);
+
     reportList = new LinearLayout(m);
     reportList.setOrientation(LinearLayout.VERTICAL);
     reportList.setPadding(0, Ui.dp(m,10), 0, 0);
@@ -129,11 +163,11 @@ class ReportPage {
     final FrameLayout holder = new FrameLayout(m);
     holder.addView(m.scroller);
     holder.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
-    String[] kinds = {m.getString(R.string.kind_daily), m.getString(R.string.kind_monthly), m.getString(R.string.kind_yearly), m.getString(R.string.kind_detail), m.getString(R.string.kind_drill)};
-    final Button[] chips = new Button[5];
+    String[] kinds = {m.getString(R.string.kind_daily), m.getString(R.string.kind_monthly), m.getString(R.string.kind_yearly), m.getString(R.string.kind_detail), m.getString(R.string.kind_drill), m.getString(R.string.kind_explore)};
+    final Button[] chips = new Button[6];
     final LinearLayout rail = new LinearLayout(m);
     rail.setOrientation(LinearLayout.VERTICAL);
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
       final int k = i;
       Button c = new Button(m);
       c.setText(kinds[i]); c.setAllCaps(false); c.setTextSize(12);
@@ -141,7 +175,7 @@ class ReportPage {
       c.setOnClickListener(v -> {
         reportKind = k;
         renderReport(k);
-        for (int j = 0; j < 5; j++) {
+        for (int j = 0; j < 6; j++) {
           chips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
           chips[j].setBackground(Ui.pill(j == k ? m.PRIMARY : 0xFFE7EAF2, Ui.dp(m,12)));
         }
@@ -282,16 +316,23 @@ class ReportPage {
     drillTables.addView(gap); drillTables.addView(t2);
   }
 
-  private void drillShow(String date, String task, String level) {
-    drillOut.removeAllViews();
+  private void drillShow(String date, String task, String level) { queryDetail(date, task, level, drillOut); }
+
+  /** 拉取明细并渲染到 out(UI 线程回调)——下钻详单与数据探索行下钻共用 */
+  private void queryDetail(String date, String task, String level, LinearLayout out) {
+    out.removeAllViews();
     TextView loading = new TextView(m);
     loading.setText(m.getString(R.string.loading_detail)); loading.setTextSize(12); loading.setPadding(Ui.dp(m,4), Ui.dp(m,8), 0, 0);
-    drillOut.addView(loading);
+    out.addView(loading);
     final android.app.Activity act = m;
     new Thread(() -> {
       final JSONArray es = com.laya.DecisionCore.drillList(act, date, task, level, 200);
-      m.runOnUiThread(() -> {
-        drillOut.removeAllViews();
+      m.runOnUiThread(() -> renderDetailInto(out, es, date, task, level));
+    }).start();
+  }
+
+  private void renderDetailInto(LinearLayout out, JSONArray es, String date, String task, String level) {
+    out.removeAllViews();        out.removeAllViews();
         java.util.Map<String, String> labels = new LinkedHashMap<>();
         for (int i = 0; i < m.taskIds.size(); i++) labels.put(m.taskIds.get(i), m.taskLabels.get(i));
         TextView title = new TextView(m);
@@ -300,7 +341,7 @@ class ReportPage {
             level != null ? level : m.getString(R.string.level_any), es.length()));
         title.setTextSize(13); title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setPadding(Ui.dp(m,4), Ui.dp(m,10), 0, Ui.dp(m,4));
-        drillOut.addView(title);
+        out.addView(title);
         for (int i = 0; i < es.length(); i++) {
           JSONObject e = es.optJSONObject(i); if (e == null) continue;
           LinearLayout card = new LinearLayout(m);
@@ -327,28 +368,28 @@ class ReportPage {
           l3.setText(st.length() > 80 ? st.substring(0, 80) + "…" : st);
           l3.setTextSize(11); l3.setTextColor(0xFF66707E);
           card.addView(l3);
-          drillOut.addView(card);
+          out.addView(card);
         }
         if (es.length() == 0) {
           TextView empty = new TextView(m);
           empty.setText(m.getString(R.string.no_records)); empty.setTextSize(12); empty.setTextColor(0xFF66707E);
           empty.setPadding(Ui.dp(m,4), Ui.dp(m,6), 0, 0);
-          drillOut.addView(empty);
+          out.addView(empty);
         }
-        m.scroller.post(() -> m.scroller.fullScroll(View.FOCUS_DOWN));
-      });
-    }).start();
-  }
+        m.scroller.post(() -> m.scroller.fullScroll(View.FOCUS_DOWN));  }
 
   private void renderReport(int kind) {
     final boolean isDetail = kind == 3;
     final boolean isDrill = kind == 4;
+    final boolean isExplore = kind == 5;
     m.runOnUiThread(() -> {
       pagerRow.setVisibility(isDetail ? View.VISIBLE : View.GONE);
-      reportList.setVisibility(isDrill ? View.GONE : View.VISIBLE);
+      reportList.setVisibility(isDrill || isExplore ? View.GONE : View.VISIBLE);
       drillPane.setVisibility(isDrill ? View.VISIBLE : View.GONE);
+      explorePane.setVisibility(isExplore ? View.VISIBLE : View.GONE);
     });
     if (isDrill) { m.runOnUiThread(this::renderDrill); return; }
+    if (isExplore) { m.runOnUiThread(this::queryExplore); return; }
     final android.app.Activity act = m;
     new Thread(() -> {
       try {
@@ -457,5 +498,99 @@ class ReportPage {
       case 3: return String.format(java.util.Locale.US, "%.0f%%", a[4] * 100.0 / a[0]);
       default: return String.valueOf(a[0]);
     }
+  }
+
+  private void queryExplore() {
+    final int days = new int[]{7, 1, 30, 0}[expRange.getSelectedItemPosition()];
+    final String dim = new String[]{"task", "date", "level"}[expDim.getSelectedItemPosition()];
+    final android.app.Activity act = m;
+    new Thread(() -> {
+      expData = com.laya.DecisionCore.explore(act, days, dim);
+      m.runOnUiThread(this::renderExplore);
+    }).start();
+  }
+
+  /** 数据探索表:行=维度值,列=多指标并列;点指标表头排序(再点切升/降),点行按维度值下钻明细 */
+  private void renderExplore() {
+    exploreTable.removeAllViews();
+    exploreOut.removeAllViews();
+    if (expData == null) return;
+    JSONArray jr = expData.optJSONArray("rows");
+    ArrayList<JSONObject> rows = new ArrayList<>();
+    if (jr != null) for (int i = 0; i < jr.length(); i++) rows.add(jr.optJSONObject(i));
+    final int c = expSortCol;
+    java.util.Collections.sort(rows, (a, b) -> {
+      double va = sortVal(a, c), vb = sortVal(b, c);
+      return expSortAsc ? Double.compare(va, vb) : Double.compare(vb, va);
+    });
+    String dim = expData.optString("dim");
+    String keyHead = "date".equals(dim) ? m.getString(R.string.col_date)
+        : "level".equals(dim) ? m.getString(R.string.col_level) : m.getString(R.string.col_task);
+    LinearLayout t = new LinearLayout(m); t.setOrientation(LinearLayout.VERTICAL);
+    t.setBackground(Ui.pill(0xFFFFFFFF, Ui.dp(m,10))); t.setPadding(Ui.dp(m,6), Ui.dp(m,6), Ui.dp(m,6), Ui.dp(m,6));
+    LinearLayout h = new LinearLayout(m);
+    h.addView(dCell(keyHead, true, 0, null, 1.4f));
+    String[] mh = {m.getString(R.string.metric_count), m.getString(R.string.metric_latency), m.getString(R.string.metric_score), m.getString(R.string.metric_human), m.getString(R.string.col_high_rate)};
+    for (int i = 1; i <= 5; i++) {
+      final int col = i;
+      String label = mh[i - 1] + (col == c ? (expSortAsc ? " ▲" : " ▼") : "");
+      h.addView(dCell(label, true, 0, v -> {
+        if (col == expSortCol) expSortAsc = !expSortAsc; else { expSortCol = col; expSortAsc = false; }
+        renderExplore();
+      }, 1f));
+    }
+    t.addView(h);
+    long[] tot = new long[6];
+    for (JSONObject r : rows) {
+      long[] a = expAgg(r);
+      for (int i = 0; i < 6; i++) tot[i] += a[i];
+      LinearLayout r2 = new LinearLayout(m);
+      String key = r.optString("key");
+      String disp = "date".equals(dim) && key.length() >= 5 ? key.substring(5) : key;
+      r2.addView(dCell(disp, true, 0, v -> exploreDrill(key), 1.4f));
+      for (int i = 1; i <= 5; i++) r2.addView(dCell(expCell(a, i), false, 0, v -> exploreDrill(key), 1f));
+      t.addView(r2);
+    }
+    LinearLayout tr = new LinearLayout(m);
+    tr.addView(dCell(m.getString(R.string.col_total), true, 0, null, 1.4f));
+    for (int i = 1; i <= 5; i++) tr.addView(dCell(expCell(tot, i), true, 0, null, 1f));
+    t.addView(tr);
+    exploreTable.addView(t);
+  }
+
+  private static long[] expAgg(JSONObject r) {
+    return new long[]{ r.optLong("count"), r.optLong("latSum"), r.optLong("scoreSum"), r.optLong("scoreCnt"), r.optLong("humanCnt"), r.optLong("highCnt") };
+  }
+
+  /** 排序键:1决策数 2平均耗时(ms) 3平均评分 4需人工率(%) 5高占比(%);空桶沉底 */
+  private static double sortVal(JSONObject r, int col) {
+    long[] a = expAgg(r);
+    switch (col) {
+      case 2: return a[0] == 0 ? -1 : (double) a[1] / a[0];
+      case 3: return a[3] == 0 ? -1 : (double) a[2] / 1000.0 / a[3];
+      case 4: return a[0] == 0 ? -1 : a[4] * 100.0 / a[0];
+      case 5: return a[0] == 0 ? -1 : a[5] * 100.0 / a[0];
+      default: return a[0];
+    }
+  }
+
+  /** 探索表单元格:1决策数 2平均耗时 3平均评分 4需人工率 5高占比 */
+  private String expCell(long[] a, int col) {
+    if (a[0] == 0) return "·";
+    switch (col) {
+      case 2: return (a[1] / a[0]) + "ms";
+      case 3: return a[3] == 0 ? "·" : String.format(java.util.Locale.US, "%.2f", a[2] / 1000.0 / a[3]);
+      case 4: return String.format(java.util.Locale.US, "%.0f%%", a[4] * 100.0 / a[0]);
+      case 5: return String.format(java.util.Locale.US, "%.0f%%", a[5] * 100.0 / a[0]);
+      default: return String.valueOf(a[0]);
+    }
+  }
+
+  /** 点探索表行:按当前维度值下钻明细 */
+  private void exploreDrill(String key) {
+    String dim = expData != null ? expData.optString("dim") : "task";
+    queryDetail("date".equals(dim) ? key : null,
+        "task".equals(dim) ? key : null,
+        "level".equals(dim) ? key : null, exploreOut);
   }
 }
