@@ -255,4 +255,5 @@
     <string name="exp_by_date">By date</string>
     <string name="exp_by_level">By level</string>
     <string name="col_high_rate">High rate</string>
+    <string name="exp_more">Show more (%1$d left)</string>
 </resources>

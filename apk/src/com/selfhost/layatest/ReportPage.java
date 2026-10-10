@@ -33,6 +33,9 @@ class ReportPage {
   private final java.util.HashMap<String, org.json.JSONArray> expDetailCache = new java.util.HashMap<>();
   private android.widget.Spinner expRange, expDim;
   private org.json.JSONObject expData;
+  private static final int EXP_PAGE = 20; // 子表明细首屏/每页条数(长列表分页渲染)
+  private LinearLayout expHolder;        // 当前展开的子表容器(到数后局部填充,免整表重建)
+  private String expHolderKey;
   private int expSortCol = 1;   // 排序列:1决策数 2平均耗时 3平均评分 4需人工率 5高占比
   private boolean expSortAsc = false;
   private int detailPage = 0;   // 详单当前页(0 基)
@@ -331,8 +334,13 @@ class ReportPage {
   }
 
   private void renderDetailInto(LinearLayout out, JSONArray es, String date, String task, String level, boolean scrollToEnd) {
-    out.removeAllViews();        out.removeAllViews();
-        java.util.Map<String, String> labels = new LinkedHashMap<>();
+    renderDetailInto(out, es, date, task, level, scrollToEnd, EXP_PAGE);
+  }
+
+  /** limit:首屏渲染条数;超出出「显示更多」按钮(每页 EXP_PAGE 递增),避免长列表一次性建几百个视图 */
+  private void renderDetailInto(LinearLayout out, JSONArray es, String date, String task, String level, boolean scrollToEnd, int limit) {
+    out.removeAllViews();
+    java.util.Map<String, String> labels = new LinkedHashMap<>();
         for (int i = 0; i < m.taskIds.size(); i++) labels.put(m.taskIds.get(i), m.taskLabels.get(i));
         TextView title = new TextView(m);
         title.setText(m.getString(R.string.drill_title, date != null ? date : m.getString(R.string.range_any),
@@ -341,7 +349,8 @@ class ReportPage {
         title.setTextSize(13); title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setPadding(Ui.dp(m,4), Ui.dp(m,10), 0, Ui.dp(m,4));
         out.addView(title);
-        for (int i = 0; i < es.length(); i++) {
+        int n = Math.min(limit, es.length());
+    for (int i = 0; i < n; i++) {
           JSONObject e = es.optJSONObject(i); if (e == null) continue;
           LinearLayout card = new LinearLayout(m);
           card.setOrientation(LinearLayout.VERTICAL);
@@ -369,7 +378,16 @@ class ReportPage {
           card.addView(l3);
           out.addView(card);
         }
-        if (es.length() == 0) {
+        if (es.length() > n) {
+      Button more = new Button(m);
+      more.setText(m.getString(R.string.exp_more, es.length() - n));
+      more.setAllCaps(false); more.setTextSize(12);
+      more.setOnClickListener(v -> renderDetailInto(out, es, date, task, level, false, n + EXP_PAGE));
+      LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+      mlp.bottomMargin = Ui.dp(m,8); more.setLayoutParams(mlp);
+      out.addView(more);
+    }
+    if (es.length() == 0) {
           TextView empty = new TextView(m);
           empty.setText(m.getString(R.string.no_records)); empty.setTextSize(12); empty.setTextColor(0xFF66707E);
           empty.setPadding(Ui.dp(m,4), Ui.dp(m,6), 0, 0);
@@ -513,6 +531,7 @@ class ReportPage {
   /** 数据探索表:行=维度值,列=多指标并列;点指标表头排序(再点切升/降),点行按维度值下钻明细 */
   private void renderExplore() {
     exploreTable.removeAllViews();
+    expHolder = null;
     if (expData == null) return;
     JSONArray jr = expData.optJSONArray("rows");
     ArrayList<JSONObject> rows = new ArrayList<>();
@@ -556,6 +575,7 @@ class ReportPage {
         holder.setBackground(Ui.pill(0xFFF7F8FA, Ui.dp(m,8)));
         holder.setPadding(Ui.dp(m,12), Ui.dp(m,4), Ui.dp(m,10), Ui.dp(m,6));
         holder.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        expHolder = holder; expHolderKey = key;
         org.json.JSONArray es = expDetailCache.get(key);
         if (es != null) {
           renderDetailInto(holder, es, "date".equals(dim) ? key : null,
@@ -607,7 +627,7 @@ class ReportPage {
 
   /** 点探索表行:在该行下方展开/收起明细子表;明细异步拉取并缓存 */
   private void exploreDrill(String key) {
-    if (key.equals(expDrillKey)) { expDrillKey = null; renderExplore(); return; }
+    if (key.equals(expDrillKey)) { expDrillKey = null; expHolder = null; renderExplore(); return; }
     expDrillKey = key;
     renderExplore(); // 立即出"加载中"占位
   }
@@ -621,7 +641,13 @@ class ReportPage {
     new Thread(() -> {
       org.json.JSONArray es = com.laya.DecisionCore.drillList(act, d, t, l, 200);
       expDetailCache.put(key, es);
-      m.runOnUiThread(this::renderExplore); // 到数后重建,子表插入展开行下
+      m.runOnUiThread(() -> {
+        // 局部填充既有子表容器;整表重建在长列表下 measure/layout 代价高
+        if (key.equals(expDrillKey) && key.equals(expHolderKey) && expHolder != null) {
+          expHolder.removeAllViews();
+          renderDetailInto(expHolder, es, d, t, l, false);
+        }
+      });
     }).start();
   }
 }

@@ -255,4 +255,5 @@
     <string name="exp_by_date">按日期</string>
     <string name="exp_by_level">按等级</string>
     <string name="col_high_rate">高占比</string>
+    <string name="exp_more">显示更多(剩 %1$d 条)</string>
 </resources>
