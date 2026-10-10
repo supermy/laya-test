@@ -1,0 +1,45 @@
+Laya Decision Console (laya-test)
+Copyright 2026 supermy
+
+This product includes software developed by third parties:
+
+* LiteRT (TensorFlow Lite) runtime, AAR 2.2.0
+  Copyright 2019 The TensorFlow Authors / Google LLC
+  Licensed under the Apache License, Version 2.0
+  https://github.com/google-ai-edge/litert
+
+* NanoHTTPD 2.3.1 (embedded HTTP server: model upload / decision API)
+  Copyright 2012-2023 NanoHTTPD contributors
+  Licensed under the BSD 3-Clause License
+  https://github.com/NanoHttpd/nanohttpd
+
+* Eclipse Paho MQTT v3 client (paho-mqttv3 1.2.5)
+  Copyright Eclipse contributors
+  Licensed under the Eclipse Public License 2.0 / Eclipse Distribution License 1.0
+  https://github.com/eclipse/paho.mqtt.java
+
+* Android Mail / Jakarta Mail (android-mail 1.6.7, IMAP/SMTP)
+  Copyright 2018 Oracle and/or its affiliates
+  Licensed under the Eclipse Public License 2.0 OR GPL-2.0 WITH Classpath-exception-2.0
+  https://github.com/eclipse-ee4j/mail
+
+* Kotlin Standard Library
+  Copyright 2010-2024 JetBrains s.r.o.
+  Licensed under the Apache License, Version 2.0
+
+* libc++_shared (LLVM libc++, packaged for NPU runner)
+  Copyright The LLVM Authors
+  Licensed under the Apache License 2.0 with LLVM Exceptions
+
+* LiteRT MediaTek dispatch plugin (libLiteRtDispatch_MediaTek.so,
+  libLiteRtDispatch... / libnpu_rt.so runner payload)
+  Proprietary — MediaTek Inc. Distributed as provided by the device
+  vendor toolchain; used only to execute models on MediaTek MDLA hardware.
+
+* Model decision core (scorer weights / tokenizer / calibration files)
+  Fine-tuned from convaiinnovations/laya-multilingual — see the upstream
+  model card for applicable model license terms.
+
+This product bundles decision model packages that users install separately
+(/sdcard/models/laya-litert-*). Model package licensing is determined by
+each package's own terms (see label.txt inside each package).

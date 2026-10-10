@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-10 — v1.4.7:内置决策 API 服务(token + level)
+
+- APK 内置 HTTP 决策 API(`DecisionApiServer`,NanoHTTPD,端口 8790):**不依赖 Termux**,随网关启停、配置持久化
+  - `GET /health` — 状态/业务清单/引擎
+  - `POST /decide` body `{"task":"ticket","text":"…"}` → `answers/level/engine/latencyMs/result`
+- 新增:可选 Token 鉴权(cfg `api.key` 非空时校验 `X-Laya-Key` header 或 `?key=`)、`/decide` 响应含 `level`(等级分流)
+- UI:网关页邮件面板底部「启动/停止决策 API」按钮,状态并入网关状态栏
+- 真机验证:英文输入 `my account was charged twice` → 账单计费 0.82 / level=高 / NPU 251ms;`/health` 5 业务 ✓
+
 ## 2026-10-10 — v1.4.6:按钮间距 + 系统页局部刷新 + 发布质量
 
 - 网关页相邻按钮竖向贴合 → `button()` helper 统一加 8dp 下间距(真机 dump 实测间隔 26px)

@@ -32,6 +32,13 @@ class DecisionApiServer private constructor(private val ctx: Context, port: Int)
 
   override fun serve(session: IHTTPSession): Response {
     val uri = session.uri ?: ""
+    // 可选 Token:cfg api.key 非空时校验 header X-Laya-Key 或 ?key=
+    val key = Gateway.cfg(ctx).optJSONObject("api")?.optString("key").orEmpty()
+    if (key.isNotEmpty()) {
+      val given = session.parameters["key"]?.firstOrNull()
+          ?: session.headers["x-laya-key"]
+      if (given != key) return json(Response.Status.UNAUTHORIZED, err("invalid key"))
+    }
     return try {
       when {
         uri == "/health" -> json(Response.Status.OK, health())
@@ -49,6 +56,7 @@ class DecisionApiServer private constructor(private val ctx: Context, port: Int)
             json(Response.Status.OK, JSONObject()
               .put("ok", true)
               .put("task", task)
+              .put("level", DecisionCore.levelOf(JSONObject().put("decoded", r.answers)).optString("level"))
               .put("engine", DecisionCore.currentEngine(ctx))
               .put("latencyMs", r.latencyMs)
               .put("answers", r.answers)

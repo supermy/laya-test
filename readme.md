@@ -183,3 +183,22 @@ node sms-e2e-test.mjs           # SMS 判别管路测试(multi 模型+覆盖问�
 - multi 的 int8 导出未做 urgency 温度校准(分布偏平),urgency 断言仅对 en 有效
 - noul 是非判别在中文上不可靠,退款意图请用判别式 choice(intent)
 - ugc/agent/risk 微调数据为构造式合成(冷启动),分布≠真实黑产/风控,上线前换真实语料
+
+## 决策 API(APK 内置,不依赖 Termux)
+
+应用网关启用后,APK 在 8790 端口提供本地/局域网 HTTP 决策接口(网关页可启停):
+
+```
+GET  http://<手机IP>:8790/health        # 状态 / 业务清单 / 当前引擎
+POST http://<手机IP>:8790/decide        # body: {"task":"ticket","text":"..."}
+# 响应: {"ok":true,"task":"ticket","level":"高","engine":"NPU(MTK MDLA,独立进程)",
+#        "latencyMs":251,"answers":{...},"result":"【客服工单分流】..."}
+```
+
+可选鉴权:配置 `api.key` 后,请求需携带 header `X-Laya-Key: <key>` 或 `?key=<key>`。
+
+## 许可
+
+代码以 [Apache-2.0](LICENSE) 发布;第三方组件清单见 [NOTICE](NOTICE)。
+决策模型包单独分发,其许可遵循各包内 label.txt / 上游模型卡(微调自
+convaiinnovations/laya-multilingual,商用前请确认其权重许可)。
