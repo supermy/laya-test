@@ -252,3 +252,9 @@
 - MainActivity 瘦身至 ~1270 行;后续页面(决策/报表/网关)按同模式拆分
 - 工程护栏回归:smoke 10/10、levelOf 单测 ALL PASS
 - 待办:Gateway cfg 键常量化(P1 后半)
+
+## 2026-10-10 — v1.4.10:P1 重构第二步(GatewayPage 拆出)
+
+- MainActivity 再拆出 `GatewayPage.java`(335 行):邮件/MQTT/LLM 三面板、决策 API 开关、底栏状态;parsePort 移入;MainActivity 瘦身至 ~990 行
+- 已拆:SystemPage(382)/GatewayPage(335);待拆:决策/报表页(P1 收尾)
+- 回归:冒烟 10/10、levelOf 单测 ALL PASS
