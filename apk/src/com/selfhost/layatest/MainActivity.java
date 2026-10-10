@@ -72,15 +72,16 @@ public class MainActivity extends Activity {
     if (taskIdx >= taskIds.size()) taskIdx = 0;
   }
   private final DecisionPage decisionPage = new DecisionPage(this);
+  private final NewsPage newsPage = new NewsPage(this);
   private final ReportPage reportPage = new ReportPage(this);
   private final SystemPage systemPage = new SystemPage(this);
   private final GatewayPage gatewayPage = new GatewayPage(this);
-  private int tab = 0; // 0决策 1报表 2网关 3系统
+  int tab = 0; // 0决策 1报表 2网关 3系统 4快讯(NewsPage 读)
   int taskIdx = 0;
   LinearLayout body;
   Button menuBtn;
   ScrollView scroller;
-  private TextView[] tabBtns = new TextView[4];
+  private TextView[] tabBtns = new TextView[5];
   private static final boolean USE_GPU_MAIN = true; // GPU 主图;失败自动降级 CPU
 
   @Override
@@ -209,8 +210,8 @@ public class MainActivity extends Activity {
     View topDiv = new View(this);
     topDiv.setBackgroundColor(0xFFE5E5E5);
     root.addView(topDiv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 1)));
-    String[] names = {getString(R.string.tab_decision), getString(R.string.tab_report), getString(R.string.tab_gateway), getString(R.string.tab_system)};
-    for (int i = 0; i < 4; i++) {
+    String[] names = {getString(R.string.tab_decision), getString(R.string.tab_report), getString(R.string.tab_gateway), getString(R.string.tab_system), getString(R.string.tab_news)};
+    for (int i = 0; i < 5; i++) {
       final int k = i;
       TextView t = new TextView(this);
       t.setText(names[i]); t.setTextSize(13); t.setGravity(Gravity.CENTER);
@@ -252,7 +253,7 @@ public class MainActivity extends Activity {
     tab = k;
     getSharedPreferences("ui", MODE_PRIVATE).edit().putInt("tab", k).apply();
     refreshGatewayBar();
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
       boolean on = i == k;
       TextView tb = tabBtns[i];
       tb.setTextColor(on ? WX_GREEN : 0xFF7F7F7F);
@@ -264,6 +265,7 @@ public class MainActivity extends Activity {
     if (k == 0) decisionPage.build();
     else if (k == 1) reportPage.build();
     else if (k == 2) gatewayPage.build();
+    else if (k == 4) newsPage.build();
     else systemPage.build();
   }
 

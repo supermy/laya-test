@@ -55,7 +55,7 @@ chk "tab 系统" grep -q 'text="系统"' "$HOME_XML"
 chk "标题栏语言按钮" grep -qE "🌐A|&#127760;|>中<|>EN<" "$HOME_XML"
 
 echo "== [3/5] 网关页 + 决策 API 启动 =="
-$A shell "input tap 796 2528; sleep 1.5" >/dev/null 2>&1
+$A shell "input tap 640 2528; sleep 1.5" >/dev/null 2>&1
 # 逐屏滚动找 API 按钮(最多 4 屏);"启动"则点,"停止"则已在运行
 API_TOUCHED=0
 for i in 1 2 3 4; do
@@ -93,7 +93,7 @@ chk "GET /health" bash -c "curl -s --max-time 8 http://127.0.0.1:8790/health | g
 chk "POST /decide(level)" bash -c "curl -s --max-time 30 -X POST http://127.0.0.1:8790/decide -H 'Content-Type: application/json' -d '{\"task\":\"ticket\",\"text\":\"smoke test: cannot login\"}' | grep -q '\"level\"'"
 
 echo "== [5/5] 系统页断言 =="
-$A shell "input tap 1110 2528; sleep 1.5; uiautomator dump /sdcard/smoke.xml" >/dev/null 2>&1
+$A shell "input tap 896 2528; sleep 1.5; uiautomator dump /sdcard/smoke.xml" >/dev/null 2>&1
 SYS_XML=$(dumpfile smoke_sys.xml)
 chk "业务卡片" grep -q "已装入\|未装入\|Installed\|Not installed" "$SYS_XML"
 
