@@ -63,3 +63,8 @@ finetune/data/
 finetune/laya-*-int8/
 finetune/*.tar.gz
 finetune/__pycache__/
+verify/
+/*.png
+/*.xml
+apk/sys*.xml
+apk/dec.xml

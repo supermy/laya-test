@@ -1208,7 +1208,9 @@ public class MainActivity extends Activity {
     b.setText(label); b.setAllCaps(false); b.setTextColor(Color.WHITE); b.setTextSize(13);
     b.setBackground(pill(PRIMARY, dp(16)));
     b.setPadding(dp(14), dp(8), dp(14), dp(8));
-    parent.addView(b, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+    LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+    blp.bottomMargin = dp(8); // 相邻按钮隔开
+    parent.addView(b, blp);
     return b;
   }
 
@@ -1377,7 +1379,7 @@ public class MainActivity extends Activity {
         runOnUiThread(() -> {
           if (err == null) {
             upStatus.setText(getString(R.string.upload_ok, task));
-            setTab(3);
+            rebuildBizList();
           } else upStatus.setText("❌ " + err);
         });
       }).start();
@@ -1385,136 +1387,17 @@ public class MainActivity extends Activity {
     l.addView(up);
 
     Button rescan = button(l, getString(R.string.rescan));
-    rescan.setOnClickListener(v -> { refreshTasks(); setTab(3); });
+    rescan.setOnClickListener(v -> rebuildBizList());
     l.addView(hint(getString(R.string.biz_list_hint)));
+    bizListPanel = new LinearLayout(this);
+    bizListPanel.setOrientation(LinearLayout.VERTICAL);
+    l.addView(bizListPanel);
+    rebuildBizList();
 
-    for (int i = 0; i < taskIds.size(); i++) {
-      final String task = taskIds.get(i);
-      final String label = taskLabels.get(i);
-      boolean loaded = new File(getFilesDir(), "laya-" + task + "/laya_ml_s256_embeds_wfp16.tflite").isFile()
-          || new File(getFilesDir(), "laya-" + task + "/laya_ml_s256_embeds_npu.tflite").isFile();
-
-      LinearLayout card = new LinearLayout(this);
-      card.setOrientation(LinearLayout.VERTICAL);
-      card.setBackground(pill(loaded ? 0xFFEAF3FF : 0xFFF7F8FA, dp(10)));
-      card.setPadding(dp(10), dp(8), dp(10), dp(10));
-      LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-      clp.bottomMargin = dp(8);
-      card.setLayoutParams(clp);
-
-      TextView head = new TextView(this);
-      head.setText((loaded ? "✅ " : "📦 ") + label + "  [" + task + "]");
-      head.setTextSize(14); head.setTypeface(Typeface.DEFAULT_BOLD); head.setTextColor(0xFF1A2B4C);
-      card.addView(head);
-      TextView st = new TextView(this);
-      st.setText(getString(loaded ? R.string.loaded_state : R.string.not_loaded_state));
-      st.setTextSize(11); st.setTextColor(0xFF66707E);
-      st.setPadding(0, dp(2), 0, dp(4));
-      card.addView(st);
-
-      // 单按钮动态切换:未加载=加载(装入 app);已加载=卸载(释放空间)
-      Button toggle = new Button(this);
-      toggle.setText(getString(loaded ? R.string.uninstall : R.string.load_btn));
-      toggle.setAllCaps(false); toggle.setTextSize(12);
-      toggle.setTextColor(loaded ? 0xFF444A55 : Color.WHITE);
-      toggle.setBackground(pill(loaded ? CHIP_OFF : PRIMARY, dp(14)));
-      toggle.setPadding(dp(8), dp(6), dp(8), dp(6));
-      toggle.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-      toggle.setOnClickListener(v -> {
-        if (loaded) {
-          com.laya.DecisionCore.unload(this, task);
-          setTab(3);
-        } else {
-          st.setText(getString(R.string.loading_model));
-          new Thread(() -> {
-            try { com.laya.DecisionCore.preload(this, task); runOnUiThread(() -> setTab(3)); }
-            catch (Throwable e) { runOnUiThread(() -> st.setText(getString(R.string.load_failed, e.getMessage()))); }
-          }).start();
-        }
-      });
-      card.addView(toggle);
-
-      // 模型详情(展开/收起)+ 导出 zip + 删除业务
-      LinearLayout row2 = new LinearLayout(this);
-      row2.setOrientation(LinearLayout.HORIZONTAL);
-      Button detailBtn = new Button(this);
-      detailBtn.setText(getString(R.string.detail_btn)); detailBtn.setAllCaps(false); detailBtn.setTextSize(12);
-      detailBtn.setTextColor(0xFF444A55); detailBtn.setBackground(pill(CHIP_OFF, dp(14)));
-      detailBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
-      Button expBtn = new Button(this);
-      expBtn.setText(getString(R.string.export_zip)); expBtn.setAllCaps(false); expBtn.setTextSize(12);
-      expBtn.setTextColor(0xFF444A55); expBtn.setBackground(pill(CHIP_OFF, dp(14)));
-      expBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
-      Button delBtn = new Button(this);
-      delBtn.setText(getString(R.string.delete_biz)); delBtn.setAllCaps(false); delBtn.setTextSize(12);
-      delBtn.setTextColor(0xFFB3261E); delBtn.setBackground(pill(0xFFFCEAEA, dp(14)));
-      delBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
-      LinearLayout.LayoutParams half1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-      half1.rightMargin = dp(6);
-      detailBtn.setLayoutParams(half1);
-      LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-      half2.rightMargin = dp(6);
-      expBtn.setLayoutParams(half2);
-      delBtn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-      row2.addView(detailBtn); row2.addView(expBtn); row2.addView(delBtn);
-      row2.setPadding(0, dp(6), 0, 0);
-      card.addView(row2);
-
-      TextView detail = new TextView(this);
-      detail.setText(modelDetail(task));
-      detail.setTextSize(9);
-      detail.setTypeface(Typeface.MONOSPACE);
-      detail.setTextColor(0xFF444A55);
-      detail.setBackground(pill(0xFFFFFFFF, dp(8)));
-      detail.setPadding(dp(8), dp(6), dp(8), dp(6));
-      detail.setVisibility(View.GONE);
-      detail.setOnClickListener(v -> detail.setVisibility(View.GONE));
-      card.addView(detail);
-      detailBtn.setOnClickListener(v ->
-          detail.setVisibility(detail.getVisibility() == View.GONE ? View.VISIBLE : View.GONE));
-
-      expBtn.setOnClickListener(v -> {
-        final File dst = new File("/sdcard/Download", "laya-litert-" + task + ".zip");
-        expBtn.setText(getString(R.string.packing)); expBtn.setEnabled(false);
-        new Thread(() -> {
-          String err = null;
-          try {
-            dst.getParentFile().mkdirs();
-            zipDir(srcDir(task), dst);
-          } catch (Throwable e) {
-            err = e.getMessage() != null ? e.getMessage() : e.toString();
-            dst.delete();
-          }
-          final String ferr = err;
-          runOnUiThread(() -> {
-            expBtn.setText(getString(R.string.export_zip)); expBtn.setEnabled(true);
-            if (ferr == null)
-              new AlertDialog.Builder(this).setTitle(getString(R.string.export_done_title))
-                  .setMessage(getString(R.string.export_done_msg, dst.getAbsolutePath(), human(dst.length())))
-                  .setPositiveButton(getString(R.string.ok_btn), null).show();
-            else
-              new AlertDialog.Builder(this).setTitle(getString(R.string.export_failed_title)).setMessage(ferr).setPositiveButton(getString(R.string.ok_btn), null).show();
-          });
-        }).start();
-      });
-
-      delBtn.setOnClickListener(v -> {
-        String srcPath = srcDir(task).getAbsolutePath();
-        new AlertDialog.Builder(this)
-            .setTitle(getString(R.string.delete_title, task))
-            .setMessage(getString(R.string.delete_msg, srcPath, task))
-            .setNegativeButton(getString(R.string.cancel), null)
-            .setPositiveButton(getString(R.string.delete_btn), (d, w) -> {
-              com.laya.DecisionCore.unload(this, task);
-              new Thread(() -> {
-                deleteQuiet(srcDir(task).getParentFile());
-                deleteQuiet(new File(getFilesDir(), "laya-" + task));
-                runOnUiThread(() -> { refreshTasks(); setTab(3); });
-              }).start();
-            }).show();
-      });
-      l.addView(card);
-    }
+    bizListPanel = new LinearLayout(this);
+    bizListPanel.setOrientation(LinearLayout.VERTICAL);
+    l.addView(bizListPanel);
+    rebuildBizList();
 
     sysView = new TextView(this);
     sysView.setText(com.laya.DecisionCore.backendInfo(this) + getString(R.string.sys_tail));
@@ -1593,6 +1476,143 @@ public class MainActivity extends Activity {
     sysTop.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
     body.addView(sysTop);
     chips[0].performClick();
+  }
+  private LinearLayout bizListPanel;
+
+  /** 单个业务卡片(加载态/操作按钮/详情/导出/删除) */
+  private LinearLayout bizCard(String task, String label) {
+    boolean loaded = new File(getFilesDir(), "laya-" + task + "/laya_ml_s256_embeds_wfp16.tflite").isFile()
+        || new File(getFilesDir(), "laya-" + task + "/laya_ml_s256_embeds_npu.tflite").isFile();
+
+    LinearLayout card = new LinearLayout(this);
+    card.setOrientation(LinearLayout.VERTICAL);
+    card.setBackground(pill(loaded ? 0xFFEAF3FF : 0xFFF7F8FA, dp(10)));
+    card.setPadding(dp(10), dp(8), dp(10), dp(10));
+    LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+    clp.bottomMargin = dp(8);
+    card.setLayoutParams(clp);
+
+    TextView head = new TextView(this);
+    head.setText((loaded ? "✅ " : "📦 ") + label + "  [" + task + "]");
+    head.setTextSize(14); head.setTypeface(Typeface.DEFAULT_BOLD); head.setTextColor(0xFF1A2B4C);
+    card.addView(head);
+    TextView st = new TextView(this);
+    st.setText(getString(loaded ? R.string.loaded_state : R.string.not_loaded_state));
+    st.setTextSize(11); st.setTextColor(0xFF66707E);
+    st.setPadding(0, dp(2), 0, dp(4));
+    card.addView(st);
+
+    // 单按钮动态切换:未加载=加载(装入 app);已加载=卸载(释放空间)
+    Button toggle = new Button(this);
+    toggle.setText(getString(loaded ? R.string.uninstall : R.string.load_btn));
+    toggle.setAllCaps(false); toggle.setTextSize(12);
+    toggle.setTextColor(loaded ? 0xFF444A55 : Color.WHITE);
+    toggle.setBackground(pill(loaded ? CHIP_OFF : PRIMARY, dp(14)));
+    toggle.setPadding(dp(8), dp(6), dp(8), dp(6));
+    toggle.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+    toggle.setOnClickListener(v -> {
+      if (loaded) {
+        com.laya.DecisionCore.unload(this, task);
+        rebuildBizList();
+      } else {
+        st.setText(getString(R.string.loading_model));
+        new Thread(() -> {
+          try { com.laya.DecisionCore.preload(this, task); runOnUiThread(() -> rebuildBizList()); }
+          catch (Throwable e) { runOnUiThread(() -> st.setText(getString(R.string.load_failed, e.getMessage()))); }
+        }).start();
+      }
+    });
+    card.addView(toggle);
+
+    // 模型详情(展开/收起)+ 导出 zip + 删除业务
+    LinearLayout row2 = new LinearLayout(this);
+    row2.setOrientation(LinearLayout.HORIZONTAL);
+    Button detailBtn = new Button(this);
+    detailBtn.setText(getString(R.string.detail_btn)); detailBtn.setAllCaps(false); detailBtn.setTextSize(12);
+    detailBtn.setTextColor(0xFF444A55); detailBtn.setBackground(pill(CHIP_OFF, dp(14)));
+    detailBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
+    Button expBtn = new Button(this);
+    expBtn.setText(getString(R.string.export_zip)); expBtn.setAllCaps(false); expBtn.setTextSize(12);
+    expBtn.setTextColor(0xFF444A55); expBtn.setBackground(pill(CHIP_OFF, dp(14)));
+    expBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
+    Button delBtn = new Button(this);
+    delBtn.setText(getString(R.string.delete_biz)); delBtn.setAllCaps(false); delBtn.setTextSize(12);
+    delBtn.setTextColor(0xFFB3261E); delBtn.setBackground(pill(0xFFFCEAEA, dp(14)));
+    delBtn.setPadding(dp(4), dp(6), dp(4), dp(6));
+    LinearLayout.LayoutParams half1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+    half1.rightMargin = dp(6);
+    detailBtn.setLayoutParams(half1);
+    LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+    half2.rightMargin = dp(6);
+    expBtn.setLayoutParams(half2);
+    delBtn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+    row2.addView(detailBtn); row2.addView(expBtn); row2.addView(delBtn);
+    row2.setPadding(0, dp(6), 0, 0);
+    card.addView(row2);
+
+    TextView detail = new TextView(this);
+    detail.setText(modelDetail(task));
+    detail.setTextSize(9);
+    detail.setTypeface(Typeface.MONOSPACE);
+    detail.setTextColor(0xFF444A55);
+    detail.setBackground(pill(0xFFFFFFFF, dp(8)));
+    detail.setPadding(dp(8), dp(6), dp(8), dp(6));
+    detail.setVisibility(View.GONE);
+    detail.setOnClickListener(v -> detail.setVisibility(View.GONE));
+    card.addView(detail);
+    detailBtn.setOnClickListener(v ->
+        detail.setVisibility(detail.getVisibility() == View.GONE ? View.VISIBLE : View.GONE));
+
+    expBtn.setOnClickListener(v -> {
+      final File dst = new File("/sdcard/Download", "laya-litert-" + task + ".zip");
+      expBtn.setText(getString(R.string.packing)); expBtn.setEnabled(false);
+      new Thread(() -> {
+        String err = null;
+        try {
+          dst.getParentFile().mkdirs();
+          zipDir(srcDir(task), dst);
+        } catch (Throwable e) {
+          err = e.getMessage() != null ? e.getMessage() : e.toString();
+          dst.delete();
+        }
+        final String ferr = err;
+        runOnUiThread(() -> {
+          expBtn.setText(getString(R.string.export_zip)); expBtn.setEnabled(true);
+          if (ferr == null)
+            new AlertDialog.Builder(this).setTitle(getString(R.string.export_done_title))
+                .setMessage(getString(R.string.export_done_msg, dst.getAbsolutePath(), human(dst.length())))
+                .setPositiveButton(getString(R.string.ok_btn), null).show();
+          else
+            new AlertDialog.Builder(this).setTitle(getString(R.string.export_failed_title)).setMessage(ferr).setPositiveButton(getString(R.string.ok_btn), null).show();
+        });
+      }).start();
+    });
+
+    delBtn.setOnClickListener(v -> {
+      String srcPath = srcDir(task).getAbsolutePath();
+      new AlertDialog.Builder(this)
+          .setTitle(getString(R.string.delete_title, task))
+          .setMessage(getString(R.string.delete_msg, srcPath, task))
+          .setNegativeButton(getString(R.string.cancel), null)
+          .setPositiveButton(getString(R.string.delete_btn), (d, w) -> {
+            com.laya.DecisionCore.unload(this, task);
+            new Thread(() -> {
+              deleteQuiet(srcDir(task).getParentFile());
+              deleteQuiet(new File(getFilesDir(), "laya-" + task));
+              runOnUiThread(() -> rebuildBizList());
+            }).start();
+          }).show();
+    });
+
+    return card;
+  }
+
+  /** 局部刷新:仅重建业务卡片列表(替代整页 setTab(3) 重建,避免闪烁) */
+  private void rebuildBizList() {
+    refreshTasks();
+    if (bizListPanel == null) return;
+    bizListPanel.removeAllViews();
+    for (int i = 0; i < taskIds.size(); i++) bizListPanel.addView(bizCard(taskIds.get(i), taskLabels.get(i)));
   }
 
   // ================= 通用 =================
