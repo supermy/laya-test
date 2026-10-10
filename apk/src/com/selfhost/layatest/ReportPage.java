@@ -28,7 +28,9 @@ class ReportPage {
   private android.widget.Spinner spinMetric;
   private int drillMetric = 0; // 0决策数 1平均耗时 2平均评分 3需人工率
   private org.json.JSONObject lastPiv; // 最近一次下钻查询结果(指标切换免重查)
-  private LinearLayout explorePane, exploreTable, exploreOut;
+  private LinearLayout explorePane, exploreTable;
+  private String expDrillKey; // 当前展开子表的行 key(再点收起)
+  private final java.util.HashMap<String, org.json.JSONArray> expDetailCache = new java.util.HashMap<>();
   private android.widget.Spinner expRange, expDim;
   private org.json.JSONObject expData;
   private int expSortCol = 1;   // 排序列:1决策数 2平均耗时 3平均评分 4需人工率 5高占比
@@ -145,9 +147,6 @@ class ReportPage {
     exploreTable = new LinearLayout(m);
     exploreTable.setOrientation(LinearLayout.VERTICAL);
     explorePane.addView(exploreTable);
-    exploreOut = new LinearLayout(m);
-    exploreOut.setOrientation(LinearLayout.VERTICAL);
-    explorePane.addView(exploreOut);
     explorePane.setVisibility(View.GONE);
     l.addView(explorePane);
 
@@ -327,11 +326,11 @@ class ReportPage {
     final android.app.Activity act = m;
     new Thread(() -> {
       final JSONArray es = com.laya.DecisionCore.drillList(act, date, task, level, 200);
-      m.runOnUiThread(() -> renderDetailInto(out, es, date, task, level));
+      m.runOnUiThread(() -> renderDetailInto(out, es, date, task, level, true));
     }).start();
   }
 
-  private void renderDetailInto(LinearLayout out, JSONArray es, String date, String task, String level) {
+  private void renderDetailInto(LinearLayout out, JSONArray es, String date, String task, String level, boolean scrollToEnd) {
     out.removeAllViews();        out.removeAllViews();
         java.util.Map<String, String> labels = new LinkedHashMap<>();
         for (int i = 0; i < m.taskIds.size(); i++) labels.put(m.taskIds.get(i), m.taskLabels.get(i));
@@ -376,7 +375,7 @@ class ReportPage {
           empty.setPadding(Ui.dp(m,4), Ui.dp(m,6), 0, 0);
           out.addView(empty);
         }
-        m.scroller.post(() -> m.scroller.fullScroll(View.FOCUS_DOWN));  }
+        if (scrollToEnd) m.scroller.post(() -> m.scroller.fullScroll(View.FOCUS_DOWN));  }
 
   private void renderReport(int kind) {
     final boolean isDetail = kind == 3;
@@ -506,6 +505,7 @@ class ReportPage {
     final android.app.Activity act = m;
     new Thread(() -> {
       expData = com.laya.DecisionCore.explore(act, days, dim);
+      expDrillKey = null; expDetailCache.clear(); // 新查询重置展开态
       m.runOnUiThread(this::renderExplore);
     }).start();
   }
@@ -513,7 +513,6 @@ class ReportPage {
   /** 数据探索表:行=维度值,列=多指标并列;点指标表头排序(再点切升/降),点行按维度值下钻明细 */
   private void renderExplore() {
     exploreTable.removeAllViews();
-    exploreOut.removeAllViews();
     if (expData == null) return;
     JSONArray jr = expData.optJSONArray("rows");
     ArrayList<JSONObject> rows = new ArrayList<>();
@@ -550,6 +549,26 @@ class ReportPage {
       r2.addView(dCell(disp, true, 0, v -> exploreDrill(key), 1.4f));
       for (int i = 1; i <= 5; i++) r2.addView(dCell(expCell(a, i), false, 0, v -> exploreDrill(key), 1f));
       t.addView(r2);
+      // 展开行:明细子表嵌在该行下方(再点收起)
+      if (key.equals(expDrillKey)) {
+        LinearLayout holder = new LinearLayout(m);
+        holder.setOrientation(LinearLayout.VERTICAL);
+        holder.setBackground(Ui.pill(0xFFF7F8FA, Ui.dp(m,8)));
+        holder.setPadding(Ui.dp(m,12), Ui.dp(m,4), Ui.dp(m,10), Ui.dp(m,6));
+        holder.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        org.json.JSONArray es = expDetailCache.get(key);
+        if (es != null) {
+          renderDetailInto(holder, es, "date".equals(dim) ? key : null,
+              "task".equals(dim) ? key : null, "level".equals(dim) ? key : null, false);
+        } else {
+          TextView loading = new TextView(m);
+          loading.setText(m.getString(R.string.loading_detail)); loading.setTextSize(12); loading.setTextColor(0xFF66707E);
+          loading.setPadding(0, Ui.dp(m,4), 0, Ui.dp(m,4));
+          holder.addView(loading);
+          fetchExploreDetail(key);
+        }
+        t.addView(holder);
+      }
     }
     LinearLayout tr = new LinearLayout(m);
     tr.addView(dCell(m.getString(R.string.col_total), true, 0, null, 1.4f));
@@ -586,11 +605,23 @@ class ReportPage {
     }
   }
 
-  /** 点探索表行:按当前维度值下钻明细 */
+  /** 点探索表行:在该行下方展开/收起明细子表;明细异步拉取并缓存 */
   private void exploreDrill(String key) {
+    if (key.equals(expDrillKey)) { expDrillKey = null; renderExplore(); return; }
+    expDrillKey = key;
+    renderExplore(); // 立即出"加载中"占位
+  }
+
+  private void fetchExploreDetail(String key) {
     String dim = expData != null ? expData.optString("dim") : "task";
-    queryDetail("date".equals(dim) ? key : null,
-        "task".equals(dim) ? key : null,
-        "level".equals(dim) ? key : null, exploreOut);
+    final String d = "date".equals(dim) ? key : null;
+    final String t = "task".equals(dim) ? key : null;
+    final String l = "level".equals(dim) ? key : null;
+    final android.app.Activity act = m;
+    new Thread(() -> {
+      org.json.JSONArray es = com.laya.DecisionCore.drillList(act, d, t, l, 200);
+      expDetailCache.put(key, es);
+      m.runOnUiThread(this::renderExplore); // 到数后重建,子表插入展开行下
+    }).start();
   }
 }
