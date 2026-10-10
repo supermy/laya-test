@@ -290,3 +290,9 @@
 - 替换散落字符串:Gateway.kt 52 处、DecisionApiServer.kt 2 处、GatewayPage.java 36 处、MainActivity 1 处;协议值(.put("role","user"))与消息键(task/text/answers)不涉及
 - smoke.sh「决策 API 按钮」等价判定加固:前台化解冻 + health 4 次重试(消除启动竞态);连跑两遍 10/10
 - 回归:levelOf 单测 ALL PASS
+
+## 2026-10-10 — v1.4.16:P2 — DecisionCore 串行模型文档化
+
+- 类头新增**并发设计契约 KDoc**:单引擎槽 + 全局互斥串行;四调用来源(UI/API/邮件/MQTT)隐式排队;为何不做多业务常驻(650MB×N 内存不可行);llmFollowUp 必须异步的禁令;禁止持锁重入;后续演进判据(高频调用方再评估队列+背压,而非细化锁粒度)
+- decide/ensureRunner KDoc 指向契约;readme 决策 API 段补并发语义(调用方超时/重试/客户端排队建议)
+- 纯文档变更,并发代码零改动(维持"不写请求队列"的 review 结论)

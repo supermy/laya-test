@@ -14,6 +14,27 @@ import java.util.Date
 import java.util.Locale
 
 /** 全局决策核心:单引擎策略 + 问题定义 + 决策日志 + 报表。UI 与网关共用。 */
+/**
+ * 决策核心(进程级单例)。
+ *
+ * ## 并发模型(设计契约——改并发相关代码前必读)
+ *
+ * **单引擎槽 + 全局互斥串行**:
+ * - 同一时刻至多一个业务的引擎常驻([jniEngine]/[runnerEngine] 单槽,[engineTask] 记录归属)。
+ *   换业务 = close 旧引擎 + 冷加载新引擎(该业务首问付加载代价);同业务重复决策走热路径(零加载)。
+ * - 所有入口([decide]/[preload]/[unload]/[ensureRunner])都在单例 monitor 上 @Synchronized,
+ *   四个调用来源(UI 决策页、决策 API 的 NanoHTTPD 线程池、邮件轮询、MQTT 订阅)在此**隐式串行排队**
+ *   ——并发调用阻塞等锁,无公平性保证。刻意不设显式请求队列:当前规模(触发频率 ≈1 QPS 量级、
+ *   单次决策 54-72ms NPU)排队延迟可忽略;若未来出现高频调用方,再评估"队列 + 超时/背压",
+ *   而不是细化锁粒度。
+ * - 为什么不做多业务常驻:每业务模型包 ~650MB,N 业务常驻即 650MB×N,端侧内存不可行;
+ *   单槽切换的冷加载(百 ms 级)是可接受的折中。
+ * - [llmFollowUp] 必须保持异步(决策等级"高"时触发):**严禁**在持锁状态下同步调 LLM/网络,
+ *   否则外呼耗时会被串行锁放大成全局停顿。
+ * - 禁止重入:[decide] 持锁期间不得再进入本对象任何 @Synchronized 方法(会死锁,self-monitor 不可重入场景除外)。
+ *
+ * 引擎选择链:NPU(MTK MDLA / Qualcomm QNN)→ GPU → CPU,按 SoC 与模型包能力自动落档,见 [backendInfo]。
+ */
 object DecisionCore {
   private val BUILTIN = linkedMapOf(
     "ticket" to "客服工单分流", "ugc" to "UGC 内容审核",
@@ -183,6 +204,7 @@ object DecisionCore {
   /** ctx 可空的 getString(无 ctx 路径兜底空串) */
   private fun Context?.getString2(id: Int): String = this?.getString(id) ?: ""
 
+  /** 取引擎:同业务热路径直返;换业务冷切换(close 旧 + 重载)。持锁调用,见类头并发契约。 */
   @Synchronized
   private fun ensureRunner(ctx: Context, task: String): DecisionEngine {
     if (runnerEngine != null && engineTask == task) return runnerEngine!!
@@ -325,7 +347,7 @@ object DecisionCore {
 
   class Result(@JvmField val answers: JSONObject, @JvmField val latencyMs: Long)
 
-  /** 三问全跑。线程安全(引擎内部单线程,此处 synchronized 防并发切换)。 */
+  /** 三问全跑。串行契约见类头 KDoc:四个来源(UI/API/邮件/MQTT)的调用在此排队,同业务热路径、换业务冷切换。 */
   @Synchronized
   @JvmStatic
   fun decide(ctx: Context, task: String, text: String): Result {
