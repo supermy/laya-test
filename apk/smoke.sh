@@ -97,6 +97,19 @@ $A shell "input tap 1110 2528; sleep 1.5; uiautomator dump /sdcard/smoke.xml" >/
 SYS_XML=$(dumpfile smoke_sys.xml)
 chk "业务卡片" grep -q "已装入\|未装入\|Installed\|Not installed" "$SYS_XML"
 
+# 卡片重复检测:health tasks 的每个业务名在 dump 中至多出现 1 次(双面板会让每名 ×2)
+DUP=$(curl -s --max-time 8 http://127.0.0.1:8790/health | python3 -c "
+import sys,json,os
+try:
+    h=json.load(sys.stdin)
+    xml=open(os.environ['TD']+'/smoke_sys.xml',encoding='utf-8').read()
+    print(','.join(v for v in h.get('tasks',{}).values() if xml.count(v)>1))
+except Exception:
+    print('')
+")
+if [ -z "$DUP" ]; then echo "PASS: 业务卡片无重复"; PASS=$((PASS+1))
+else echo "FAIL: 业务卡片重复($DUP)"; FAIL=$((FAIL+1)); fi
+
 echo "== 结果: PASS=$PASS FAIL=$FAIL =="
 rm -rf "$TD"
 [ "$FAIL" -eq 0 ]

@@ -158,11 +158,6 @@ class SystemPage {
     l.addView(bizListPanel);
     rebuildBizList();
 
-    bizListPanel = new LinearLayout(m);
-    bizListPanel.setOrientation(LinearLayout.VERTICAL);
-    l.addView(bizListPanel);
-    rebuildBizList();
-
     sysView = new TextView(m);
     sysView.setText(com.laya.DecisionCore.backendInfo(m) + m.getString(R.string.sys_tail));
     sysView.setTextSize(13);
