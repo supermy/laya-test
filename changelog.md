@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-10 — v1.4.6:按钮间距 + 系统页局部刷新 + 发布质量
+
+- 网关页相邻按钮竖向贴合 → `button()` helper 统一加 8dp 下间距(真机 dump 实测间隔 26px)
+- 系统页业务卡片抽出 `bizCard()`/`rebuildBizList()`:加载/卸载/删除/重扫/上传成功后**只重建卡片列表**,不再整页 `setTab(3)` 重建(消除闪烁,滚动位置保持)
+- AndroidManifest 去除 `android:debuggable`(上架质量;F-Droid repo 已同步此版本)
+- F-Droid 自建仓库上线:https://supermy.github.io/laya-test/fdroid/repo(GitHub Pages 托管,与 Release 同签名,fdroidserver 2.4.5 生成)
+
 ## 2026-10-10 — v1.4.5:DecisionCore.kt 文案资源化(i18n 收尾)
 
 - Kotlin 决策核心 54 条中文按"文案/数据键"分类处理:**34 处资源化**——业务名(BUILTIN→biz_* 资源,scanTasks/fmt 加 Context)、引擎描述 6 条(engineDesc 改可空 + currentEngine(ctx))、backendInfo 硬件 5 条、ensureRunner 校验 2 条、导入校验 7 条、内置业务问题文本 12 条(instructions 本地化)、格式词(评分/需人工/自动/是/否/报表头/分组行)
