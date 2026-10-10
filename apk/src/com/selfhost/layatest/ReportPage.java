@@ -33,17 +33,17 @@ class ReportPage {
   void build() {
     LinearLayout l = new LinearLayout(m);
     l.setOrientation(LinearLayout.VERTICAL);
-    l.setPadding(m.dp(12), m.dp(8), m.dp(12), m.dp(8));
+    l.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
     TextView cur = new TextView(m);
     cur.setText(m.getString(R.string.report_hint)); cur.setTextSize(12); cur.setTextColor(0xFF66707E);
-    cur.setPadding(m.dp(2), 0, 0, 0);
+    cur.setPadding(Ui.dp(m,2), 0, 0, 0);
     l.addView(cur);
 
     // 详单翻页行(仅详单显示)
     pagerRow = new LinearLayout(m);
     pagerRow.setOrientation(LinearLayout.HORIZONTAL);
     pagerRow.setGravity(Gravity.CENTER_VERTICAL);
-    pagerRow.setPadding(0, m.dp(4), 0, m.dp(4));
+    pagerRow.setPadding(0, Ui.dp(m,4), 0, Ui.dp(m,4));
     Button prev = new Button(m);
     prev.setText(m.getString(R.string.page_prev)); prev.setAllCaps(false); prev.setTextSize(12);
     prev.setOnClickListener(v -> { if (detailPage > 0) { detailPage--; renderReport(3); } });
@@ -64,7 +64,7 @@ class ReportPage {
     // ---- 下钻详单面板(仅 reportKind==4 显示):业务 × 决策等级 × 日期 ----
     drillPane = new LinearLayout(m);
     drillPane.setOrientation(LinearLayout.VERTICAL);
-    drillPane.setPadding(0, m.dp(6), 0, 0);
+    drillPane.setPadding(0, Ui.dp(m,6), 0, 0);
     LinearLayout fRow1 = new LinearLayout(m);
     fRow1.setGravity(Gravity.CENTER_VERTICAL);
     spinRange = new Spinner(m);
@@ -99,7 +99,7 @@ class ReportPage {
 
     reportList = new LinearLayout(m);
     reportList.setOrientation(LinearLayout.VERTICAL);
-    reportList.setPadding(0, m.dp(10), 0, 0);
+    reportList.setPadding(0, Ui.dp(m,10), 0, 0);
     l.addView(reportList);
     m.scroller = new ScrollView(m);
     m.scroller.addView(l);
@@ -123,7 +123,7 @@ class ReportPage {
         renderReport(k);
         for (int j = 0; j < 5; j++) {
           chips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
-          chips[j].setBackground(m.pill(j == k ? m.PRIMARY : 0xFFE7EAF2, m.dp(12)));
+          chips[j].setBackground(Ui.pill(j == k ? m.PRIMARY : 0xFFE7EAF2, Ui.dp(m,12)));
         }
       });
       chips[i] = c;
@@ -131,12 +131,12 @@ class ReportPage {
     }
     final LinearLayout leftCol = new LinearLayout(m);
     leftCol.setOrientation(LinearLayout.VERTICAL);
-    leftCol.setPadding(m.dp(4), m.dp(4), m.dp(0), m.dp(0));
+    leftCol.setPadding(Ui.dp(m,4), Ui.dp(m,4), Ui.dp(m,0), Ui.dp(m,0));
     ScrollView railScroll = new ScrollView(m);
     railScroll.addView(rail); // 左侧 tab 菜单可上下滑动(小屏防截断)
     leftCol.addView(railScroll);
-    LinearLayout.LayoutParams lclp = new LinearLayout.LayoutParams(m.dp(40), LinearLayout.LayoutParams.MATCH_PARENT);
-    lclp.rightMargin = m.dp(2);
+    LinearLayout.LayoutParams lclp = new LinearLayout.LayoutParams(Ui.dp(m,40), LinearLayout.LayoutParams.MATCH_PARENT);
+    lclp.rightMargin = Ui.dp(m,2);
     leftCol.setLayoutParams(lclp);
     LinearLayout top = new LinearLayout(m);
     top.setOrientation(LinearLayout.HORIZONTAL);
@@ -150,7 +150,7 @@ class ReportPage {
     });
     // 初始高亮当前类型
     chips[reportKind].setTextColor(Color.WHITE);
-    chips[reportKind].setBackground(m.pill(m.PRIMARY, m.dp(12)));
+    chips[reportKind].setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,12)));
   }
   private LinearLayout reportList;
   private LinearLayout drillPane, drillTables, drillOut;
@@ -163,8 +163,8 @@ class ReportPage {
     c.setText(t); c.setTextSize(12); c.setGravity(Gravity.CENTER);
     c.setTextColor(color != 0 ? color : 0xFF1A2B4C);
     if (bold) c.setTypeface(Typeface.DEFAULT_BOLD);
-    c.setBackground(m.pill(0xFFF6F7FA, m.dp(6)));
-    c.setPadding(m.dp(4), m.dp(7), m.dp(4), m.dp(7));
+    c.setBackground(Ui.pill(0xFFF6F7FA, Ui.dp(m,6)));
+    c.setPadding(Ui.dp(m,4), Ui.dp(m,7), Ui.dp(m,4), Ui.dp(m,7));
     c.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, weight));
     if (oc != null) { c.setTextColor(0xFF3E7BFA); c.setOnClickListener(oc); }
     return c;
@@ -202,7 +202,7 @@ class ReportPage {
     ArrayList<String> dOrd = new ArrayList<>(dates); java.util.Collections.reverse(dOrd);
     TextView head = new TextView(m);
     head.setText(m.getString(R.string.drill_head, piv.optInt("total")));
-    head.setTextSize(12); head.setTextColor(0xFF66707E); head.setPadding(m.dp(4), m.dp(8), 0, m.dp(4));
+    head.setTextSize(12); head.setTextColor(0xFF66707E); head.setPadding(Ui.dp(m,4), Ui.dp(m,8), 0, Ui.dp(m,4));
     drillTables.addView(head);
     java.util.Map<String, Integer> grid = new LinkedHashMap<>();
     java.util.Map<String, Integer> gDate = new LinkedHashMap<>();
@@ -212,7 +212,7 @@ class ReportPage {
     }
     // 表1:业务 × 等级
     LinearLayout t1 = new LinearLayout(m); t1.setOrientation(LinearLayout.VERTICAL);
-    t1.setBackground(m.pill(0xFFFFFFFF, m.dp(10))); t1.setPadding(m.dp(6), m.dp(6), m.dp(6), m.dp(6));
+    t1.setBackground(Ui.pill(0xFFFFFFFF, Ui.dp(m,10))); t1.setPadding(Ui.dp(m,6), Ui.dp(m,6), Ui.dp(m,6), Ui.dp(m,6));
     LinearLayout h1 = new LinearLayout(m);
     h1.addView(dCell(m.getString(R.string.col_task), true, 0, null, 2.2f));
     for (String lv : lvOrd) h1.addView(dCell(lv, true, 0, null, 1f));
@@ -234,7 +234,7 @@ class ReportPage {
     drillTables.addView(t1);
     // 表2:日期 × 业务
     LinearLayout t2 = new LinearLayout(m); t2.setOrientation(LinearLayout.VERTICAL);
-    t2.setBackground(m.pill(0xFFFFFFFF, m.dp(10))); t2.setPadding(m.dp(6), m.dp(6), m.dp(6), m.dp(6));
+    t2.setBackground(Ui.pill(0xFFFFFFFF, Ui.dp(m,10))); t2.setPadding(Ui.dp(m,6), Ui.dp(m,6), Ui.dp(m,6), Ui.dp(m,6));
     LinearLayout h2 = new LinearLayout(m);
     h2.addView(dCell(m.getString(R.string.col_date), true, 0, null, 1.6f));
     for (String t : tasks) h2.addView(dCell(t, true, 0, null, 1f));
@@ -253,14 +253,14 @@ class ReportPage {
       r.addView(dCell(String.valueOf(tot), true, 0, v -> drillShow(fd, null, null), 1f));
       t2.addView(r);
     }
-    LinearLayout gap = new LinearLayout(m); gap.setPadding(0, m.dp(8), 0, 0);
+    LinearLayout gap = new LinearLayout(m); gap.setPadding(0, Ui.dp(m,8), 0, 0);
     drillTables.addView(gap); drillTables.addView(t2);
   }
 
   private void drillShow(String date, String task, String level) {
     drillOut.removeAllViews();
     TextView loading = new TextView(m);
-    loading.setText(m.getString(R.string.loading_detail)); loading.setTextSize(12); loading.setPadding(m.dp(4), m.dp(8), 0, 0);
+    loading.setText(m.getString(R.string.loading_detail)); loading.setTextSize(12); loading.setPadding(Ui.dp(m,4), Ui.dp(m,8), 0, 0);
     drillOut.addView(loading);
     final android.app.Activity act = m;
     new Thread(() -> {
@@ -274,16 +274,16 @@ class ReportPage {
             task != null ? labels.getOrDefault(task, task) : m.getString(R.string.task_all),
             level != null ? level : m.getString(R.string.level_any), es.length()));
         title.setTextSize(13); title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setPadding(m.dp(4), m.dp(10), 0, m.dp(4));
+        title.setPadding(Ui.dp(m,4), Ui.dp(m,10), 0, Ui.dp(m,4));
         drillOut.addView(title);
         for (int i = 0; i < es.length(); i++) {
           JSONObject e = es.optJSONObject(i); if (e == null) continue;
           LinearLayout card = new LinearLayout(m);
           card.setOrientation(LinearLayout.VERTICAL);
-          card.setBackground(m.pill(0xFFF7F8FA, m.dp(8)));
-          card.setPadding(m.dp(9), m.dp(6), m.dp(9), m.dp(7));
+          card.setBackground(Ui.pill(0xFFF7F8FA, Ui.dp(m,8)));
+          card.setPadding(Ui.dp(m,9), Ui.dp(m,6), Ui.dp(m,9), Ui.dp(m,7));
           LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-          clp.bottomMargin = m.dp(6); card.setLayoutParams(clp);
+          clp.bottomMargin = Ui.dp(m,6); card.setLayoutParams(clp);
           TextView l1 = new TextView(m);
           String lv = e.optString("level");
           int lvc = "高".equals(lv) ? 0xFFD62828 : "中".equals(lv) ? 0xFFE78A00 : "低".equals(lv) ? 0xFF2A9D8F : 0xFF66707E;
@@ -295,7 +295,7 @@ class ReportPage {
           String basis = e.optString("basis", "");
           TextView l2 = new TextView(m);
           l2.setText((ans.isEmpty() ? "" : ans + "\n") + basis);
-          l2.setTextSize(11); l2.setTextColor(0xFF444A55); l2.setPadding(0, m.dp(1), 0, m.dp(2));
+          l2.setTextSize(11); l2.setTextColor(0xFF444A55); l2.setPadding(0, Ui.dp(m,1), 0, Ui.dp(m,2));
           card.addView(l2);
           TextView l3 = new TextView(m);
           String st = e.optString("state");
@@ -307,7 +307,7 @@ class ReportPage {
         if (es.length() == 0) {
           TextView empty = new TextView(m);
           empty.setText(m.getString(R.string.no_records)); empty.setTextSize(12); empty.setTextColor(0xFF66707E);
-          empty.setPadding(m.dp(4), m.dp(6), 0, 0);
+          empty.setPadding(Ui.dp(m,4), Ui.dp(m,6), 0, 0);
           drillOut.addView(empty);
         }
         m.scroller.post(() -> m.scroller.fullScroll(View.FOCUS_DOWN));
@@ -389,10 +389,10 @@ class ReportPage {
     reportList.removeAllViews();
     LinearLayout t = new LinearLayout(m);
     t.setOrientation(LinearLayout.VERTICAL);
-    t.setBackground(m.pill(0xFFFFFFFF, m.dp(10)));
-    t.setPadding(m.dp(6), m.dp(4), m.dp(6), m.dp(4));
+    t.setBackground(Ui.pill(0xFFFFFFFF, Ui.dp(m,10)));
+    t.setPadding(Ui.dp(m,6), Ui.dp(m,4), Ui.dp(m,6), Ui.dp(m,4));
     LinearLayout h = new LinearLayout(m);
-    h.setBackground(m.pill(0xFFEFF2F7, m.dp(6)));
+    h.setBackground(Ui.pill(0xFFEFF2F7, Ui.dp(m,6)));
     for (int i = 0; i < heads.length; i++) h.addView(tCell(heads[i], true, ws[i]));
     t.addView(h);
     for (int r = 0; r < rows.size(); r++) {
@@ -410,7 +410,7 @@ class ReportPage {
     c.setTextSize(11);
     c.setTypeface(bold ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
     c.setTextColor(bold ? 0xFF1A2B4C : 0xFF444A55);
-    c.setPadding(m.dp(6), m.dp(5), m.dp(6), m.dp(5));
+    c.setPadding(Ui.dp(m,6), Ui.dp(m,5), Ui.dp(m,6), Ui.dp(m,5));
     c.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, w));
     return c;
   }

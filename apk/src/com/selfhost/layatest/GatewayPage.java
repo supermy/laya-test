@@ -35,26 +35,26 @@ class GatewayPage {
     // 三个子页面板,左栏 tab 切换
     LinearLayout pMail = new LinearLayout(m);
     pMail.setOrientation(LinearLayout.VERTICAL);
-    pMail.setPadding(m.dp(12), m.dp(8), m.dp(12), m.dp(8));
+    pMail.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
     LinearLayout l = pMail;
-    l.addView(m.hint(m.getString(R.string.mail_hint)));
-    gwEmailHost = m.fieldU(l, m.getString(R.string.mail_host_hint));
-    gwEmailUser = m.fieldU(l, m.getString(R.string.mail_user_hint));
-    gwEmailPass = m.fieldU(l, m.getString(R.string.mail_pass_hint));
+    l.addView(Ui.hint(m,m.getString(R.string.mail_hint)));
+    gwEmailHost = Ui.fieldU(m,l, m.getString(R.string.mail_host_hint));
+    gwEmailUser = Ui.fieldU(m,l, m.getString(R.string.mail_user_hint));
+    gwEmailPass = Ui.fieldU(m,l, m.getString(R.string.mail_pass_hint));
     LinearLayout pr = new LinearLayout(m);
     pr.setOrientation(LinearLayout.HORIZONTAL);
-    gwImapPort = m.fieldU(pr, m.getString(R.string.imap_port_hint), "143");
-    gwSmtpPort = m.fieldU(pr, m.getString(R.string.smtp_port_hint), "25");
+    gwImapPort = Ui.fieldU(m,pr, m.getString(R.string.imap_port_hint), "143");
+    gwSmtpPort = Ui.fieldU(m,pr, m.getString(R.string.smtp_port_hint), "25");
     LinearLayout.LayoutParams plp1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-    plp1.rightMargin = m.dp(8); gwImapPort.setLayoutParams(plp1);
+    plp1.rightMargin = Ui.dp(m,8); gwImapPort.setLayoutParams(plp1);
     gwSmtpPort.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
     l.addView(pr);
     gwSsl = new CheckBox(m);
     gwSsl.setText(m.getString(R.string.ssl_hint));
-    gwSsl.setTextSize(13); gwSsl.setPadding(0, m.dp(6), 0, m.dp(6));
+    gwSsl.setTextSize(13); gwSsl.setPadding(0, Ui.dp(m,6), 0, Ui.dp(m,6));
     l.addView(gwSsl);
-    gwReportTo = m.fieldU(l, m.getString(R.string.report_to_hint));
-    Button emailBtn = m.button(l, m.getString(R.string.save_start_mail));
+    gwReportTo = Ui.fieldU(m,l, m.getString(R.string.report_to_hint));
+    Button emailBtn = Ui.button(m,l, m.getString(R.string.save_start_mail));
     emailBtn.setOnClickListener(v -> {
       try {
         JSONObject cfg = com.laya.Gateway.cfg(m.getApplicationContext());
@@ -72,7 +72,7 @@ class GatewayPage {
         m.refreshGatewayBar();
       } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
     });
-    Button emailTestBtn = m.button(l, m.getString(R.string.test_imap_btn));
+    Button emailTestBtn = Ui.button(m,l, m.getString(R.string.test_imap_btn));
     emailTestBtn.setOnClickListener(v -> {
       gwStatus.setText(m.getString(R.string.imap_testing));
       new Thread(() -> {
@@ -89,7 +89,7 @@ class GatewayPage {
         m.runOnUiThread(() -> gwStatus.setText(fr));
       }).start();
     });
-    Button smtpTestBtn = m.button(l, m.getString(R.string.test_smtp_btn));
+    Button smtpTestBtn = Ui.button(m,l, m.getString(R.string.test_smtp_btn));
     smtpTestBtn.setOnClickListener(v -> {
       gwStatus.setText(m.getString(R.string.smtp_testing));
       new Thread(() -> {
@@ -109,13 +109,13 @@ class GatewayPage {
     });
     LinearLayout pMq = new LinearLayout(m);
     pMq.setOrientation(LinearLayout.VERTICAL);
-    pMq.setPadding(m.dp(12), m.dp(8), m.dp(12), m.dp(8));
+    pMq.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
     l = pMq;
-    l.addView(m.hint(m.getString(R.string.mqtt_hint)));
-    gwMqUrl = m.fieldU(l, m.getString(R.string.mqtt_url_hint));
-    gwMqSub = m.fieldU(l, m.getString(R.string.mqtt_sub_hint), "laya/req/+");
-    gwMqPub = m.fieldU(l, m.getString(R.string.mqtt_pub_hint), "laya/resp");
-    Button mqBtn = m.button(l, m.getString(R.string.save_start_mqtt));
+    l.addView(Ui.hint(m,m.getString(R.string.mqtt_hint)));
+    gwMqUrl = Ui.fieldU(m,l, m.getString(R.string.mqtt_url_hint));
+    gwMqSub = Ui.fieldU(m,l, m.getString(R.string.mqtt_sub_hint), "laya/req/+");
+    gwMqPub = Ui.fieldU(m,l, m.getString(R.string.mqtt_pub_hint), "laya/resp");
+    Button mqBtn = Ui.button(m,l, m.getString(R.string.save_start_mqtt));
     mqBtn.setOnClickListener(v -> {
       try {
         JSONObject cfg = com.laya.Gateway.cfg(m.getApplicationContext());
@@ -125,7 +125,7 @@ class GatewayPage {
         gwStatus.setText(com.laya.Gateway.saveAndStart(m.getApplicationContext(), cfg));
       } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
     });
-    Button mqTestBtn = m.button(l, m.getString(R.string.test_mqtt_btn));
+    Button mqTestBtn = Ui.button(m,l, m.getString(R.string.test_mqtt_btn));
     mqTestBtn.setOnClickListener(v -> {
       gwStatus.setText(m.getString(R.string.mqtt_testing));
       new Thread(() -> {
@@ -139,8 +139,8 @@ class GatewayPage {
         m.runOnUiThread(() -> gwStatus.setText(fr));
       }).start();
     });
-    l.addView(m.hint(m.getString(R.string.upload_hint, com.laya.Gateway.uploadUrl(), com.laya.Gateway.uploadUrl())));
-    Button upTestBtn = m.button(l, m.getString(R.string.test_upload_btn));
+    l.addView(Ui.hint(m,m.getString(R.string.upload_hint, com.laya.Gateway.uploadUrl(), com.laya.Gateway.uploadUrl())));
+    Button upTestBtn = Ui.button(m,l, m.getString(R.string.test_upload_btn));
     upTestBtn.setOnClickListener(v -> {
       gwStatus.setText(m.getString(R.string.upload_testing));
       new Thread(() -> {
@@ -150,9 +150,9 @@ class GatewayPage {
     });
 
     // ---- 决策 API 服务(HTTP):POST /decide,随网关配置持久化 ----
-    l.addView(m.hint(m.getString(R.string.api_hint)));
+    l.addView(Ui.hint(m,m.getString(R.string.api_hint)));
     final boolean apiOn = com.laya.DecisionApiServer.running();
-    Button apiBtn = m.button(l, m.getString(apiOn ? R.string.api_stop : R.string.api_start));
+    Button apiBtn = Ui.button(m,l, m.getString(apiOn ? R.string.api_stop : R.string.api_start));
     apiBtn.setOnClickListener(v -> {
       boolean next = !com.laya.DecisionApiServer.running();
       try {
@@ -169,9 +169,9 @@ class GatewayPage {
     // ---- LLM 设置(重要+紧急升级通道,3 槽位供可选) ----
     LinearLayout pLlm = new LinearLayout(m);
     pLlm.setOrientation(LinearLayout.VERTICAL);
-    pLlm.setPadding(m.dp(12), m.dp(8), m.dp(12), m.dp(8));
+    pLlm.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
     l = pLlm;
-    l.addView(m.hint(m.getString(R.string.llm_hint)));
+    l.addView(Ui.hint(m,m.getString(R.string.llm_hint)));
     JSONObject llmCfg = com.laya.Gateway.cfg(m).optJSONObject("llm");
     JSONObject llmSlots = llmCfg != null ? llmCfg.optJSONObject("slots") : null;
     String actId = llmCfg != null ? llmCfg.optString("active", "llm1") : "llm1";
@@ -188,33 +188,33 @@ class GatewayPage {
       JSONObject s = llmSlots != null ? llmSlots.optJSONObject(slotIds[i]) : null;
       LinearLayout slot = new LinearLayout(m);
       slot.setOrientation(LinearLayout.VERTICAL);
-      slot.setBackground(m.pill(0xFFF7F8FA, m.dp(10)));
-      slot.setPadding(m.dp(9), m.dp(6), m.dp(9), m.dp(8));
+      slot.setBackground(Ui.pill(0xFFF7F8FA, Ui.dp(m,10)));
+      slot.setPadding(Ui.dp(m,9), Ui.dp(m,6), Ui.dp(m,9), Ui.dp(m,8));
       LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-      slp.bottomMargin = m.dp(8); slot.setLayoutParams(slp);
+      slp.bottomMargin = Ui.dp(m,8); slot.setLayoutParams(slp);
       LinearLayout head = new LinearLayout(m);
       head.setGravity(Gravity.CENTER_VERTICAL);
       llmRb[i] = new RadioButton(m);
       llmRb[i].setText(m.getString(R.string.llm_enable)); llmRb[i].setTextSize(12);
       llmRb[i].setChecked(slotIds[i].equals(actId));
       head.addView(llmRb[i]);
-      llmName[i] = m.fieldU(head, m.getString(R.string.name_hint));
+      llmName[i] = Ui.fieldU(m,head, m.getString(R.string.name_hint));
       JSONObject fs = s;
       String nm = s != null ? s.optString("name", defNames[i]) : defNames[i];
       llmName[i].setText(nm);
       llmName[i].setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
       slot.addView(head);
-      llmUrl[i] = m.fieldU(slot, m.getString(R.string.base_url_hint));
+      llmUrl[i] = Ui.fieldU(m,slot, m.getString(R.string.base_url_hint));
       llmUrl[i].setText(s != null ? s.optString("baseURL", defUrls[i]) : defUrls[i]);
       LinearLayout mr = new LinearLayout(m);
-      llmModel[i] = m.fieldU(mr, "Model");
+      llmModel[i] = Ui.fieldU(m,mr, "Model");
       llmModel[i].setText(s != null ? s.optString("model", defModels[i]) : defModels[i]);
       llmModel[i].setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-      llmKey[i] = m.fieldU(mr, "API Key");
+      llmKey[i] = Ui.fieldU(m,mr, "API Key");
       if (s != null) llmKey[i].setText(s.optString("apiKey", ""));
       llmKey[i].setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
       LinearLayout.LayoutParams mlp0 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-      mlp0.rightMargin = m.dp(8); llmModel[i].setLayoutParams(mlp0);
+      mlp0.rightMargin = Ui.dp(m,8); llmModel[i].setLayoutParams(mlp0);
       slot.addView(mr);
       l.addView(slot);
     }
@@ -224,7 +224,7 @@ class GatewayPage {
       final int k = i;
       llmRb[i].setOnClickListener(v -> { for (int j = 0; j < 3; j++) llmRb[j].setChecked(j == k); });
     }
-    Button llmSave = m.button(l, m.getString(R.string.save_llm));
+    Button llmSave = Ui.button(m,l, m.getString(R.string.save_llm));
     llmSave.setOnClickListener(v -> {
       try {
         JSONObject slots = new JSONObject();
@@ -241,7 +241,7 @@ class GatewayPage {
             new JSONObject().put("active", checked < 0 ? "llm1" : slotIds[checked]).put("slots", slots)));
       } catch (Exception e) { gwStatus.setText(m.getString(R.string.llm_cfg_failed, e.getMessage())); }
     });
-    Button llmTest = m.button(l, m.getString(R.string.test_llm_btn));
+    Button llmTest = Ui.button(m,l, m.getString(R.string.test_llm_btn));
     llmTest.setOnClickListener(v -> {
       try {
         int checked = -1;
@@ -307,7 +307,7 @@ class GatewayPage {
         m.scroller = scrolls[k];
         for (int j = 0; j < 3; j++) {
           gchips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
-          gchips[j].setBackground(m.pill(j == k ? m.PRIMARY : 0xFFE7EAF2, m.dp(12)));
+          gchips[j].setBackground(Ui.pill(j == k ? m.PRIMARY : 0xFFE7EAF2, Ui.dp(m,12)));
         }
       });
       gchips[i] = c;
@@ -315,10 +315,10 @@ class GatewayPage {
     }
     final LinearLayout gLeft = new LinearLayout(m);
     gLeft.setOrientation(LinearLayout.VERTICAL);
-    gLeft.setPadding(m.dp(4), m.dp(4), m.dp(0), m.dp(0));
+    gLeft.setPadding(Ui.dp(m,4), Ui.dp(m,4), Ui.dp(m,0), Ui.dp(m,0));
     gLeft.addView(grail);
-    LinearLayout.LayoutParams glclp = new LinearLayout.LayoutParams(m.dp(40), LinearLayout.LayoutParams.MATCH_PARENT);
-    glclp.rightMargin = m.dp(2);
+    LinearLayout.LayoutParams glclp = new LinearLayout.LayoutParams(Ui.dp(m,40), LinearLayout.LayoutParams.MATCH_PARENT);
+    glclp.rightMargin = Ui.dp(m,2);
     gLeft.setLayoutParams(glclp);
     LinearLayout gTop = new LinearLayout(m);
     gTop.setOrientation(LinearLayout.HORIZONTAL);
@@ -334,14 +334,14 @@ class GatewayPage {
     // 共用底栏:停止 + 状态
     LinearLayout gBottom = new LinearLayout(m);
     gBottom.setOrientation(LinearLayout.VERTICAL);
-    gBottom.setPadding(m.dp(12), m.dp(2), m.dp(12), m.dp(8));
-    Button stopBtn = m.button(gBottom, m.getString(R.string.stop_gw));
+    gBottom.setPadding(Ui.dp(m,12), Ui.dp(m,2), Ui.dp(m,12), Ui.dp(m,8));
+    Button stopBtn = Ui.button(m,gBottom, m.getString(R.string.stop_gw));
     stopBtn.setOnClickListener(v -> gwStatus.setText(com.laya.Gateway.stop(m.getApplicationContext())));
-    gwStatus = m.hint(m.getString(R.string.gateway_bar, com.laya.Gateway.status(m)));
+    gwStatus = Ui.hint(m,m.getString(R.string.gateway_bar, com.laya.Gateway.status(m)));
     gBottom.addView(gwStatus);
     m.body.addView(gBottom);
     // 初始高亮
     gchips[0].setTextColor(Color.WHITE);
-    gchips[0].setBackground(m.pill(m.PRIMARY, m.dp(12)));
+    gchips[0].setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,12)));
   }
 }

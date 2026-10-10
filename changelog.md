@@ -277,3 +277,9 @@
 - `railChip`(左栏整词旋转 90° chip)从 MainActivity 抽出为独立 `RailChip.java`(静态工厂 `RailChip.make(m, c)`),决策/报表/网关/系统四页 rail 统一引用
 - MainActivity 瘦身至 ~404 行,职责更纯:chrome + 页面编排
 - 回归:冒烟 10/10、levelOf 单测 ALL PASS
+
+## 2026-10-10 — v1.4.14:UI helper 抽成 Ui 工具类
+
+- `dp`/`pill`/`button`/`fieldU`/`field`/`hint` 从 MainActivity 抽成静态工具类 `Ui.java`(Context 由调用方传入)
+- 全部调用点改写:四 Page(282 处)+ MainActivity 自身(裸调用)+ RailChip;MainActivity 瘦身至 **372 行**
+- 回归:冒烟 10/10、levelOf 单测 ALL PASS

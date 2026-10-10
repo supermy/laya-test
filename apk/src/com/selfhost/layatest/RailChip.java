@@ -12,14 +12,14 @@ final class RailChip {
 
   /** 把按钮 c 包进旋转 90° 的定尺寸 slot 并返回 slot(调用方 addView 进 rail) */
   static FrameLayout make(MainActivity m, Button c) {
-    int visW = m.dp(40);
-    int visH = (int) c.getPaint().measureText(c.getText().toString()) + m.dp(28);
+    int visW = Ui.dp(m,40);
+    int visH = (int) c.getPaint().measureText(c.getText().toString()) + Ui.dp(m,28);
     c.setRotation(90);
-    c.setPadding(0, m.dp(10), 0, m.dp(10));
+    c.setPadding(0, Ui.dp(m,10), 0, Ui.dp(m,10));
     FrameLayout slot = new FrameLayout(m);
     slot.addView(c, new FrameLayout.LayoutParams(visH, visW, Gravity.CENTER));
     LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(visW, visH);
-    slp.bottomMargin = m.dp(6);
+    slp.bottomMargin = Ui.dp(m,6);
     slot.setLayoutParams(slp);
     return slot;
   }

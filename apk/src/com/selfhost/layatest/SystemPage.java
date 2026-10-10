@@ -61,15 +61,15 @@ class SystemPage {
     m.refreshTasks();
     LinearLayout l = new LinearLayout(m);
     l.setOrientation(LinearLayout.VERTICAL);
-    l.setPadding(m.dp(12), m.dp(8), m.dp(12), m.dp(8));
+    l.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
 
     // ---- 语言 / Language(应用内切换,立即生效) ----
     LinearLayout langRow = new LinearLayout(m);
     langRow.setOrientation(LinearLayout.VERTICAL);
-    langRow.setBackground(m.pill(0xFFF0F4FF, m.dp(10)));
-    langRow.setPadding(m.dp(10), m.dp(8), m.dp(10), m.dp(8));
+    langRow.setBackground(Ui.pill(0xFFF0F4FF, Ui.dp(m,10)));
+    langRow.setPadding(Ui.dp(m,10), Ui.dp(m,8), Ui.dp(m,10), Ui.dp(m,8));
     LinearLayout.LayoutParams langLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    langLp.bottomMargin = m.dp(10);
+    langLp.bottomMargin = Ui.dp(m,10);
     langRow.setLayoutParams(langLp);
     TextView langHead = new TextView(m);
     langHead.setText(m.getString(R.string.lang_label)); langHead.setTextSize(14); langHead.setTypeface(Typeface.DEFAULT_BOLD);
@@ -77,7 +77,7 @@ class SystemPage {
     LinearLayout langBtns = new LinearLayout(m);
     langBtns.setOrientation(LinearLayout.HORIZONTAL);
     LinearLayout.LayoutParams btnsLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    btnsLp.topMargin = m.dp(4);
+    btnsLp.topMargin = Ui.dp(m,4);
     langBtns.setLayoutParams(btnsLp);
     String curLoc = m.uiLocale();
     String[] locIds = {"sys", "zh", "en"};
@@ -87,12 +87,12 @@ class SystemPage {
       b.setText("sys".equals(id) ? m.getString(R.string.lang_follow) : "zh".equals(id) ? m.getString(R.string.lang_zh) : m.getString(R.string.lang_en));
       b.setAllCaps(false); b.setTextSize(12);
       b.setMinHeight(0); b.setMinimumWidth(0); b.setMinimumHeight(0);
-      b.setPadding(m.dp(12), m.dp(6), m.dp(12), m.dp(6));
+      b.setPadding(Ui.dp(m,12), Ui.dp(m,6), Ui.dp(m,12), Ui.dp(m,6));
       boolean on = id.equals(curLoc);
       b.setTextColor(on ? Color.WHITE : 0xFF1A2B4C);
-      b.setBackground(m.pill(on ? m.PRIMARY : 0xFFE7EAF2, m.dp(14)));
+      b.setBackground(Ui.pill(on ? m.PRIMARY : 0xFFE7EAF2, Ui.dp(m,14)));
       LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-      blp.leftMargin = m.dp(8);
+      blp.leftMargin = Ui.dp(m,8);
       b.setLayoutParams(blp);
       b.setOnClickListener(v -> {
         if (!fid.equals(m.uiLocale())) {
@@ -108,16 +108,16 @@ class SystemPage {
     // ---- 手动上传模型包输入界面 ----
     LinearLayout up = new LinearLayout(m);
     up.setOrientation(LinearLayout.VERTICAL);
-    up.setBackground(m.pill(0xFFF0F4FF, m.dp(10)));
-    up.setPadding(m.dp(10), m.dp(8), m.dp(10), m.dp(10));
+    up.setBackground(Ui.pill(0xFFF0F4FF, Ui.dp(m,10)));
+    up.setPadding(Ui.dp(m,10), Ui.dp(m,8), Ui.dp(m,10), Ui.dp(m,10));
     LinearLayout.LayoutParams ulp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    ulp.bottomMargin = m.dp(10);
+    ulp.bottomMargin = Ui.dp(m,10);
     up.setLayoutParams(ulp);
     TextView upHead = new TextView(m);
     upHead.setText(m.getString(R.string.upload_head)); upHead.setTextSize(14); upHead.setTypeface(Typeface.DEFAULT_BOLD);
     up.addView(upHead);
-    upSrc = m.fieldU(up, m.getString(R.string.pkg_path_hint));
-    Button pickBtn = m.button(up, m.getString(R.string.pick_zip));
+    upSrc = Ui.fieldU(m,up, m.getString(R.string.pkg_path_hint));
+    Button pickBtn = Ui.button(m,up, m.getString(R.string.pick_zip));
     pickBtn.setOnClickListener(v -> {
       Intent it = new Intent(Intent.ACTION_OPEN_DOCUMENT);
       it.addCategory(Intent.CATEGORY_OPENABLE);
@@ -125,12 +125,12 @@ class SystemPage {
       it.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream"});
       m.startActivityForResult(it, MainActivity.REQ_PICK_ZIP);
     });
-    upTask = m.fieldU(up, m.getString(R.string.task_name_hint));
+    upTask = Ui.fieldU(m,up, m.getString(R.string.task_name_hint));
     upStatus = new TextView(m);
     upStatus.setTextSize(11); upStatus.setTextColor(0xFF66707E);
     upStatus.setText(m.getString(R.string.upload_note));
     up.addView(upStatus);
-    Button impBtn = m.button(up, m.getString(R.string.upload_register));
+    Button impBtn = Ui.button(m,up, m.getString(R.string.upload_register));
     impBtn.setOnClickListener(v -> {
       String src = upSrc.getText().toString().trim();
       String task = upTask.getText().toString().trim();
@@ -150,9 +150,9 @@ class SystemPage {
     });
     l.addView(up);
 
-    Button rescan = m.button(l, m.getString(R.string.rescan));
+    Button rescan = Ui.button(m,l, m.getString(R.string.rescan));
     rescan.setOnClickListener(v -> rebuildBizList());
-    l.addView(m.hint(m.getString(R.string.biz_list_hint)));
+    l.addView(Ui.hint(m,m.getString(R.string.biz_list_hint)));
     bizListPanel = new LinearLayout(m);
     bizListPanel.setOrientation(LinearLayout.VERTICAL);
     l.addView(bizListPanel);
@@ -171,20 +171,20 @@ class SystemPage {
     // 泳道数据流独立成「数据流」子页(fig5 同构:一次决策请求的端到端路径)
     LinearLayout p3 = new LinearLayout(m);
     p3.setOrientation(LinearLayout.VERTICAL);
-    p3.setPadding(m.dp(12), m.dp(8), m.dp(12), m.dp(8));
-    p3.addView(m.hint(m.getString(R.string.flow_hint_data)));
+    p3.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
+    p3.addView(Ui.hint(m,m.getString(R.string.flow_hint_data)));
     p3.addView(new DiagramView(m, 1));
 
     // ---- 子标签页:左侧竖排(系统/架构图/流程图/数据流)+ 显隐开关 ----
     LinearLayout p1 = new LinearLayout(m);
     p1.setOrientation(LinearLayout.VERTICAL);
-    p1.setPadding(m.dp(12), m.dp(8), m.dp(12), m.dp(8));
-    p1.addView(m.hint(m.getString(R.string.flow_hint_arch)));
+    p1.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
+    p1.addView(Ui.hint(m,m.getString(R.string.flow_hint_arch)));
     p1.addView(new DiagramView(m, 0));
     LinearLayout p2 = new LinearLayout(m);
     p2.setOrientation(LinearLayout.VERTICAL);
-    p2.setPadding(m.dp(12), m.dp(8), m.dp(12), m.dp(8));
-    p2.addView(m.hint(m.getString(R.string.flow_hint_proc)));
+    p2.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
+    p2.addView(Ui.hint(m,m.getString(R.string.flow_hint_proc)));
     p2.addView(new DiagramView(m, 3));
 
     String[] subNames = {m.getString(R.string.sub_sys), m.getString(R.string.sub_arch), m.getString(R.string.sub_flow), m.getString(R.string.sub_data)};
@@ -210,7 +210,7 @@ class SystemPage {
         m.scroller = subScrolls[k];
         for (int j = 0; j < 4; j++) {
           chips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
-          chips[j].setBackground(m.pill(j == k ? m.PRIMARY : 0xFFE7EAF2, m.dp(12)));
+          chips[j].setBackground(Ui.pill(j == k ? m.PRIMARY : 0xFFE7EAF2, Ui.dp(m,12)));
         }
       });
       chips[i] = c;
@@ -218,12 +218,12 @@ class SystemPage {
     }
     final LinearLayout leftCol = new LinearLayout(m);
     leftCol.setOrientation(LinearLayout.VERTICAL);
-    leftCol.setPadding(m.dp(4), m.dp(4), m.dp(0), m.dp(0));
+    leftCol.setPadding(Ui.dp(m,4), Ui.dp(m,4), Ui.dp(m,0), Ui.dp(m,0));
     ScrollView railScroll = new ScrollView(m);
     railScroll.addView(rail); // 左侧 tab 菜单可上下滑动(小屏防截断)
     leftCol.addView(railScroll);
-    LinearLayout.LayoutParams lclp = new LinearLayout.LayoutParams(m.dp(40), LinearLayout.LayoutParams.MATCH_PARENT);
-    lclp.rightMargin = m.dp(2);
+    LinearLayout.LayoutParams lclp = new LinearLayout.LayoutParams(Ui.dp(m,40), LinearLayout.LayoutParams.MATCH_PARENT);
+    lclp.rightMargin = Ui.dp(m,2);
     leftCol.setLayoutParams(lclp);
     // 显隐开关在标题栏左侧(☰),点击收起/展开左栏
     m.menuBtn.setOnClickListener(v -> {
@@ -249,10 +249,10 @@ class SystemPage {
 
     LinearLayout card = new LinearLayout(m);
     card.setOrientation(LinearLayout.VERTICAL);
-    card.setBackground(m.pill(loaded ? 0xFFEAF3FF : 0xFFF7F8FA, m.dp(10)));
-    card.setPadding(m.dp(10), m.dp(8), m.dp(10), m.dp(10));
+    card.setBackground(Ui.pill(loaded ? 0xFFEAF3FF : 0xFFF7F8FA, Ui.dp(m,10)));
+    card.setPadding(Ui.dp(m,10), Ui.dp(m,8), Ui.dp(m,10), Ui.dp(m,10));
     LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    clp.bottomMargin = m.dp(8);
+    clp.bottomMargin = Ui.dp(m,8);
     card.setLayoutParams(clp);
 
     TextView head = new TextView(m);
@@ -262,7 +262,7 @@ class SystemPage {
     TextView st = new TextView(m);
     st.setText(m.getString(loaded ? R.string.loaded_state : R.string.not_loaded_state));
     st.setTextSize(11); st.setTextColor(0xFF66707E);
-    st.setPadding(0, m.dp(2), 0, m.dp(4));
+    st.setPadding(0, Ui.dp(m,2), 0, Ui.dp(m,4));
     card.addView(st);
 
     // 单按钮动态切换:未加载=加载(装入 app);已加载=卸载(释放空间)
@@ -270,8 +270,8 @@ class SystemPage {
     toggle.setText(m.getString(loaded ? R.string.uninstall : R.string.load_btn));
     toggle.setAllCaps(false); toggle.setTextSize(12);
     toggle.setTextColor(loaded ? 0xFF444A55 : Color.WHITE);
-    toggle.setBackground(m.pill(loaded ? m.CHIP_OFF : m.PRIMARY, m.dp(14)));
-    toggle.setPadding(m.dp(8), m.dp(6), m.dp(8), m.dp(6));
+    toggle.setBackground(Ui.pill(loaded ? m.CHIP_OFF : m.PRIMARY, Ui.dp(m,14)));
+    toggle.setPadding(Ui.dp(m,8), Ui.dp(m,6), Ui.dp(m,8), Ui.dp(m,6));
     toggle.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
     toggle.setOnClickListener(v -> {
       if (loaded) {
@@ -292,25 +292,25 @@ class SystemPage {
     row2.setOrientation(LinearLayout.HORIZONTAL);
     Button detailBtn = new Button(m);
     detailBtn.setText(m.getString(R.string.detail_btn)); detailBtn.setAllCaps(false); detailBtn.setTextSize(12);
-    detailBtn.setTextColor(0xFF444A55); detailBtn.setBackground(m.pill(m.CHIP_OFF, m.dp(14)));
-    detailBtn.setPadding(m.dp(4), m.dp(6), m.dp(4), m.dp(6));
+    detailBtn.setTextColor(0xFF444A55); detailBtn.setBackground(Ui.pill(m.CHIP_OFF, Ui.dp(m,14)));
+    detailBtn.setPadding(Ui.dp(m,4), Ui.dp(m,6), Ui.dp(m,4), Ui.dp(m,6));
     Button expBtn = new Button(m);
     expBtn.setText(m.getString(R.string.export_zip)); expBtn.setAllCaps(false); expBtn.setTextSize(12);
-    expBtn.setTextColor(0xFF444A55); expBtn.setBackground(m.pill(m.CHIP_OFF, m.dp(14)));
-    expBtn.setPadding(m.dp(4), m.dp(6), m.dp(4), m.dp(6));
+    expBtn.setTextColor(0xFF444A55); expBtn.setBackground(Ui.pill(m.CHIP_OFF, Ui.dp(m,14)));
+    expBtn.setPadding(Ui.dp(m,4), Ui.dp(m,6), Ui.dp(m,4), Ui.dp(m,6));
     Button delBtn = new Button(m);
     delBtn.setText(m.getString(R.string.delete_biz)); delBtn.setAllCaps(false); delBtn.setTextSize(12);
-    delBtn.setTextColor(0xFFB3261E); delBtn.setBackground(m.pill(0xFFFCEAEA, m.dp(14)));
-    delBtn.setPadding(m.dp(4), m.dp(6), m.dp(4), m.dp(6));
+    delBtn.setTextColor(0xFFB3261E); delBtn.setBackground(Ui.pill(0xFFFCEAEA, Ui.dp(m,14)));
+    delBtn.setPadding(Ui.dp(m,4), Ui.dp(m,6), Ui.dp(m,4), Ui.dp(m,6));
     LinearLayout.LayoutParams half1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-    half1.rightMargin = m.dp(6);
+    half1.rightMargin = Ui.dp(m,6);
     detailBtn.setLayoutParams(half1);
     LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-    half2.rightMargin = m.dp(6);
+    half2.rightMargin = Ui.dp(m,6);
     expBtn.setLayoutParams(half2);
     delBtn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
     row2.addView(detailBtn); row2.addView(expBtn); row2.addView(delBtn);
-    row2.setPadding(0, m.dp(6), 0, 0);
+    row2.setPadding(0, Ui.dp(m,6), 0, 0);
     card.addView(row2);
 
     TextView detail = new TextView(m);
@@ -318,8 +318,8 @@ class SystemPage {
     detail.setTextSize(9);
     detail.setTypeface(Typeface.MONOSPACE);
     detail.setTextColor(0xFF444A55);
-    detail.setBackground(m.pill(0xFFFFFFFF, m.dp(8)));
-    detail.setPadding(m.dp(8), m.dp(6), m.dp(8), m.dp(6));
+    detail.setBackground(Ui.pill(0xFFFFFFFF, Ui.dp(m,8)));
+    detail.setPadding(Ui.dp(m,8), Ui.dp(m,6), Ui.dp(m,8), Ui.dp(m,6));
     detail.setVisibility(View.GONE);
     detail.setOnClickListener(v -> detail.setVisibility(View.GONE));
     card.addView(detail);

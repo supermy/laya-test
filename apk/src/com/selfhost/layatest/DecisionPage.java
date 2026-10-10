@@ -29,12 +29,12 @@ class DecisionPage {
     TextView tv = new TextView(m);
     tv.setText(text); tv.setTextSize(14);
     tv.setTextColor(user ? 0xFF1A2B4C : 0xFF22262E);
-    tv.setMaxWidth(m.dp(280));
-    tv.setBackground(m.pill(user ? m.USER_BG : m.BOT_BG, m.dp(8)));
-    tv.setPadding(m.dp(13), m.dp(9), m.dp(13), m.dp(9));
+    tv.setMaxWidth(Ui.dp(m,280));
+    tv.setBackground(Ui.pill(user ? m.USER_BG : m.BOT_BG, Ui.dp(m,8)));
+    tv.setPadding(Ui.dp(m,13), Ui.dp(m,9), Ui.dp(m,13), Ui.dp(m,9));
     LinearLayout row = new LinearLayout(m);
     row.setGravity(user ? Gravity.END : Gravity.START);
-    row.setPadding(0, m.dp(4), 0, m.dp(4));
+    row.setPadding(0, Ui.dp(m,4), 0, Ui.dp(m,4));
     row.addView(tv);
     msgList.addView(row);
     m.scroller.post(() -> m.scroller.fullScroll(View.FOCUS_DOWN));
@@ -46,11 +46,11 @@ class DecisionPage {
   void build() {
     // 顶部当前业务提示(业务切换由左侧竖排 tab 完成,标题栏 ☰ 控制左栏显隐,与报表页一致)
     LinearLayout row = new LinearLayout(m);
-    row.setPadding(m.dp(12), m.dp(8), m.dp(12), m.dp(4));
+    row.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,4));
     row.setGravity(Gravity.CENTER_VERTICAL);
     curBizLabel = new TextView(m);
     curBizLabel.setTextSize(12); curBizLabel.setTextColor(0xFF66707E);
-    curBizLabel.setPadding(m.dp(2), 0, 0, 0);
+    curBizLabel.setPadding(Ui.dp(m,2), 0, 0, 0);
     row.addView(curBizLabel);
     m.body.addView(row);
     paintChips();
@@ -58,7 +58,7 @@ class DecisionPage {
     // 左侧业务 tab 菜单(竖排,可上下滑动):点 chip 切业务并载入该业务历史
     final LinearLayout rail = new LinearLayout(m);
     rail.setOrientation(LinearLayout.VERTICAL);
-    rail.setPadding(m.dp(2), m.dp(2), m.dp(2), m.dp(2));
+    rail.setPadding(Ui.dp(m,2), Ui.dp(m,2), Ui.dp(m,2), Ui.dp(m,2));
     final Button[] bizChips = new Button[m.taskIds.size()];
     for (int i = 0; i < m.taskIds.size(); i++) {
       final int k = i;
@@ -67,33 +67,33 @@ class DecisionPage {
       String name = m.taskIds.get(i);
       c.setText(name); c.setAllCaps(false); c.setTextSize(12);
       c.setMinHeight(0); c.setMinimumWidth(0); c.setMinimumHeight(0);
-      c.setPadding(0, m.dp(10), 0, m.dp(10)); // 旋转后成为左右内边距
+      c.setPadding(0, Ui.dp(m,10), 0, Ui.dp(m,10)); // 旋转后成为左右内边距
       c.setTextColor(k == m.taskIdx ? Color.WHITE : 0xFF1A2B4C);
-      c.setBackground(m.pill(k == m.taskIdx ? m.PRIMARY : 0xFFE7EAF2, m.dp(10)));
-      int visW = m.dp(40);                                  // 旋转后视觉宽 = 按钮自身高
-      int visH = (int) c.getPaint().measureText(name) + m.dp(28); // 旋转后视觉高 = 按钮自身宽
+      c.setBackground(Ui.pill(k == m.taskIdx ? m.PRIMARY : 0xFFE7EAF2, Ui.dp(m,10)));
+      int visW = Ui.dp(m,40);                                  // 旋转后视觉宽 = 按钮自身高
+      int visH = (int) c.getPaint().measureText(name) + Ui.dp(m,28); // 旋转后视觉高 = 按钮自身宽
       c.setRotation(90);
       FrameLayout slot = new FrameLayout(m);
       slot.addView(c, new FrameLayout.LayoutParams(visH, visW, Gravity.CENTER));
       LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(visW, visH);
-      slp.bottomMargin = m.dp(6);
+      slp.bottomMargin = Ui.dp(m,6);
       c.setOnClickListener(v -> {
         m.taskIdx = k; paintChips(); loadHistory(m.taskIds.get(k));
         for (int j = 0; j < bizChips.length; j++) {
           bizChips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
-          bizChips[j].setBackground(m.pill(j == k ? m.PRIMARY : 0xFFE7EAF2, m.dp(10)));
+          bizChips[j].setBackground(Ui.pill(j == k ? m.PRIMARY : 0xFFE7EAF2, Ui.dp(m,10)));
         }
       });
       bizChips[i] = c; rail.addView(slot, slp);
     }
     final LinearLayout leftCol = new LinearLayout(m);
     leftCol.setOrientation(LinearLayout.VERTICAL);
-    leftCol.setPadding(m.dp(4), m.dp(4), m.dp(0), m.dp(0));
+    leftCol.setPadding(Ui.dp(m,4), Ui.dp(m,4), Ui.dp(m,0), Ui.dp(m,0));
     ScrollView railScroll = new ScrollView(m);
     railScroll.addView(rail); // 业务 tab 菜单可上下滑动
     leftCol.addView(railScroll);
-    LinearLayout.LayoutParams lclp = new LinearLayout.LayoutParams(m.dp(64), LinearLayout.LayoutParams.MATCH_PARENT);
-    lclp.rightMargin = m.dp(2);
+    LinearLayout.LayoutParams lclp = new LinearLayout.LayoutParams(Ui.dp(m,64), LinearLayout.LayoutParams.MATCH_PARENT);
+    lclp.rightMargin = Ui.dp(m,2);
     leftCol.setLayoutParams(lclp);
     leftCol.setVisibility(railHidden ? View.GONE : View.VISIBLE);
 
@@ -108,7 +108,7 @@ class DecisionPage {
 
     msgList = new LinearLayout(m);
     msgList.setOrientation(LinearLayout.VERTICAL);
-    msgList.setPadding(m.dp(12), m.dp(6), m.dp(12), m.dp(6));
+    msgList.setPadding(Ui.dp(m,12), Ui.dp(m,6), Ui.dp(m,12), Ui.dp(m,6));
     m.scroller = new ScrollView(m);
     m.scroller.addView(msgList);
     chatCol.addView(m.scroller, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -118,18 +118,18 @@ class DecisionPage {
     LinearLayout bottom = new LinearLayout(m);
     bottom.setOrientation(LinearLayout.HORIZONTAL);
     bottom.setGravity(Gravity.CENTER_VERTICAL);
-    bottom.setPadding(m.dp(12), m.dp(8), m.dp(12), m.dp(8));
+    bottom.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
     bottom.setBackgroundColor(Color.WHITE);
     input = new EditText(m);
     input.setHint(m.getString(R.string.input_hint, m.taskLabels.get(m.taskIdx))); input.setTextSize(14); input.setMaxLines(3);
-    input.setBackground(m.pill(Color.WHITE, m.dp(22)));
-    input.setPadding(m.dp(14), m.dp(10), m.dp(14), m.dp(10));
+    input.setBackground(Ui.pill(Color.WHITE, Ui.dp(m,22)));
+    input.setPadding(Ui.dp(m,14), Ui.dp(m,10), Ui.dp(m,14), Ui.dp(m,10));
     bottom.addView(input, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
     Button send = new Button(m);
     send.setText(m.getString(R.string.btn_decide)); send.setTextColor(Color.WHITE); send.setAllCaps(false);
-    send.setBackground(m.pill(m.PRIMARY, m.dp(22)));
+    send.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,22)));
     LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    slp.leftMargin = m.dp(8); send.setLayoutParams(slp);
+    slp.leftMargin = Ui.dp(m,8); send.setLayoutParams(slp);
     send.setOnClickListener(v -> sendDecision(input.getText().toString()));
     bottom.addView(send);
     chatCol.addView(bottom);

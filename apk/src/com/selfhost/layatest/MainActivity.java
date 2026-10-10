@@ -6,7 +6,6 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
@@ -145,8 +144,6 @@ public class MainActivity extends Activity {
     if (text != null && !text.isEmpty()) decisionPage.sendDecision(text);
   }
 
-  int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
-  GradientDrawable pill(int c, float r) { GradientDrawable g = new GradientDrawable(); g.setColor(c); g.setCornerRadius(r); return g; }
 
   private void buildUi() {
     LinearLayout root = new LinearLayout(this);
@@ -156,7 +153,7 @@ public class MainActivity extends Activity {
     // ---- 标题栏(仿微信:浅灰底、居中标题、左侧☰菜单按钮、底部分隔线) ----
     menuBtn = new Button(this);
     menuBtn.setText("☰"); menuBtn.setAllCaps(false); menuBtn.setTextSize(18);
-    menuBtn.setPadding(dp(12), dp(2), dp(12), dp(2));
+    menuBtn.setPadding(Ui.dp(this, 12), Ui.dp(this, 2), Ui.dp(this, 12), Ui.dp(this, 2));
     menuBtn.setMinHeight(0); menuBtn.setMinimumHeight(0);
     menuBtn.setMinWidth(0); menuBtn.setMinimumWidth(0);
     menuBtn.setTextColor(0xFF1A1A1A);
@@ -170,17 +167,17 @@ public class MainActivity extends Activity {
     title.setText(getString(R.string.app_title));
     title.setTextSize(17); title.setTypeface(Typeface.DEFAULT_BOLD); title.setGravity(Gravity.CENTER);
     title.setTextColor(0xFF1A1A1A);
-    title.setPadding(0, dp(10), 0, dp(10));
+    title.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 10));
     titleHolder.addView(title);
     titleHolder.addView(menuBtn);
     // 标题右侧语言切换按钮:点击循环 跟随系统→中文→English(与系统页选择器同一记忆键)
     langBtn = new TextView(this);
     langBtn.setTextSize(13); langBtn.setTypeface(Typeface.DEFAULT_BOLD);
     langBtn.setTextColor(0xFF1A2B4C);
-    langBtn.setBackground(pill(0xFFE7EAF2, dp(12)));
-    langBtn.setPadding(dp(10), dp(5), dp(10), dp(5));
+    langBtn.setBackground(Ui.pill(0xFFE7EAF2, Ui.dp(this, 12)));
+    langBtn.setPadding(Ui.dp(this, 10), Ui.dp(this, 5), Ui.dp(this, 10), Ui.dp(this, 5));
     FrameLayout.LayoutParams llblp = new FrameLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, Gravity.END | Gravity.CENTER_VERTICAL);
-    llblp.rightMargin = dp(10); llblp.topMargin = dp(6);
+    llblp.rightMargin = Ui.dp(this, 10); llblp.topMargin = Ui.dp(this, 6);
     langBtn.setLayoutParams(llblp);
     paintLangBtn();
     langBtn.setOnClickListener(v -> {
@@ -193,7 +190,7 @@ public class MainActivity extends Activity {
     titleBar.addView(titleHolder);
     View titleDiv = new View(this);
     titleDiv.setBackgroundColor(0xFFE0E0E0);
-    titleBar.addView(titleDiv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)));
+    titleBar.addView(titleDiv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 1)));
     root.addView(titleBar);
 
 
@@ -208,16 +205,16 @@ public class MainActivity extends Activity {
     LinearLayout bar = new LinearLayout(this);
     bar.setOrientation(LinearLayout.HORIZONTAL);
     bar.setBackgroundColor(Color.WHITE);
-    bar.setPadding(dp(4), dp(6), dp(4), dp(10));
+    bar.setPadding(Ui.dp(this, 4), Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 10));
     View topDiv = new View(this);
     topDiv.setBackgroundColor(0xFFE5E5E5);
-    root.addView(topDiv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)));
+    root.addView(topDiv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 1)));
     String[] names = {getString(R.string.tab_decision), getString(R.string.tab_report), getString(R.string.tab_gateway), getString(R.string.tab_system)};
     for (int i = 0; i < 4; i++) {
       final int k = i;
       TextView t = new TextView(this);
       t.setText(names[i]); t.setTextSize(13); t.setGravity(Gravity.CENTER);
-      t.setPadding(0, dp(8), 0, dp(8));
+      t.setPadding(0, Ui.dp(this, 8), 0, Ui.dp(this, 8));
       t.setOnClickListener(v -> setTab(k));
       t.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
       tabBtns[i] = t; bar.addView(t);
@@ -260,8 +257,8 @@ public class MainActivity extends Activity {
       TextView tb = tabBtns[i];
       tb.setTextColor(on ? WX_GREEN : 0xFF7F7F7F);
       tb.setTypeface(on ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
-      tb.setBackground(pill(on ? 0xFFE3F7EC : Color.TRANSPARENT, dp(18)));
-      tb.setPadding(0, on ? dp(9) : dp(9), 0, on ? dp(9) : dp(9));
+      tb.setBackground(Ui.pill(on ? 0xFFE3F7EC : Color.TRANSPARENT, Ui.dp(this, 18)));
+      tb.setPadding(0, on ? Ui.dp(this, 9) : Ui.dp(this, 9), 0, on ? Ui.dp(this, 9) : Ui.dp(this, 9));
     }
     body.removeAllViews();
     if (k == 0) decisionPage.build();
@@ -281,43 +278,14 @@ public class MainActivity extends Activity {
 
 
 
-  /** 下划线输入框(网关页):不带 pill 背景,走系统默认下划线 */
-  EditText fieldU(LinearLayout parent, String hint) { return fieldU(parent, hint, ""); }
-  EditText fieldU(LinearLayout parent, String hint, String text) {
-    EditText e = new EditText(this);
-    e.setHint(hint); e.setTextSize(13); e.setText(text); e.setSingleLine(true);
-    e.setPadding(dp(4), dp(10), dp(4), dp(10));
-    parent.addView(e, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-    return e;
-  }
+
   private static int parsePort(String s, int def) {
     try { int v = Integer.parseInt(s.trim()); return (v > 0 && v < 65536) ? v : def; } catch (Exception e) { return def; }
   }
 
-  TextView hint(String s) {
-    TextView t = new TextView(this);
-    t.setText(s); t.setTextSize(12); t.setTextColor(0xFF666C77); t.setPadding(0, dp(8), 0, dp(4));
-    return t;
-  }
-  EditText field(LinearLayout parent, String hint) { return field(parent, hint, ""); }
-  EditText field(LinearLayout parent, String hint, String text) {
-    EditText e = new EditText(this);
-    e.setHint(hint); e.setTextSize(13); e.setText(text); e.setSingleLine(true);
-    e.setBackground(pill(Color.WHITE, dp(10)));
-    e.setPadding(dp(10), dp(8), dp(10), dp(8));
-    parent.addView(e, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-    return e;
-  }
-  Button button(LinearLayout parent, String label) {
-    Button b = new Button(this);
-    b.setText(label); b.setAllCaps(false); b.setTextColor(Color.WHITE); b.setTextSize(13);
-    b.setBackground(pill(PRIMARY, dp(16)));
-    b.setPadding(dp(14), dp(8), dp(14), dp(8));
-    LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    blp.bottomMargin = dp(8); // 相邻按钮隔开
-    parent.addView(b, blp);
-    return b;
-  }
+
+
+
 
 
   // ---- 模型详情:八文件清单 + 大小 + 齐全度(主图 NPU/GPU 二选一,scorer.bin 仅 NPU 用) ----
