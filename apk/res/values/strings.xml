@@ -242,4 +242,8 @@
     <string name="llm_failed_prefix">失败: %1$s</string>
     <string name="report_header_fmt">== %1$s(共 %2$d 条决策)==</string>
     <string name="report_group_fmt">【%1$s】%2$d 条,平均 %3$dms</string>
+    <string name="api_running">决策 API %1$s</string>
+    <string name="api_start">启动决策 API</string>
+    <string name="api_stop">停止决策 API</string>
+    <string name="api_hint">决策 API 服务(HTTP,端口 8790):POST /decide,body {\"task\":\"ticket\",\"text\":\"…\"} → 决策 JSON;GET /health 查状态。随网关启停,配置持久化。</string>
 </resources>

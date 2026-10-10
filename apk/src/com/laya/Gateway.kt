@@ -49,6 +49,12 @@ object Gateway {
   fun cfg(ctx: Context): JSONObject =
     JSONObject(ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString("cfg", "{}") ?: "{}")
 
+  /** 仅保存配置(不启停);供 UI 细粒度开关使用 */
+  @JvmStatic
+  fun saveCfg(ctx: Context, cfg: JSONObject) {
+    ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString("cfg", cfg.toString()).apply()
+  }
+
   @JvmStatic
   fun saveAndStart(ctx: Context, cfg: JSONObject): String {
     cfg.put("enabled", true)
@@ -66,6 +72,7 @@ object Gateway {
     try { mqtt?.disconnect() } catch (_: Exception) {}
     mqtt = null; mqttRunning = false
     UploadServer.stopServer()
+    DecisionApiServer.stopServer()
     ctx.stopService(Intent(ctx, GatewayService::class.java))
     return ctx.getString(com.selfhost.layatest.R.string.gw_stopped)
   }
@@ -97,6 +104,7 @@ object Gateway {
     if (c.optJSONObject("email")?.optBoolean("enabled") == true) parts.add(ctx.getString(com.selfhost.layatest.R.string.mail_running))
     if (c.optJSONObject("mqtt")?.optBoolean("enabled") == true) parts.add(ctx.getString(com.selfhost.layatest.R.string.mqtt_connected, c.optJSONObject("mqtt")?.optString("url")))
     if (UploadServer.running()) parts.add(ctx.getString(com.selfhost.layatest.R.string.upload_running, UploadServer.url()))
+    if (DecisionApiServer.running()) parts.add(ctx.getString(com.selfhost.layatest.R.string.api_running, DecisionApiServer.url()))
     return if (parts.isEmpty()) ctx.getString(com.selfhost.layatest.R.string.gw_enabled_no_ch) else parts.joinToString(";")
   }
 
@@ -110,6 +118,8 @@ object Gateway {
   fun start(ctx: Context) {
     UploadServer.start(ctx) // 上传服务随网关常驻(局域网页面/接口)
     val c = cfg(ctx)
+    val api = c.optJSONObject("api")
+    if (api?.optBoolean("enabled") == true) DecisionApiServer.start(ctx, api.optInt("port", DecisionApiServer.PORT))
     val email = c.optJSONObject("email")
     if (email?.optBoolean("enabled") == true && !emailRunning) startEmail(ctx, email, c.optJSONObject("report"))
     val mq = c.optJSONObject("mqtt")

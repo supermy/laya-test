@@ -997,6 +997,23 @@ public class MainActivity extends Activity {
       }).start();
     });
 
+    // ---- 决策 API 服务(HTTP):POST /decide,随网关配置持久化 ----
+    l.addView(hint(getString(R.string.api_hint)));
+    final boolean apiOn = com.laya.DecisionApiServer.running();
+    Button apiBtn = button(l, getString(apiOn ? R.string.api_stop : R.string.api_start));
+    apiBtn.setOnClickListener(v -> {
+      boolean next = !com.laya.DecisionApiServer.running();
+      try {
+        JSONObject cfg = com.laya.Gateway.cfg(getApplicationContext());
+        cfg.put("api", new JSONObject().put("enabled", next));
+        com.laya.Gateway.saveCfg(getApplicationContext(), cfg);
+      } catch (Exception e) { gwStatus.setText(getString(R.string.cfg_failed, e.getMessage())); return; }
+      if (next) com.laya.DecisionApiServer.start(getApplicationContext(), com.laya.DecisionApiServer.PORT);
+      else com.laya.DecisionApiServer.stopServer();
+      apiBtn.setText(getString(next ? R.string.api_stop : R.string.api_start));
+      gwStatus.setText(getString(R.string.gateway_bar, com.laya.Gateway.status(this)));
+    });
+
     // ---- LLM 设置(重要+紧急升级通道,3 槽位供可选) ----
     LinearLayout pLlm = new LinearLayout(this);
     pLlm.setOrientation(LinearLayout.VERTICAL);

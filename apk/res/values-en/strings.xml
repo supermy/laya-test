@@ -242,4 +242,8 @@
     <string name="llm_failed_prefix">Failed: %1$s</string>
     <string name="report_header_fmt">== %1$s (%2$d decisions in total) ==</string>
     <string name="report_group_fmt">[%1$s] %2$d entries, avg %3$dms</string>
+    <string name="api_running">Decision API %1$s</string>
+    <string name="api_start">Start decision API</string>
+    <string name="api_stop">Stop decision API</string>
+    <string name="api_hint">Decision API (HTTP, port 8790): POST /decide with body {\"task\":\"ticket\",\"text\":\"…\"} → decision JSON; GET /health for status. Persists with the gateway config.</string>
 </resources>
