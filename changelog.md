@@ -302,3 +302,11 @@
 - 根因:SystemPage 中 bizListPanel **重复创建两遍**(各 addView 一次 + 各 rebuildBizList 一次)→ 每业务卡片显示两份;系 v1.4.9 SystemPage 拆分时遗留(只去重了字段声明,漏了创建块),git 事故恢复代码的次生问题
 - smoke.sh 新增「业务卡片无重复」断言:/health tasks 业务名在系统页 dump 中至多出现 1 次——此前断言只查存在不查数量,未能拦住;断言后总数 11
 - 真机验证:截图每业务单卡 + 冒烟 11/11
+
+## 2026-10-10 — v1.4.18:下钻详单指标切换表格(数据探索)
+
+- 下钻详单新增**指标切换**:决策数 / 平均耗时 / 平均评分 / 需人工率;业务×等级、日期×业务两张矩阵按所选指标渲染,合计列同指标聚合
+- `DecisionCore.detailPivot` 扩展桶聚合:scoreSum/scoreCnt/humanCnt(评分按条均后累加,noul≥0.5 计需人工)
+- 指标切换直接重渲染缓存 piv(不重查日志);单元格点击仍按维度下钻明细行
+- 指标文案 zh/en(Decisions/Avg latency/Avg score/Human rate)
+- 真机验证:需人工率(risk 高 100%、ticket 合计 88%)、平均评分(ticket 合计 2.47=高/中加权)渲染正确,单元格下钻明细正常;冒烟 11/11、单测 ALL PASS

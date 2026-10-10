@@ -246,4 +246,8 @@
     <string name="api_start">启动决策 API</string>
     <string name="api_stop">停止决策 API</string>
     <string name="api_hint">决策 API 服务(HTTP,端口 8790):POST /decide,body {\"task\":\"ticket\",\"text\":\"…\"} → 决策 JSON;GET /health 查状态。随网关启停,配置持久化。</string>
+    <string name="metric_count">决策数</string>
+    <string name="metric_latency">平均耗时</string>
+    <string name="metric_score">平均评分</string>
+    <string name="metric_human">需人工率</string>
 </resources>

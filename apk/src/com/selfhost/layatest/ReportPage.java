@@ -25,6 +25,9 @@ class ReportPage {
 
   // ================= ② 报表 =================
   private int reportKind = 0;
+  private android.widget.Spinner spinMetric;
+  private int drillMetric = 0; // 0决策数 1平均耗时 2平均评分 3需人工率
+  private org.json.JSONObject lastPiv; // 最近一次下钻查询结果(指标切换免重查)
   private int detailPage = 0;   // 详单当前页(0 基)
   private int detailPages = 1;
   private LinearLayout pagerRow;
@@ -83,6 +86,23 @@ class ReportPage {
     spinTask.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f));
     fRow1.addView(spinTask);
     drillPane.addView(fRow1);
+    LinearLayout fRow2 = new LinearLayout(m);
+    fRow2.setGravity(Gravity.CENTER_VERTICAL);
+    fRow2.setPadding(0, Ui.dp(m,4), 0, 0);
+    spinMetric = new Spinner(m);
+    spinMetric.setAdapter(new ArrayAdapter<>(m, android.R.layout.simple_spinner_dropdown_item, new String[]{
+        m.getString(R.string.metric_count), m.getString(R.string.metric_latency),
+        m.getString(R.string.metric_score), m.getString(R.string.metric_human)}));
+    fRow2.addView(spinMetric, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+    spinMetric.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+      @Override public void onItemSelected(android.widget.AdapterView<?> p, View v, int pos, long id) {
+        if (pos == drillMetric || lastPiv == null) return;
+        drillMetric = pos;
+        renderPivot(lastPiv); // 指标切换不重查,直接重渲染缓存结果
+      }
+      @Override public void onNothingSelected(android.widget.AdapterView<?> p) {}
+    });
+    drillPane.addView(fRow2);
     Button qBtn = new Button(m);
     qBtn.setText(m.getString(R.string.drill_query));
     qBtn.setAllCaps(false); qBtn.setTextSize(13);
@@ -179,11 +199,12 @@ class ReportPage {
     final android.app.Activity act = m;
     new Thread(() -> {
       final JSONObject piv = com.laya.DecisionCore.detailPivot(act, days, task, level);
-      m.runOnUiThread(() -> renderPivot(act, piv, task, level));
+      lastPiv = piv;
+      m.runOnUiThread(() -> renderPivot(piv));
     }).start();
   }
 
-  private void renderPivot(android.app.Activity act, JSONObject piv, String taskF, String levelF) {
+  private void renderPivot(JSONObject piv) {
     drillTables.removeAllViews();
     drillOut.removeAllViews();
     ArrayList<JSONObject> rows = new ArrayList<>();
@@ -204,11 +225,13 @@ class ReportPage {
     head.setText(m.getString(R.string.drill_head, piv.optInt("total")));
     head.setTextSize(12); head.setTextColor(0xFF66707E); head.setPadding(Ui.dp(m,4), Ui.dp(m,8), 0, Ui.dp(m,4));
     drillTables.addView(head);
-    java.util.Map<String, Integer> grid = new LinkedHashMap<>();
-    java.util.Map<String, Integer> gDate = new LinkedHashMap<>();
+    // 指标聚合:cell 值由 drillMetric 决定;点击仍按维度下钻明细
+    java.util.Map<String, long[]> grid = new LinkedHashMap<>();   // task|level
+    java.util.Map<String, long[]> gDate = new LinkedHashMap<>();  // date|task
     for (JSONObject r : rows) {
-      grid.merge(r.optString("task") + "|" + r.optString("level"), r.optInt("count"), Integer::sum);
-      gDate.merge(r.optString("date") + "|" + r.optString("task"), r.optInt("count"), Integer::sum);
+      long[] a = aggOf(r);
+      grid.merge(r.optString("task") + "|" + r.optString("level"), a, ReportPage::mergeAgg);
+      gDate.merge(r.optString("date") + "|" + r.optString("task"), aggOf(r), ReportPage::mergeAgg);
     }
     // 表1:业务 × 等级
     LinearLayout t1 = new LinearLayout(m); t1.setOrientation(LinearLayout.VERTICAL);
@@ -221,14 +244,15 @@ class ReportPage {
     for (String t : tasks) {
       LinearLayout r = new LinearLayout(m);
       r.addView(dCell(t, true, 0, null, 2.2f));
-      int tot = 0;
+      long[] tot = new long[5];
       for (String lv : lvOrd) {
-        int n = grid.getOrDefault(t + "|" + lv, 0); tot += n;
+        long[] n = grid.getOrDefault(t + "|" + lv, new long[5]);
+        for (int i = 0; i < 5; i++) tot[i] += n[i];
         final String ft = t, flv = lv;
-        r.addView(dCell(n == 0 ? "·" : String.valueOf(n), false, 0, v -> drillShow(null, ft, flv), 1f));
+        r.addView(dCell(cellText(n), false, 0, v -> drillShow(null, ft, flv), 1f));
       }
       final String ft = t;
-      r.addView(dCell(String.valueOf(tot), true, 0, v -> drillShow(null, ft, null), 1f));
+      r.addView(dCell(cellText(tot), true, 0, v -> drillShow(null, ft, null), 1f));
       t1.addView(r);
     }
     drillTables.addView(t1);
@@ -243,14 +267,15 @@ class ReportPage {
     for (String d : dOrd) {
       LinearLayout r = new LinearLayout(m);
       r.addView(dCell(d.substring(5), false, 0, null, 1.6f));
-      int tot = 0;
+      long[] tot = new long[5];
       for (String t : tasks) {
-        int n = gDate.getOrDefault(d + "|" + t, 0); tot += n;
+        long[] n = gDate.getOrDefault(d + "|" + t, new long[5]);
+        for (int i = 0; i < 5; i++) tot[i] += n[i];
         final String fd = d, ft = t;
-        r.addView(dCell(n == 0 ? "·" : String.valueOf(n), false, 0, v -> drillShow(fd, ft, null), 1f));
+        r.addView(dCell(cellText(n), false, 0, v -> drillShow(fd, ft, null), 1f));
       }
       final String fd = d;
-      r.addView(dCell(String.valueOf(tot), true, 0, v -> drillShow(fd, null, null), 1f));
+      r.addView(dCell(cellText(tot), true, 0, v -> drillShow(fd, null, null), 1f));
       t2.addView(r);
     }
     LinearLayout gap = new LinearLayout(m); gap.setPadding(0, Ui.dp(m,8), 0, 0);
@@ -415,4 +440,22 @@ class ReportPage {
     return c;
   }
 
+  /** 行 → 聚合数组 [count, latSum, scoreSum(×1000), scoreCnt, humanCnt] */
+  private static long[] aggOf(JSONObject r) {
+    return new long[]{ r.optLong("count"), r.optLong("avgLatency") * r.optLong("count"),
+        r.optLong("scoreSum"), r.optLong("scoreCnt"), r.optLong("humanCnt") };
+  }
+
+  private static long[] mergeAgg(long[] a, long[] b) { for (int i = 0; i < a.length; i++) a[i] += b[i]; return a; }
+
+  /** 按当前指标把聚合数组格式化为单元格文本 */
+  private String cellText(long[] a) {
+    if (a[0] == 0) return "·";
+    switch (drillMetric) {
+      case 1: return (a[1] / a[0]) + "ms";
+      case 2: return a[3] == 0 ? "·" : String.format(java.util.Locale.US, "%.2f", a[2] / 1000.0 / a[3]);
+      case 3: return String.format(java.util.Locale.US, "%.0f%%", a[4] * 100.0 / a[0]);
+      default: return String.valueOf(a[0]);
+    }
+  }
 }

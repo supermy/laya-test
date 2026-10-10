@@ -246,4 +246,8 @@
     <string name="api_start">Start decision API</string>
     <string name="api_stop">Stop decision API</string>
     <string name="api_hint">Decision API (HTTP, port 8790): POST /decide with body {\"task\":\"ticket\",\"text\":\"…\"} → decision JSON; GET /health for status. Persists with the gateway config.</string>
+    <string name="metric_count">Decisions</string>
+    <string name="metric_latency">Avg latency</string>
+    <string name="metric_score">Avg score</string>
+    <string name="metric_human">Human rate</string>
 </resources>

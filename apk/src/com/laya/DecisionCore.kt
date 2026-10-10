@@ -721,15 +721,31 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
       val lv = levelOf(e).optString("level")
       if (level != null && lv != level) continue
       val key = df.format(Date(e.optLong("ts"))) + "|" + e.optString("task") + "|" + lv
-      val arr = rows[key] ?: LongArray(2)
-      arr[0]++; arr[1] += e.optLong("latencyMs"); rows[key] = arr
+      // 桶聚合:[count, latSum, scoreSum(×1000,按条均后再累), scoreCnt(有评分的条数), humanCnt(noul≥0.5 条数)]
+      val arr = rows[key] ?: LongArray(5)
+      arr[0]++; arr[1] += e.optLong("latencyMs")
+      val dec = e.optJSONObject("decoded")
+      if (dec != null) {
+        var scoreN = 0; var scoreS = 0.0; var human = false
+        for (k in dec.keys()) {
+          val a = dec.optJSONObject(k) ?: continue
+          when (a.optString("type")) {
+            "score" -> { scoreS += a.optDouble("score"); scoreN++ }
+            "noul" -> if (a.optDouble("noul") >= 0.5) human = true
+          }
+        }
+        if (scoreN > 0) { arr[2] += Math.round(scoreS / scoreN * 1000); arr[3]++ }
+        if (human) arr[4]++
+      }
+      rows[key] = arr
       total++
     }
     val outRows = JSONArray()
     for ((key, arr) in rows) {
       val p = key.split("|")
       outRows.put(JSONObject().put("date", p[0]).put("task", p[1]).put("level", p[2])
-        .put("count", arr[0]).put("avgLatency", if (arr[0] > 0) arr[1] / arr[0] else 0L))
+        .put("count", arr[0]).put("avgLatency", if (arr[0] > 0) arr[1] / arr[0] else 0L)
+        .put("scoreSum", arr[2]).put("scoreCnt", arr[3]).put("humanCnt", arr[4]))
     }
     return JSONObject().put("total", total).put("rows", outRows)
   }
