@@ -1008,7 +1008,7 @@ public class MainActivity extends Activity {
         cfg.put("api", new JSONObject().put("enabled", next));
         com.laya.Gateway.saveCfg(getApplicationContext(), cfg);
       } catch (Exception e) { gwStatus.setText(getString(R.string.cfg_failed, e.getMessage())); return; }
-      if (next) com.laya.DecisionApiServer.start(getApplicationContext(), com.laya.DecisionApiServer.PORT);
+      if (next) com.laya.DecisionApiServer.start(getApplicationContext(), com.laya.DecisionApiServer.PORT, /*ensureFgs=*/true);
       else com.laya.DecisionApiServer.stopServer();
       apiBtn.setText(getString(next ? R.string.api_stop : R.string.api_start));
       gwStatus.setText(getString(R.string.gateway_bar, com.laya.Gateway.status(this)));

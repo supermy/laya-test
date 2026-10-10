@@ -79,9 +79,14 @@ class DecisionApiServer private constructor(private val ctx: Context, port: Int)
 
     @JvmStatic
     @Synchronized
-    fun start(ctx: Context, port: Int = PORT) {
+    fun start(ctx: Context, port: Int = PORT, ensureFgs: Boolean = true) {
       stopServer()
       inst = DecisionApiServer(ctx.applicationContext, port).also { it.start(SOCKET_READ_TIMEOUT, true) }
+      // 前台服务保活:无 FGS 的后台进程会被冻结(freezer),API 请求将挂起。
+      // ensureFgs=false 用于 Gateway.start 自启链(否则 startForegroundService →
+      // GatewayService.onStartCommand → autoStart → start() 死循环)
+      if (ensureFgs) ctx.applicationContext.startForegroundService(
+        android.content.Intent(ctx.applicationContext, GatewayService::class.java))
       Log.i(TAG, "up at ${url()}")
     }
 

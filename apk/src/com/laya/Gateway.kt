@@ -119,7 +119,7 @@ object Gateway {
     UploadServer.start(ctx) // 上传服务随网关常驻(局域网页面/接口)
     val c = cfg(ctx)
     val api = c.optJSONObject("api")
-    if (api?.optBoolean("enabled") == true) DecisionApiServer.start(ctx, api.optInt("port", DecisionApiServer.PORT))
+    if (api?.optBoolean("enabled") == true) DecisionApiServer.start(ctx, api.optInt("port", DecisionApiServer.PORT), /*ensureFgs=*/false)
     val email = c.optJSONObject("email")
     if (email?.optBoolean("enabled") == true && !emailRunning) startEmail(ctx, email, c.optJSONObject("report"))
     val mq = c.optJSONObject("mqtt")

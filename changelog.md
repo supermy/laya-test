@@ -237,3 +237,10 @@
 - `@receptron/laya` + onnxruntime-web WASM 垫片(`onnxruntime-node` 不支持 Android)
 - hf-mirror 下载模型(直连 huggingface.co 挂死)
 - 基线:wasm fp32 单次 4.2s,自建用例 11/11
+
+## 2026-10-10 — v1.4.8:决策 API 后台冻结修复 + P0 工程护栏
+
+- **修复:API 后台挂起**——app 切后台被冻结(freezer)后 TCP 请求全部挂起;`DecisionApiServer.start()` 现拉起前台服务(GatewayService FGS)保活
+- 新增 `apk/smoke.sh`:真机冒烟测试(安装/主页四 tab/网关页/API health 与 /decide/系统页卡片,PASS/FAIL 统计)
+- 新增 `apk/test/levelOf_test.kt` + `apk/run_tests.sh`:levelOf 纯逻辑单测 14 例全 PASS(Termux JVM 直跑:边界 0.33/0.66、noul 翻转口径、choice 直通、basis 格式)
+- 实测:后台挂起 → 前台解冻后 /decide 立即恢复(171ms);MIUI 等厂商省电白名单建议写入 readme
