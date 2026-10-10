@@ -258,3 +258,9 @@
 - MainActivity 再拆出 `GatewayPage.java`(335 行):邮件/MQTT/LLM 三面板、决策 API 开关、底栏状态;parsePort 移入;MainActivity 瘦身至 ~990 行
 - 已拆:SystemPage(382)/GatewayPage(335);待拆:决策/报表页(P1 收尾)
 - 回归:冒烟 10/10、levelOf 单测 ALL PASS
+
+## 2026-10-10 — v1.4.11:P1 重构第三步(DecisionPage 拆出)
+
+- MainActivity 拆出 `DecisionPage.java`(210 行):聊天式决策/业务 rail/历史/LLM 风险分析展示;bot/bubble 气泡通道随迁(host 经 decisionPage.bot 调用)
+- MainActivity 瘦身至 ~800 行;P1 页面拆分剩报表页(下一轮收尾)
+- 回归:冒烟 10/10、levelOf 单测 ALL PASS

@@ -54,8 +54,8 @@ import com.laya.LayaDecoder;
  */
 public class MainActivity extends Activity {
   static final int PRIMARY = 0xFF3E7BFA;
-  private static final int USER_BG = 0xFF95EC69;   // 微信绿气泡
-  private static final int BOT_BG = 0xFFFFFFFF;     // 白色气泡
+  static final int USER_BG = 0xFF95EC69;   // 微信绿气泡
+  static final int BOT_BG = 0xFFFFFFFF;     // 白色气泡
   static final int CHIP_OFF = 0xFFF0F1F5;
   private static final int WX_PAGE_BG = 0xFFF5F5F5; // 页面浅灰底
   private static final int WX_GREEN = 0xFF07C160;   // 微信选中绿
@@ -72,17 +72,15 @@ public class MainActivity extends Activity {
     }
     if (taskIdx >= taskIds.size()) taskIdx = 0;
   }
+  private final DecisionPage decisionPage = new DecisionPage(this);
   private final SystemPage systemPage = new SystemPage(this);
   private final GatewayPage gatewayPage = new GatewayPage(this);
   private int tab = 0; // 0决策 1报表 2网关 3系统
-  private int taskIdx = 0;
+  int taskIdx = 0;
   LinearLayout body;
   Button menuBtn;
-  private LinearLayout msgList;
   ScrollView scroller;
-  private EditText input;
   private TextView[] tabBtns = new TextView[4];
-  private boolean busy = false;
   private static final boolean USE_GPU_MAIN = true; // GPU 主图;失败自动降级 CPU
 
   @Override
@@ -93,15 +91,15 @@ public class MainActivity extends Activity {
     buildUi();
     // LLM 升级完成回调:决策页气泡展示风险分析(邮件/MQTT 渠道触发的也在此显示)
     com.laya.DecisionCore.setLlmListener((task, content, err) -> runOnUiThread(() -> {
-      if (err != null) bot(getString(R.string.llm_fail_msg, task, err));
-      else if (!content.isEmpty()) bot(getString(R.string.llm_analysis_msg, task, content));
+      if (err != null) decisionPage.bot(getString(R.string.llm_fail_msg, task, err));
+      else if (!content.isEmpty()) decisionPage.bot(getString(R.string.llm_analysis_msg, task, content));
     }));
     // 恢复内置网关(仅配置了 enabled 时)
     if (com.laya.Gateway.cfg(this).optBoolean("enabled")) {
       startForegroundService(new Intent(this, com.laya.GatewayService.class));
       com.laya.Gateway.autoStart(this);
     }
-    bot(getString(R.string.ready_msg, taskLabels));
+    decisionPage.bot(getString(R.string.ready_msg, taskLabels));
     handleIntent(getIntent() != null ? getIntent() : null);
     if ((getIntent() == null || getIntent().getStringExtra("tab") == null) && tab != savedTab) setTab(savedTab);
   }
@@ -141,9 +139,9 @@ public class MainActivity extends Activity {
     String tabS = i.getStringExtra("tab");
     if (tabS != null) setTab("report".equals(tabS) ? 1 : "gateway".equals(tabS) ? 2 : "sys".equals(tabS) ? 3 : 0);
     String task = i.getStringExtra("task");
-    if (task != null) for (int k = 0; k < taskIds.size(); k++) if (taskIds.get(k).equals(task)) { taskIdx = k; paintChips(); }
+    if (task != null) for (int k = 0; k < taskIds.size(); k++) if (taskIds.get(k).equals(task)) { taskIdx = k; decisionPage.paintChips(); }
     String text = i.getStringExtra("text");
-    if (text != null && !text.isEmpty()) sendDecision(text);
+    if (text != null && !text.isEmpty()) decisionPage.sendDecision(text);
   }
 
   int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
@@ -265,180 +263,13 @@ public class MainActivity extends Activity {
       tb.setPadding(0, on ? dp(9) : dp(9), 0, on ? dp(9) : dp(9));
     }
     body.removeAllViews();
-    if (k == 0) buildDecisionTab();
+    if (k == 0) decisionPage.build();
     else if (k == 1) buildReportTab();
     else if (k == 2) gatewayPage.build();
     else systemPage.build();
   }
 
-  // ================= ① 决策 =================
-  private TextView curBizLabel;
-  private boolean railHidden = false; // 左栏显隐跨重建保持(网关轮询会触发页面重建)
 
-  private void buildDecisionTab() {
-    // 顶部当前业务提示(业务切换由左侧竖排 tab 完成,标题栏 ☰ 控制左栏显隐,与报表页一致)
-    LinearLayout row = new LinearLayout(this);
-    row.setPadding(dp(12), dp(8), dp(12), dp(4));
-    row.setGravity(Gravity.CENTER_VERTICAL);
-    curBizLabel = new TextView(this);
-    curBizLabel.setTextSize(12); curBizLabel.setTextColor(0xFF66707E);
-    curBizLabel.setPadding(dp(2), 0, 0, 0);
-    row.addView(curBizLabel);
-    body.addView(row);
-    paintChips();
-
-    // 左侧业务 tab 菜单(竖排,可上下滑动):点 chip 切业务并载入该业务历史
-    final LinearLayout rail = new LinearLayout(this);
-    rail.setOrientation(LinearLayout.VERTICAL);
-    rail.setPadding(dp(2), dp(2), dp(2), dp(2));
-    final Button[] bizChips = new Button[taskIds.size()];
-    for (int i = 0; i < taskIds.size(); i++) {
-      final int k = i;
-      // 英文单词整词旋转 90°(顺时针,自上而下读)
-      Button c = new Button(this);
-      String name = taskIds.get(i);
-      c.setText(name); c.setAllCaps(false); c.setTextSize(12);
-      c.setMinHeight(0); c.setMinimumWidth(0); c.setMinimumHeight(0);
-      c.setPadding(0, dp(10), 0, dp(10)); // 旋转后成为左右内边距
-      c.setTextColor(k == taskIdx ? Color.WHITE : 0xFF1A2B4C);
-      c.setBackground(pill(k == taskIdx ? PRIMARY : 0xFFE7EAF2, dp(10)));
-      int visW = dp(40);                                  // 旋转后视觉宽 = 按钮自身高
-      int visH = (int) c.getPaint().measureText(name) + dp(28); // 旋转后视觉高 = 按钮自身宽
-      c.setRotation(90);
-      FrameLayout slot = new FrameLayout(this);
-      slot.addView(c, new FrameLayout.LayoutParams(visH, visW, Gravity.CENTER));
-      LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(visW, visH);
-      slp.bottomMargin = dp(6);
-      c.setOnClickListener(v -> {
-        taskIdx = k; paintChips(); loadHistory(taskIds.get(k));
-        for (int j = 0; j < bizChips.length; j++) {
-          bizChips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
-          bizChips[j].setBackground(pill(j == k ? PRIMARY : 0xFFE7EAF2, dp(10)));
-        }
-      });
-      bizChips[i] = c; rail.addView(slot, slp);
-    }
-    final LinearLayout leftCol = new LinearLayout(this);
-    leftCol.setOrientation(LinearLayout.VERTICAL);
-    leftCol.setPadding(dp(4), dp(4), dp(0), dp(0));
-    ScrollView railScroll = new ScrollView(this);
-    railScroll.addView(rail); // 业务 tab 菜单可上下滑动
-    leftCol.addView(railScroll);
-    LinearLayout.LayoutParams lclp = new LinearLayout.LayoutParams(dp(64), LinearLayout.LayoutParams.MATCH_PARENT);
-    lclp.rightMargin = dp(2);
-    leftCol.setLayoutParams(lclp);
-    leftCol.setVisibility(railHidden ? View.GONE : View.VISIBLE);
-
-    LinearLayout top = new LinearLayout(this);
-    top.setOrientation(LinearLayout.HORIZONTAL);
-    top.addView(leftCol);
-
-    LinearLayout chatCol = new LinearLayout(this);
-    chatCol.setOrientation(LinearLayout.VERTICAL);
-    chatCol.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
-    top.addView(chatCol);
-
-    msgList = new LinearLayout(this);
-    msgList.setOrientation(LinearLayout.VERTICAL);
-    msgList.setPadding(dp(12), dp(6), dp(12), dp(6));
-    scroller = new ScrollView(this);
-    scroller.addView(msgList);
-    chatCol.addView(scroller, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
-    loadHistory(taskIds.get(taskIdx));
-
-
-    LinearLayout bottom = new LinearLayout(this);
-    bottom.setOrientation(LinearLayout.HORIZONTAL);
-    bottom.setGravity(Gravity.CENTER_VERTICAL);
-    bottom.setPadding(dp(12), dp(8), dp(12), dp(8));
-    bottom.setBackgroundColor(Color.WHITE);
-    input = new EditText(this);
-    input.setHint(getString(R.string.input_hint, taskLabels.get(taskIdx))); input.setTextSize(14); input.setMaxLines(3);
-    input.setBackground(pill(Color.WHITE, dp(22)));
-    input.setPadding(dp(14), dp(10), dp(14), dp(10));
-    bottom.addView(input, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-    Button send = new Button(this);
-    send.setText(getString(R.string.btn_decide)); send.setTextColor(Color.WHITE); send.setAllCaps(false);
-    send.setBackground(pill(PRIMARY, dp(22)));
-    LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    slp.leftMargin = dp(8); send.setLayoutParams(slp);
-    send.setOnClickListener(v -> sendDecision(input.getText().toString()));
-    bottom.addView(send);
-    chatCol.addView(bottom);
-    body.addView(top, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
-    // 标题栏 ☰ 切换本页左栏(与报表页一致);状态记入字段,重建后不丢
-    menuBtn.setOnClickListener(v -> {
-      railHidden = leftCol.getVisibility() != View.GONE;
-      leftCol.setVisibility(railHidden ? View.GONE : View.VISIBLE);
-    });
-  }
-
-  /** 业务↔日志联动:切换业务时,聊天区载入该业务的历史决策 */
-  private void loadHistory(String task) {
-    if (msgList == null) return;
-    msgList.removeAllViews();
-    bot(getString(R.string.history_header, taskLabels.get(taskIds.indexOf(task))));
-    java.util.List<org.json.JSONObject> hs = com.laya.DecisionCore.history(this, task, 20);
-    if (hs.isEmpty()) bot(getString(R.string.history_empty));
-    java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.US);
-    for (org.json.JSONObject h : hs) {
-      bubble(h.optString("state"), true);
-      String when = df.format(new java.util.Date(h.optLong("ts")));
-      bot(fmtAnswers(task, h.optJSONObject("decoded"), (int) h.optLong("latencyMs")) + "\n· " + when);
-    }
-    // 回显最近一次 LLM 风险分析(升级通道产物)
-    org.json.JSONObject llm = com.laya.DecisionCore.lastLlm(this, task);
-    if (llm != null) {
-      String when = df.format(new java.util.Date(llm.optLong("ts")));
-      org.json.JSONObject l = llm.optJSONObject("llm");
-      String c = l != null ? l.optString("content") : "";
-      if (!c.isEmpty()) bot(getString(R.string.last_llm_analysis, when, c));
-      else if (llm.has("error")) bot(getString(R.string.last_llm_fail, when, llm.optString("error")));
-    }
-    scroller.post(() -> scroller.scrollTo(0, scroller.getHeight()));
-  }
-
-  private void paintChips() {
-    if (curBizLabel != null) curBizLabel.setText(getString(R.string.current_biz_hint, taskLabels.get(taskIdx)));
-    if (input != null) input.setHint(getString(R.string.input_hint, taskLabels.get(taskIdx)));
-  }
-
-  private void sendDecision(String raw) {
-    final String text = raw == null ? "" : raw.trim();
-    if (text.isEmpty() || busy) return;
-    busy = true;
-    input.setText("");
-    bubble(text, true);
-    bubble(getString(R.string.inferring), false);
-    final int ti = taskIdx;
-    new Thread(() -> {
-      String reply;
-      try {
-        com.laya.DecisionCore.Result r = com.laya.DecisionCore.decide(this, taskIds.get(ti), text);
-        reply = fmtAnswers(taskIds.get(ti), r.answers, (int) r.latencyMs) + getString(R.string.backend_prefix, com.laya.DecisionCore.currentEngine(this));
-      } catch (Throwable e) {
-        android.util.Log.e("LayaApp", "decision failed", e);
-        reply = getString(R.string.infer_failed, e.getClass().getSimpleName(), e.getMessage());
-      }
-      final String r2 = reply;
-      runOnUiThread(() -> { bubble(r2, false); busy = false; });
-    }).start();
-  }
-
-  private String fmtAnswers(String task, org.json.JSONObject decoded, int ms) {
-    StringBuilder sb = new StringBuilder(getString(R.string.decision_result_header, taskLabels.get(taskIds.indexOf(task)))).append("\n");
-    java.util.Iterator<String> it = decoded.keys();
-    while (it.hasNext()) {
-      org.json.JSONObject a = decoded.optJSONObject(it.next());
-      if (a == null) continue;
-      String type = a.optString("type");
-      if ("choice".equals(type)) sb.append("• ").append(a.optString("choice")).append("\n");
-      else if ("score".equals(type)) sb.append("• ").append(getString(R.string.label_score)).append(": ").append(String.format("%.2f", a.optDouble("score"))).append("/5\n");
-      else if ("noul".equals(type)) sb.append("• ").append(getString(R.string.label_verdict)).append(": ").append(a.optDouble("noul") >= 0.5 ? getString(R.string.yes) : getString(R.string.no)).append("\n");
-    }
-    sb.append("\n").append(getString(R.string.label_latency)).append(": ").append(ms).append("ms");
-    return sb.toString();
-  }
 
   private static double asNum(Object o) {
     if (o instanceof Number) return ((Number) o).doubleValue();
@@ -970,20 +801,5 @@ public class MainActivity extends Activity {
 
 
   // ================= 通用 =================
-  private void bot(String t) { bubble(t, false); }
-  private void bubble(String text, boolean user) {
-    if (msgList == null) return;
-    TextView tv = new TextView(this);
-    tv.setText(text); tv.setTextSize(14);
-    tv.setTextColor(user ? 0xFF1A2B4C : 0xFF22262E);
-    tv.setMaxWidth(dp(280));
-    tv.setBackground(pill(user ? USER_BG : BOT_BG, dp(8)));
-    tv.setPadding(dp(13), dp(9), dp(13), dp(9));
-    LinearLayout row = new LinearLayout(this);
-    row.setGravity(user ? Gravity.END : Gravity.START);
-    row.setPadding(0, dp(4), 0, dp(4));
-    row.addView(tv);
-    msgList.addView(row);
-    scroller.post(() -> scroller.fullScroll(View.FOCUS_DOWN));
-  }
+
 }
