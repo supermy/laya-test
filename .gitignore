@@ -68,3 +68,4 @@ verify/
 /*.xml
 apk/sys*.xml
 apk/dec.xml
+apk/pg*.xml
