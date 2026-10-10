@@ -271,3 +271,9 @@
 - railChip(共享旋转 chip)归位 MainActivity(三页共用)
 - **P1 页面拆分全部完成**:SystemPage/GatewayPage/DecisionPage/ReportPage 四页 + MainActivity 编排骨架
 - 回归:冒烟 10/10;报表页真机渲染验证(日报表格 + 旋转 rail)✓
+
+## 2026-10-10 — v1.4.13:railChip 共享组件独立成类
+
+- `railChip`(左栏整词旋转 90° chip)从 MainActivity 抽出为独立 `RailChip.java`(静态工厂 `RailChip.make(m, c)`),决策/报表/网关/系统四页 rail 统一引用
+- MainActivity 瘦身至 ~404 行,职责更纯:chrome + 页面编排
+- 回归:冒烟 10/10、levelOf 单测 ALL PASS

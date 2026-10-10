@@ -311,7 +311,7 @@ class GatewayPage {
         }
       });
       gchips[i] = c;
-      grail.addView(m.railChip(c));
+      grail.addView(RailChip.make(m, c));
     }
     final LinearLayout gLeft = new LinearLayout(m);
     gLeft.setOrientation(LinearLayout.VERTICAL);

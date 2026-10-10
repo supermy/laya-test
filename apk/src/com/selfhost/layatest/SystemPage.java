@@ -214,7 +214,7 @@ class SystemPage {
         }
       });
       chips[i] = c;
-      rail.addView(m.railChip(c));
+      rail.addView(RailChip.make(m, c));
     }
     final LinearLayout leftCol = new LinearLayout(m);
     leftCol.setOrientation(LinearLayout.VERTICAL);

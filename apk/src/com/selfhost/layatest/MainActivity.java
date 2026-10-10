@@ -277,19 +277,6 @@ public class MainActivity extends Activity {
     try { return Double.parseDouble(String.valueOf(o)); } catch (Exception e) { return 0; }
   }
 
-  /** 左栏竖排 tab chip:整词旋转 90°(slot 定尺寸,词长自适应;中英文同构) */
-  FrameLayout railChip(Button c) {
-    int visW = dp(40);
-    int visH = (int) c.getPaint().measureText(c.getText().toString()) + dp(28);
-    c.setRotation(90); c.setPadding(0, dp(10), 0, dp(10));
-    FrameLayout slot = new FrameLayout(this);
-    slot.addView(c, new FrameLayout.LayoutParams(visH, visW, Gravity.CENTER));
-    LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(visW, visH);
-    slp.bottomMargin = dp(6);
-    slot.setLayoutParams(slp);
-    return slot;
-  }
-
   // ================= ③ 网关 =================
 
 
