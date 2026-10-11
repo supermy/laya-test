@@ -56,6 +56,11 @@ final class Ui {
 
   /** JevLive 式统计卡行:深底大数字卡(每行最多4张);返回数字 TextView 数组供实时刷新 */
   public static TextView[] statsCards(Context c, LinearLayout parent, String[] labels, int[] colors) {
+    return statsCards(c, parent, labels, colors, 0xFF161A22, 0xFF8A93A0);
+  }
+
+  /** 统计卡(可指定卡底/标签色):浅色页面用浅卡深字适配整体色系 */
+  public static TextView[] statsCards(Context c, LinearLayout parent, String[] labels, int[] colors, int cardBg, int labelColor) {
     TextView[] nums = new TextView[labels.length];
     int per = 4;
     int rows = (labels.length + per - 1) / per;
@@ -65,13 +70,13 @@ final class Ui {
         LinearLayout card = new LinearLayout(c);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setGravity(Gravity.CENTER);
-        card.setBackground(pill(0xFF161A22, dp(c, 10)));
+        card.setBackground(pill(cardBg, dp(c, 10)));
         TextView num = new TextView(c);
         num.setText("0"); num.setTextSize(16); num.setTypeface(Typeface.DEFAULT_BOLD);
         num.setTextColor(colors[i]); num.setGravity(Gravity.CENTER);
         card.addView(num, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         TextView lab = new TextView(c);
-        lab.setText(labels[i]); lab.setTextSize(10); lab.setTextColor(0xFF8A93A0); lab.setGravity(Gravity.CENTER);
+        lab.setText(labels[i]); lab.setTextSize(10); lab.setTextColor(labelColor); lab.setGravity(Gravity.CENTER);
         card.addView(lab, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         clp.rightMargin = (i % per == per - 1 || i == labels.length - 1) ? 0 : dp(c, 6);

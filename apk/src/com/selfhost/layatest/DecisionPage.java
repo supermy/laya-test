@@ -115,10 +115,12 @@ class DecisionPage {
     // 统计卡 + 检索框:放入 tab 内容区(chatCol)内部,横跨聊天列
     LinearLayout statsRow = new LinearLayout(m);
     statsRow.setPadding(Ui.dp(m,10), Ui.dp(m,6), Ui.dp(m,10), 0);
+    // 数字色取决策页主色系:深蓝/青/琥珀/红(浅底上保证对比度)
     stNums = Ui.statsCards(m, statsRow, new String[]{
         m.getString(R.string.st_total), m.getString(R.string.st_today),
         m.getString(R.string.st_avglat), m.getString(R.string.st_highrate)},
-        new int[]{0xFF6FA8FF, 0xFF4ADE80, 0xFFE7B10A, 0xFFD62828});
+        new int[]{0xFF1A2B4C, 0xFF2A9D8F, 0xFFB06F0A, 0xFFD62828},
+        0xFFF7F8FA, 0xFF66707E);
     statsRowRef = statsRow;
     chatCol.addView(statsRow);
     paintStatsBiz(); // 卡片标题随当前业务个性化

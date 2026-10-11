@@ -52,7 +52,7 @@ chk "tab 决策" grep -q 'text="决策"' "$HOME_XML"
 chk "tab 报表" grep -q 'text="报表"' "$HOME_XML"
 chk "tab 网关" grep -q 'text="网关"' "$HOME_XML"
 chk "tab 系统" grep -q 'text="系统"' "$HOME_XML"
-chk "标题栏语言按钮" grep -qE "🌐A|&#127760;|>中<|>EN<" "$HOME_XML"
+chk "标题栏语言按钮" grep -qE 'text="(🌐A|中|EN)"' "$HOME_XML"
 
 echo "== [3/5] 网关页 + 决策 API 启动 =="
 $A shell "input tap 640 2528; sleep 1.5" >/dev/null 2>&1
