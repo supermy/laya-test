@@ -57,7 +57,14 @@ class NewsPage {
 
   NewsPage(MainActivity m) { this.m = m; }
 
-  void build() {
+  private boolean active = false; // 快讯模式可见(决策页 rail 第一项);timer 仅在此拉流
+
+  void setActive(boolean a) {
+    active = a;
+    if (a) { ensureTimer(); fetch(); }
+  }
+
+  void buildInto(LinearLayout parent) {
     LinearLayout l = new LinearLayout(m);
     l.setOrientation(LinearLayout.VERTICAL);
     l.setBackgroundColor(0xFF0E1116); // JevLive 深色主题(仅快讯页)
@@ -151,7 +158,7 @@ class NewsPage {
 
     ScrollView sc = new ScrollView(m);
     sc.addView(l);
-    m.body.addView(sc, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+    parent.addView(sc, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
     ensureTimer();
     fetch();
@@ -166,7 +173,7 @@ class NewsPage {
   // ---- 定时刷新:60s,仅快讯页在前台时拉取 ----
   private final Runnable tick = new Runnable() {
     @Override public void run() {
-      if (autoOn && m.tab == 4) fetch();
+      if (autoOn && active && m.tab == 0) fetch();
       long period = Math.max(15, newsCfg().optLong(com.laya.Cfg.INTERVAL, 60)) * 1000L;
       timer.postDelayed(this, period);
     }

@@ -20,6 +20,10 @@ class DecisionPage {
   private LinearLayout statsRowRef;
   private EditText searchBox;
 
+  private boolean newsMode = false;          // rail 第一项「快讯」选中:内容区显示快讯流
+  private Button[] bizChips;                 // 业务 chips(重漆用)
+  private Button newsChip;                   // 快讯 chip
+  private LinearLayout leftColRef;           // ☰ 显隐目标(两种模式共用)
   private final android.os.Handler stHandler = new android.os.Handler(android.os.Looper.getMainLooper());
   private boolean stQueued = false;
   private TextView curBizLabel;
@@ -50,22 +54,36 @@ class DecisionPage {
   private boolean railHidden = false; // 左栏显隐跨重建保持(网关轮询会触发页面重建)
 
   void build() {
-    // 顶部当前业务提示(业务切换由左侧竖排 tab 完成,标题栏 ☰ 控制左栏显隐,与报表页一致)
-    LinearLayout row = new LinearLayout(m);
-    row.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,4));
-    row.setGravity(Gravity.CENTER_VERTICAL);
-    curBizLabel = new TextView(m);
-    curBizLabel.setTextSize(12); curBizLabel.setTextColor(Ui.c(m, 0xFF66707E, 0xFF8A93A0));
-    curBizLabel.setPadding(Ui.dp(m,2), 0, 0, 0);
-    row.addView(curBizLabel);
-    m.body.addView(row);
-    paintChips();
+    // 顶部当前业务提示(业务切换由左侧竖排 tab 完成,标题栏 ☰ 控制左栏显隐,与报表页一致);快讯模式不显示
+    if (!newsMode) {
+      LinearLayout row = new LinearLayout(m);
+      row.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,4));
+      row.setGravity(Gravity.CENTER_VERTICAL);
+      curBizLabel = new TextView(m);
+      curBizLabel.setTextSize(12); curBizLabel.setTextColor(Ui.c(m, 0xFF66707E, 0xFF8A93A0));
+      curBizLabel.setPadding(Ui.dp(m,2), 0, 0, 0);
+      row.addView(curBizLabel);
+      m.body.addView(row);
+      paintChips();
+    }
 
-    // 左侧业务 tab 菜单(竖排,可上下滑动):点 chip 切业务并载入该业务历史
+    // 左侧 tab 菜单(竖排,可上下滑动):第一项「快讯」+ 业务 chips
     final LinearLayout rail = new LinearLayout(m);
     rail.setOrientation(LinearLayout.VERTICAL);
     rail.setPadding(Ui.dp(m,2), Ui.dp(m,2), Ui.dp(m,2), Ui.dp(m,2));
-    final Button[] bizChips = new Button[m.taskIds.size()];
+    bizChips = new Button[m.taskIds.size()];
+    newsChip = new Button(m);
+    paintNewsChip();
+    int visWn = Ui.dp(m,40);
+    int visHn = (int) newsChip.getPaint().measureText(newsChip.getText().toString()) + Ui.dp(m,28);
+    newsChip.setRotation(90);
+    newsChip.setPadding(0, Ui.dp(m,10), 0, Ui.dp(m,10));
+    FrameLayout slotN = new FrameLayout(m);
+    slotN.addView(newsChip, new FrameLayout.LayoutParams(visHn, visWn, Gravity.CENTER));
+    LinearLayout.LayoutParams slpN = new LinearLayout.LayoutParams(visWn, visHn);
+    slpN.bottomMargin = Ui.dp(m,6);
+    newsChip.setOnClickListener(v -> selectNews());
+    rail.addView(slotN, slpN);
     for (int i = 0; i < m.taskIds.size(); i++) {
       final int k = i;
       // 英文单词整词旋转 90°(顺时针,自上而下读);名称用本地化业务名(中文模式中文,英文模式英文)
@@ -74,8 +92,7 @@ class DecisionPage {
       c.setText(name); c.setAllCaps(false); c.setTextSize(12);
       c.setMinHeight(0); c.setMinimumWidth(0); c.setMinimumHeight(0);
       c.setPadding(0, Ui.dp(m,10), 0, Ui.dp(m,10)); // 旋转后成为左右内边距
-      c.setTextColor(k == m.taskIdx ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
-      c.setBackground(Ui.pill(k == m.taskIdx ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,10)));
+      paintBizChip(c, !newsMode && k == m.taskIdx);
       int visW = Ui.dp(m,40);                                  // 旋转后视觉宽 = 按钮自身高
       int visH = (int) c.getPaint().measureText(name) + Ui.dp(m,28); // 旋转后视觉高 = 按钮自身宽
       c.setRotation(90);
@@ -83,13 +100,7 @@ class DecisionPage {
       slot.addView(c, new FrameLayout.LayoutParams(visH, visW, Gravity.CENTER));
       LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(visW, visH);
       slp.bottomMargin = Ui.dp(m,6);
-      c.setOnClickListener(v -> {
-        m.taskIdx = k; paintChips(); loadHistory(m.taskIds.get(k));
-        for (int j = 0; j < bizChips.length; j++) {
-          bizChips[j].setTextColor(j == k ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
-          bizChips[j].setBackground(Ui.pill(j == k ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,10)));
-        }
-      });
+      c.setOnClickListener(v -> selectBiz(k));
       bizChips[i] = c; rail.addView(slot, slp);
     }
     final LinearLayout leftCol = new LinearLayout(m);
@@ -106,11 +117,23 @@ class DecisionPage {
     LinearLayout top = new LinearLayout(m);
     top.setOrientation(LinearLayout.HORIZONTAL);
     top.addView(leftCol);
+    leftColRef = leftCol;
 
     LinearLayout chatCol = new LinearLayout(m);
     chatCol.setOrientation(LinearLayout.VERTICAL);
     chatCol.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
     top.addView(chatCol);
+
+    if (newsMode) {
+      // 快讯模式:内容区 = NewsPage(状态/统计/过滤/快讯流)
+      m.newsPage.buildInto(chatCol);
+      m.body.addView(top, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+      m.menuBtn.setOnClickListener(v -> {
+        boolean show = leftColRef.getVisibility() == View.GONE;
+        leftColRef.setVisibility(show ? View.VISIBLE : View.GONE);
+      });
+      return;
+    }
 
     // 统计卡 + 检索框:放入 tab 内容区(chatCol)内部,横跨聊天列
     LinearLayout statsRow = new LinearLayout(m);
@@ -178,6 +201,46 @@ class DecisionPage {
       railHidden = leftCol.getVisibility() != View.GONE;
       leftCol.setVisibility(railHidden ? View.GONE : View.VISIBLE);
     });
+  }
+
+  // ---- rail 选择:快讯 / 业务 ----
+  private void paintNewsChip() {
+    if (newsChip == null) return;
+    newsChip.setText(m.getString(R.string.tab_news));
+    newsChip.setAllCaps(false); newsChip.setTextSize(12);
+    newsChip.setMinHeight(0); newsChip.setMinimumWidth(0); newsChip.setMinimumHeight(0);
+    newsChip.setTextColor(newsMode ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+    newsChip.setBackground(Ui.pill(newsMode ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,10)));
+  }
+
+  private void paintBizChip(Button c, boolean on) {
+    c.setTextColor(on ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+    c.setBackground(Ui.pill(on ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,10)));
+  }
+
+  private void rebuildDecision() {
+    m.body.removeAllViews();
+    build();
+  }
+
+  void selectNews() {
+    if (newsMode) return;
+    newsMode = true;
+    m.newsPage.setActive(true);
+    rebuildDecision();
+  }
+
+  void selectBiz(int k) {
+    boolean wasNews = newsMode;
+    newsMode = false;
+    m.taskIdx = k;
+    if (wasNews) {
+      m.newsPage.setActive(false);
+      rebuildDecision();
+      return;
+    }
+    paintChips(); loadHistory(m.taskIds.get(k));
+    for (int j = 0; j < bizChips.length; j++) paintBizChip(bizChips[j], j == k);
   }
 
   /** 统计卡标签随当前业务个性化(第一卡 = 业务名,本地化) */
