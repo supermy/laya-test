@@ -35,4 +35,8 @@ object Cfg {
   const val ACTIVE = "active"
   const val NAME = "name"
   const val SLOTS = "slots"
+  const val NEWS = "news"
+  const val SINA = "sina"
+  const val WSC = "wsc"
+  const val INTERVAL = "interval"
 }

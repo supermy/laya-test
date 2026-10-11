@@ -25,6 +25,7 @@ class GatewayPage {
   private EditText gwEmailHost, gwEmailUser, gwEmailPass, gwReportTo;
   private EditText gwImapPort, gwSmtpPort; private CheckBox gwSsl;
   private EditText gwMqUrl, gwMqSub, gwMqPub;
+  private EditText gwNewsSina, gwNewsWsc, gwNewsInterval;
 
   GatewayPage(MainActivity m) { this.m = m; }
 
@@ -281,10 +282,41 @@ class GatewayPage {
       } catch (Exception e) { gwStatus.setText(m.getString(R.string.test_failed, e.getMessage())); }
     });
 
-    // ---- 左侧竖排 tab(与报表页同款):邮件/队列/LLM ----
-    LinearLayout[] panels = {pMail, pMq, pLlm};
-    final ScrollView[] scrolls = new ScrollView[3];
-    for (int i = 0; i < 3; i++) {
+    // ---- 资讯采集(快讯页数据源与刷新频率;cfg.news) ----
+    LinearLayout pNews = new LinearLayout(m);
+    pNews.setOrientation(LinearLayout.VERTICAL);
+    pNews.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
+    l = pNews;
+    l.addView(Ui.hint(m,m.getString(R.string.news_cfg_hint)));
+    org.json.JSONObject newsCfg = com.laya.Gateway.cfg(m).optJSONObject(com.laya.Cfg.NEWS);
+    org.json.JSONObject sinaCfg = newsCfg != null ? newsCfg.optJSONObject(com.laya.Cfg.SINA) : null;
+    org.json.JSONObject wscCfg = newsCfg != null ? newsCfg.optJSONObject(com.laya.Cfg.WSC) : null;
+    gwNewsSina = Ui.fieldU(m,l, m.getString(R.string.news_sina_hint),
+        sinaCfg != null ? sinaCfg.optString(com.laya.Cfg.URL) : "");
+    gwNewsWsc = Ui.fieldU(m,l, m.getString(R.string.news_wsc_hint),
+        wscCfg != null ? wscCfg.optString(com.laya.Cfg.URL) : "");
+    gwNewsInterval = Ui.fieldU(m,l, m.getString(R.string.news_interval_hint),
+        newsCfg != null && newsCfg.has(com.laya.Cfg.INTERVAL) ? String.valueOf(newsCfg.optLong(com.laya.Cfg.INTERVAL, 60)) : "60");
+    Button newsSave = Ui.button(m,l, m.getString(R.string.news_cfg_save));
+    newsSave.setOnClickListener(v -> {
+      try {
+        JSONObject cfg = com.laya.Gateway.cfg(m.getApplicationContext());
+        JSONObject news = new JSONObject();
+        String su = gwNewsSina.getText().toString().trim();
+        String wu = gwNewsWsc.getText().toString().trim();
+        if (!su.isEmpty()) news.put(com.laya.Cfg.SINA, new JSONObject().put(com.laya.Cfg.URL, su).put(com.laya.Cfg.ENABLED, true));
+        if (!wu.isEmpty()) news.put(com.laya.Cfg.WSC, new JSONObject().put(com.laya.Cfg.URL, wu).put(com.laya.Cfg.ENABLED, true));
+        try { news.put(com.laya.Cfg.INTERVAL, Math.max(15, Integer.parseInt(gwNewsInterval.getText().toString().trim()))); } catch (Exception ignore) {}
+        cfg.put(com.laya.Cfg.NEWS, news);
+        com.laya.Gateway.saveCfg(m.getApplicationContext(), cfg);
+        gwStatus.setText(m.getString(R.string.news_cfg_done));
+      } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
+    });
+
+    // ---- 左侧竖排 tab(与报表页同款):邮件/队列/LLM/资讯 ----
+    LinearLayout[] panels = {pMail, pMq, pLlm, pNews};
+    final ScrollView[] scrolls = new ScrollView[4];
+    for (int i = 0; i < 4; i++) {
       ScrollView sv = new ScrollView(m);
       sv.addView(panels[i]);
       scrolls[i] = sv;
@@ -293,11 +325,11 @@ class GatewayPage {
     final FrameLayout gHolder = new FrameLayout(m);
     gHolder.addView(scrolls[0]);
     gHolder.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
-    String[] gkinds = {m.getString(R.string.gw_mail), m.getString(R.string.gw_mq), "LLM"};
-    final Button[] gchips = new Button[3];
+    String[] gkinds = {m.getString(R.string.gw_mail), m.getString(R.string.gw_mq), "LLM", m.getString(R.string.gw_news)};
+    final Button[] gchips = new Button[4];
     final LinearLayout grail = new LinearLayout(m);
     grail.setOrientation(LinearLayout.VERTICAL);
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
       final int k = i;
       Button c = new Button(m);
       c.setText(gkinds[i]); c.setAllCaps(false); c.setTextSize(12);
@@ -306,7 +338,7 @@ class GatewayPage {
         gHolder.removeAllViews();
         gHolder.addView(scrolls[k]);
         m.scroller = scrolls[k];
-        for (int j = 0; j < 3; j++) {
+        for (int j = 0; j < 4; j++) {
           gchips[j].setTextColor(j == k ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
           gchips[j].setBackground(Ui.pill(j == k ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,12)));
         }
@@ -342,7 +374,7 @@ class GatewayPage {
     gBottom.addView(gwStatus);
     m.body.addView(gBottom);
     // 初始漆全部 chip(选中高亮,其余 off 样式;默认 Button 样式在深色下露馅)
-    for (int j = 0; j < 3; j++) {
+    for (int j = 0; j < 4; j++) {
       gchips[j].setTextColor(j == 0 ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
       gchips[j].setBackground(Ui.pill(j == 0 ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,12)));
     }

@@ -167,13 +167,14 @@ class NewsPage {
   private final Runnable tick = new Runnable() {
     @Override public void run() {
       if (autoOn && m.tab == 4) fetch();
-      timer.postDelayed(this, 60_000);
+      long period = Math.max(15, newsCfg().optLong(com.laya.Cfg.INTERVAL, 60)) * 1000L;
+      timer.postDelayed(this, period);
     }
   };
   private void ensureTimer() {
     if (timerStarted) return;
     timerStarted = true;
-    timer.postDelayed(tick, 60_000);
+    timer.postDelayed(tick, Math.max(15, newsCfg().optLong(com.laya.Cfg.INTERVAL, 60)) * 1000L);
   }
 
   // ---- 拉取:双源合并,按时间倒序;返回新增条数 ----
@@ -225,8 +226,19 @@ class NewsPage {
         .replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").trim();
   }
 
+  /** 资讯采集配置(网关页 cfg.news);缺省全默认源 */
+  private org.json.JSONObject newsCfg() {
+    org.json.JSONObject n = com.laya.Gateway.cfg(m).optJSONObject(com.laya.Cfg.NEWS);
+    return n == null ? new org.json.JSONObject() : n;
+  }
+
   private int fetchSina() throws Exception {
-    JSONObject o = getJson("https://zhibo.sina.com.cn/api/zhibo/feed?page=1&page_size=20&zhibo_id=152");
+    org.json.JSONObject sc = newsCfg().optJSONObject(com.laya.Cfg.SINA);
+    if (sc != null && !sc.optBoolean(com.laya.Cfg.ENABLED, true)) return 0;
+    String url = sc != null && !sc.optString(com.laya.Cfg.URL).isEmpty()
+        ? sc.optString(com.laya.Cfg.URL)
+        : "https://zhibo.sina.com.cn/api/zhibo/feed?page=1&page_size=20&zhibo_id=152";
+    JSONObject o = getJson(url);
     JSONArray arr = o.optJSONObject("result").optJSONObject("data").optJSONObject("feed").optJSONArray("list");
     int fresh = 0;
     SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
@@ -250,7 +262,12 @@ class NewsPage {
   }
 
   private int fetchWsc() throws Exception {
-    JSONObject o = getJson("https://api-one-wscn.awtmt.com/apiv1/content/lives?channel=global-channel&limit=20");
+    org.json.JSONObject wc = newsCfg().optJSONObject(com.laya.Cfg.WSC);
+    if (wc != null && !wc.optBoolean(com.laya.Cfg.ENABLED, true)) return 0;
+    String url = wc != null && !wc.optString(com.laya.Cfg.URL).isEmpty()
+        ? wc.optString(com.laya.Cfg.URL)
+        : "https://api-one-wscn.awtmt.com/apiv1/content/lives?channel=global-channel&limit=20";
+    JSONObject o = getJson(url);
     JSONArray arr = o.optJSONObject("data").optJSONArray("items");
     int fresh = 0;
     for (int i = 0; arr != null && i < arr.length(); i++) {
