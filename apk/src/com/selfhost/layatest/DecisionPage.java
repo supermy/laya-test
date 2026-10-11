@@ -17,8 +17,9 @@ class DecisionPage {
   private final MainActivity m;
   private LinearLayout msgList;
   private TextView[] stNums;
+  private LinearLayout statsRowRef;
   private EditText searchBox;
-  private String searchKw = "";
+  private final java.util.HashMap<String, String> searchByTask = new java.util.HashMap<>(); // 各业务独立检索词
   private final android.os.Handler stHandler = new android.os.Handler(android.os.Looper.getMainLooper());
   private boolean stQueued = false;
   private TextView curBizLabel;
@@ -118,13 +119,19 @@ class DecisionPage {
         m.getString(R.string.st_total), m.getString(R.string.st_today),
         m.getString(R.string.st_avglat), m.getString(R.string.st_highrate)},
         new int[]{0xFF6FA8FF, 0xFF4ADE80, 0xFFE7B10A, 0xFFD62828});
+    statsRowRef = statsRow;
     chatCol.addView(statsRow);
+    paintStatsBiz(); // 卡片标题随当前业务个性化
     LinearLayout searchRow = new LinearLayout(m);
     searchRow.setPadding(Ui.dp(m,10), Ui.dp(m,6), Ui.dp(m,10), Ui.dp(m,4));
     searchBox = Ui.field(m, searchRow, m.getString(R.string.st_search_hint));
     searchBox.addTextChangedListener(new android.text.TextWatcher() {
       @Override public void beforeTextChanged(CharSequence cs, int a, int b, int cc) {}
-      @Override public void onTextChanged(CharSequence cs, int a, int b, int cc) { filterBubbles(String.valueOf(cs)); }
+      @Override public void onTextChanged(CharSequence cs, int a, int b, int cc) {
+        String kw = String.valueOf(cs);
+        if (!m.taskIds.isEmpty()) searchByTask.put(m.taskIds.get(m.taskIdx), kw); // 按业务记忆
+        filterBubbles(kw);
+      }
       @Override public void afterTextChanged(android.text.Editable e) {}
     });
     chatCol.addView(searchRow);
@@ -165,6 +172,30 @@ class DecisionPage {
     });
   }
 
+  /** 统计卡标签随当前业务个性化(第一卡 = 业务名) */
+  private void paintStatsBiz() {
+    if (statsRowRef == null || m.taskIds.isEmpty()) return;
+    String biz = m.taskIds.get(m.taskIdx);
+    String[] labs = {biz, m.getString(R.string.st_today),
+        m.getString(R.string.st_avglat), m.getString(R.string.st_highrate)};
+    int i = 0;
+    for (int r = 0; r < statsRowRef.getChildCount() && i < 4; r++) {
+      View gr = statsRowRef.getChildAt(r);
+      if (!(gr instanceof android.view.ViewGroup)) continue;
+      android.view.ViewGroup g = (android.view.ViewGroup) gr;
+      for (int k = 0; k < g.getChildCount() && i < 4; k++) {
+        View card = g.getChildAt(k);
+        if (card instanceof android.view.ViewGroup) {
+          android.view.ViewGroup cg = (android.view.ViewGroup) card;
+          if (cg.getChildCount() >= 2 && cg.getChildAt(1) instanceof TextView) {
+            ((TextView) cg.getChildAt(1)).setText(labs[i]);
+            i++;
+          }
+        }
+      }
+    }
+  }
+
   /** 统计卡刷新(防抖):决策/载入历史后调用 */
   private void refreshStatsSoon() {
     if (stQueued) return;
@@ -173,7 +204,8 @@ class DecisionPage {
       stQueued = false;
       final android.app.Activity act = m;
       new Thread(() -> {
-        final long[] st = com.laya.DecisionCore.appStats(act);
+        final String biz = m.taskIds.get(m.taskIdx); // 统计随当前业务个性化
+      final long[] st = com.laya.DecisionCore.appStats(act, biz);
         m.runOnUiThread(() -> {
           if (stNums == null) return;
           stNums[0].setText(String.valueOf(st[0]));
@@ -188,10 +220,10 @@ class DecisionPage {
   /** 检索:隐藏不含关键字的气泡(空关键字全显) */
   private void filterBubbles(String kw) {
     if (msgList == null) return;
-    searchKw = kw == null ? "" : kw.trim();
+    String k = kw == null ? "" : kw.trim();
     for (int i = 0; i < msgList.getChildCount(); i++) {
       View v = msgList.getChildAt(i);
-      v.setVisibility(bubbleText(v).contains(searchKw) ? View.VISIBLE : View.GONE);
+      v.setVisibility(bubbleText(v).contains(k) ? View.VISIBLE : View.GONE);
     }
   }
 
@@ -232,7 +264,10 @@ class DecisionPage {
     }
     m.scroller.post(() -> {
       m.scroller.scrollTo(0, m.scroller.getHeight());
-      filterBubbles(searchKw);
+      String kw = searchByTask.getOrDefault(task, "");   // 恢复该业务自己的检索词
+      if (!searchBox.getText().toString().equals(kw)) searchBox.setText(kw); // setText 触发过滤
+      else filterBubbles(kw);
+      paintStatsBiz();
       refreshStatsSoon();
     });
   }
