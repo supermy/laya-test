@@ -157,10 +157,18 @@ object DecisionCore {
   }
 
   /** 动态业务:从 /sdcard/models/laya-litert-<task>/phone/questions.json 读问题定义 */
+  /** 动态业务 state_key 缓存(questions.json 顶层;缺省 "text") */
+  private val externalStateKeys = HashMap<String, String>()
+
+  fun externalStateKey(task: String): String = externalStateKeys[task] ?: "text"
+
   private fun externalDefs(task: String): List<Pair<String, Map<String, Any?>>> {
     val f = File("/sdcard/models/laya-litert-$task/phone/questions.json")
     val out = ArrayList<Pair<String, Map<String, Any?>>>()
-    val arr = org.json.JSONArray(f.readText())
+    // 两种格式:{"state_key":..., "questions":[...]}(新)或纯数组(旧,state_key=text)
+    val root = org.json.JSONObject(f.readText())
+    externalStateKeys[task] = root.optString("state_key", "text")
+    val arr = root.optJSONArray("questions") ?: org.json.JSONArray(f.readText())
     for (i in 0 until arr.length()) {
       val q = arr.getJSONObject(i)
       val m = LinkedHashMap<String, Any?>()
@@ -354,8 +362,13 @@ object DecisionCore {
     val eng = ensureRunner(ctx, task)
     val t0 = System.nanoTime()
     val answers = JSONObject()
-    for ((qid, qdef) in questionDefs(ctx, task)) {
-      answers.put(qid, JSONObject(eng.answer(text, qdef, qid)))
+    // 动态业务:训练时 state 为 {"state_key": text} JSON 包装,端侧须同格式复现(裸 String 会导致分布漂移)
+    val defs = questionDefs(ctx, task) // 先加载(动态业务填充 state_key 缓存)
+    // 与 PC json.dumps({"key": text}, ensure_ascii=False) 逐字对齐(冒号后带空格),否则 tokenize 漂移
+    val state: Any = if (task in BUILTIN) text
+      else "{\"" + externalStateKey(task) + "\": " + org.json.JSONObject.quote(text) + "}"
+    for ((qid, qdef) in defs) {
+      answers.put(qid, JSONObject(eng.answer(state, qdef, qid)))
     }
     val ms = (System.nanoTime() - t0) / 1_000_000
     appendLog(ctx, task, text, answers, ms)

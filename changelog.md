@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-11 — v1.4.31:决策 API 中文 body 乱码修复 + 动态业务 state 对齐训练格式
+
+- **决策 API 中文乱码修复**:NanoHTTPD 对无 charset 的 POST body 按 US-ASCII 解码,中文全变 '?'(不可逆)→ 决策输出退化为先验分布;parseBody 前注入 `charset=utf-8`(对纯 ASCII/已声明 charset 客户端无损)
+- **动态业务 state 对齐**:questions.json 增加 `state_key`({"state_key","questions"} 结构,兼容旧纯数组);decide 对动态业务按训练格式包装 `{"state_key": text}`(冒号后带空格,与 PC json.dumps 逐字对齐)
+- 真机验证:news(财经资讯评分)业务 API 四条典型文本,三引擎输出与 PC torch 一致 — NPU 利好 0.995/利空 0.995(248/206ms),CPU 0.917 与 PC 逐位一致;smoke 11/11
+- 排查路径备忘:NPU/CPU 输出恒定先验 → LayaDiag 序列日志发现 stateLen=95(UTF-8 字节当 Latin-1 计数)+ byte-fallback token → decode 确认 '?' 替换 → 锁定 NanoHTTPD 解码层
+
 ## 2026-10-11 — v1.4.30:标题栏收敛为「⋮」弹出子菜单 + 深色气泡降噪
 
 - 标题栏外观/语言两个按钮收敛为单个「⋮」:PopupMenu 弹出「外观」(跟随系统/浅色/深色)与「语言」(跟随系统/中文/English)两组子菜单,单选勾选当前项,选择即生效 recreate

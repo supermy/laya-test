@@ -44,6 +44,12 @@ class DecisionApiServer private constructor(private val ctx: Context, port: Int)
         uri == "/health" -> json(Response.Status.OK, health())
         uri == "/decide" && session.method == Method.POST -> {
           val files = HashMap<String, String>()
+          // NanoHTTPD 默认按 US-ASCII 解码 body → 中文全变 '?'(不可逆)。
+          // 注入 charset=utf-8 让 parseBody 以 UTF-8 解码(对纯 ASCII 客户端无影响)。
+          try {
+            session.headers["content-type"] = "application/json; charset=utf-8"
+            session.headers["Content-Type"] = "application/json; charset=utf-8"
+          } catch (_: Throwable) {}
           session.parseBody(files)
           val body = JSONObject(files["postData"] ?: "{}")
           val task = body.optString("task", "ticket")
