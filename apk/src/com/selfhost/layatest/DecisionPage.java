@@ -34,9 +34,9 @@ class DecisionPage {
     if (msgList == null) return;
     TextView tv = new TextView(m);
     tv.setText(text); tv.setTextSize(14);
-    tv.setTextColor(user ? 0xFF1A2B4C : 0xFF22262E);
+    tv.setTextColor(user ? Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6) : Ui.c(m, 0xFF22262E, 0xFFE2E6EC));
     tv.setMaxWidth(Ui.dp(m,280));
-    tv.setBackground(Ui.pill(user ? m.USER_BG : m.BOT_BG, Ui.dp(m,8)));
+    tv.setBackground(Ui.pill(user ? m.USER_BG : Ui.c(m, m.BOT_BG, 0xFF2A3040), Ui.dp(m,8)));
     tv.setPadding(Ui.dp(m,13), Ui.dp(m,9), Ui.dp(m,13), Ui.dp(m,9));
     LinearLayout row = new LinearLayout(m);
     row.setGravity(user ? Gravity.END : Gravity.START);
@@ -55,7 +55,7 @@ class DecisionPage {
     row.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,4));
     row.setGravity(Gravity.CENTER_VERTICAL);
     curBizLabel = new TextView(m);
-    curBizLabel.setTextSize(12); curBizLabel.setTextColor(0xFF66707E);
+    curBizLabel.setTextSize(12); curBizLabel.setTextColor(Ui.c(m, 0xFF66707E, 0xFF8A93A0));
     curBizLabel.setPadding(Ui.dp(m,2), 0, 0, 0);
     row.addView(curBizLabel);
     m.body.addView(row);
@@ -74,8 +74,8 @@ class DecisionPage {
       c.setText(name); c.setAllCaps(false); c.setTextSize(12);
       c.setMinHeight(0); c.setMinimumWidth(0); c.setMinimumHeight(0);
       c.setPadding(0, Ui.dp(m,10), 0, Ui.dp(m,10)); // 旋转后成为左右内边距
-      c.setTextColor(k == m.taskIdx ? Color.WHITE : 0xFF1A2B4C);
-      c.setBackground(Ui.pill(k == m.taskIdx ? m.PRIMARY : 0xFFE7EAF2, Ui.dp(m,10)));
+      c.setTextColor(k == m.taskIdx ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+      c.setBackground(Ui.pill(k == m.taskIdx ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,10)));
       int visW = Ui.dp(m,40);                                  // 旋转后视觉宽 = 按钮自身高
       int visH = (int) c.getPaint().measureText(name) + Ui.dp(m,28); // 旋转后视觉高 = 按钮自身宽
       c.setRotation(90);
@@ -86,8 +86,8 @@ class DecisionPage {
       c.setOnClickListener(v -> {
         m.taskIdx = k; paintChips(); loadHistory(m.taskIds.get(k));
         for (int j = 0; j < bizChips.length; j++) {
-          bizChips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
-          bizChips[j].setBackground(Ui.pill(j == k ? m.PRIMARY : 0xFFE7EAF2, Ui.dp(m,10)));
+          bizChips[j].setTextColor(j == k ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+          bizChips[j].setBackground(Ui.pill(j == k ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,10)));
         }
       });
       bizChips[i] = c; rail.addView(slot, slp);
@@ -119,8 +119,9 @@ class DecisionPage {
     stNums = Ui.statsCards(m, statsRow, new String[]{
         m.getString(R.string.st_total), m.getString(R.string.st_today),
         m.getString(R.string.st_avglat), m.getString(R.string.st_highrate)},
-        new int[]{0xFF1A2B4C, 0xFF2A9D8F, 0xFFB06F0A, 0xFFD62828},
-        0xFFF7F8FA, 0xFF66707E);
+        Ui.dark(m) ? new int[]{0xFF7FA8FF, 0xFF39B8AA, 0xFFE78A00, 0xFFFF6B6B}
+            : new int[]{0xFF1A2B4C, 0xFF2A9D8F, 0xFFB06F0A, 0xFFD62828},
+        Ui.c(m, 0xFFF7F8FA, 0xFF232833), Ui.c(m, 0xFF66707E, 0xFF8A93A0));
     statsRowRef = statsRow;
     chatCol.addView(statsRow);
     paintStatsBiz(); // 卡片标题随当前业务个性化
@@ -156,10 +157,11 @@ class DecisionPage {
     bottom.setOrientation(LinearLayout.HORIZONTAL);
     bottom.setGravity(Gravity.CENTER_VERTICAL);
     bottom.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
-    bottom.setBackgroundColor(Color.WHITE);
+    bottom.setBackgroundColor(Ui.c(m, Color.WHITE, 0xFF1A1E24));
     input = new EditText(m);
     input.setHint(m.getString(R.string.input_hint, m.taskLabels.get(m.taskIdx))); input.setTextSize(14); input.setMaxLines(3);
-    input.setBackground(Ui.pill(Color.WHITE, Ui.dp(m,22)));
+    input.setTextColor(Ui.c(m, 0xFF22262E, 0xFFE2E6EC)); input.setHintTextColor(Ui.c(m, 0xFF9AA3AD, 0xFF66707E));
+    input.setBackground(Ui.pill(Ui.c(m, Color.WHITE, 0xFF2A3040), Ui.dp(m,22)));
     input.setPadding(Ui.dp(m,14), Ui.dp(m,10), Ui.dp(m,14), Ui.dp(m,10));
     bottom.addView(input, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
     Button send = new Button(m);

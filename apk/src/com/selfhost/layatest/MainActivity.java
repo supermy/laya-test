@@ -117,6 +117,21 @@ public class MainActivity extends Activity {
 
   String uiLocale() { return getSharedPreferences("ui", MODE_PRIVATE).getString("locale", "sys"); }
 
+  // ---- 主题:pref("ui"/"theme") = sys|light|dark;标题栏按钮循环 A(随系统)→浅→深 ----
+  private TextView themeBtn;
+
+  private void paintThemeBtn() {
+    if (themeBtn == null) return;
+    String t = getSharedPreferences("ui", MODE_PRIVATE).getString("theme", "sys");
+    themeBtn.setText("dark".equals(t) ? "🌙" : "light".equals(t) ? "☀" : "🌗A");
+  }
+
+  @Override
+  public void onConfigurationChanged(android.content.res.Configuration newCfg) {
+    super.onConfigurationChanged(newCfg);
+    recreate(); // 跟随系统模式:系统深浅色切换时重建以取新配色
+  }
+
   @Override
   protected void attachBaseContext(android.content.Context base) {
     String sel = base.getSharedPreferences("ui", MODE_PRIVATE).getString("locale", "sys");
@@ -147,9 +162,10 @@ public class MainActivity extends Activity {
 
 
   private void buildUi() {
+    boolean dk = Ui.dark(this);
     LinearLayout root = new LinearLayout(this);
     root.setOrientation(LinearLayout.VERTICAL);
-    root.setBackgroundColor(WX_PAGE_BG);
+    root.setBackgroundColor(Ui.c(this, WX_PAGE_BG, 0xFF121417));
 
     // ---- 标题栏(仿微信:浅灰底、居中标题、左侧☰菜单按钮、底部分隔线) ----
     menuBtn = new Button(this);
@@ -157,29 +173,43 @@ public class MainActivity extends Activity {
     menuBtn.setPadding(Ui.dp(this, 12), Ui.dp(this, 2), Ui.dp(this, 12), Ui.dp(this, 2));
     menuBtn.setMinHeight(0); menuBtn.setMinimumHeight(0);
     menuBtn.setMinWidth(0); menuBtn.setMinimumWidth(0);
-    menuBtn.setTextColor(0xFF1A1A1A);
+    menuBtn.setTextColor(Ui.c(this, 0xFF1A1A1A, 0xFFE8EAED));
     menuBtn.setBackground(null);
     menuBtn.setLayoutParams(new FrameLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, Gravity.START | Gravity.CENTER_VERTICAL));
     LinearLayout titleBar = new LinearLayout(this);
     titleBar.setOrientation(LinearLayout.VERTICAL);
-    titleBar.setBackgroundColor(0xFFEDEDED);
+    titleBar.setBackgroundColor(Ui.c(this, 0xFFEDEDED, 0xFF1E2126));
     FrameLayout titleHolder = new FrameLayout(this);
     TextView title = new TextView(this);
     title.setText(getString(R.string.app_title));
     title.setTextSize(17); title.setTypeface(Typeface.DEFAULT_BOLD); title.setGravity(Gravity.CENTER);
-    title.setTextColor(0xFF1A1A1A);
+    title.setTextColor(Ui.c(this, 0xFF1A1A1A, 0xFFE8EAED));
     title.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 10));
     titleHolder.addView(title);
     titleHolder.addView(menuBtn);
-    // 标题右侧语言切换按钮:点击循环 跟随系统→中文→English(与系统页选择器同一记忆键)
+    // 标题右侧按钮组:主题切换(🌗A 随系统→☀ 浅色→🌙 深色)+ 语言切换,同一记忆风格 prefs("ui")
+    LinearLayout rightBtns = new LinearLayout(this);
+    rightBtns.setOrientation(LinearLayout.HORIZONTAL);
+    themeBtn = new TextView(this);
+    themeBtn.setTextSize(13); themeBtn.setTypeface(Typeface.DEFAULT_BOLD);
+    themeBtn.setTextColor(Ui.c(this, 0xFF1A2B4C, 0xFFCFD8E6));
+    themeBtn.setBackground(Ui.pill(Ui.c(this, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(this, 12)));
+    themeBtn.setPadding(Ui.dp(this, 10), Ui.dp(this, 5), Ui.dp(this, 10), Ui.dp(this, 5));
+    paintThemeBtn();
+    themeBtn.setOnClickListener(v -> {
+      String cur = getSharedPreferences("ui", MODE_PRIVATE).getString("theme", "sys");
+      String next = "sys".equals(cur) ? "light" : "light".equals(cur) ? "dark" : "sys";
+      getSharedPreferences("ui", MODE_PRIVATE).edit().putString("theme", next).apply();
+      recreate();
+    });
+    LinearLayout.LayoutParams tblp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+    tblp.rightMargin = Ui.dp(this, 6); tblp.topMargin = Ui.dp(this, 6);
+    rightBtns.addView(themeBtn, tblp);
     langBtn = new TextView(this);
     langBtn.setTextSize(13); langBtn.setTypeface(Typeface.DEFAULT_BOLD);
-    langBtn.setTextColor(0xFF1A2B4C);
-    langBtn.setBackground(Ui.pill(0xFFE7EAF2, Ui.dp(this, 12)));
+    langBtn.setTextColor(Ui.c(this, 0xFF1A2B4C, 0xFFCFD8E6));
+    langBtn.setBackground(Ui.pill(Ui.c(this, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(this, 12)));
     langBtn.setPadding(Ui.dp(this, 10), Ui.dp(this, 5), Ui.dp(this, 10), Ui.dp(this, 5));
-    FrameLayout.LayoutParams llblp = new FrameLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, Gravity.END | Gravity.CENTER_VERTICAL);
-    llblp.rightMargin = Ui.dp(this, 10); llblp.topMargin = Ui.dp(this, 6);
-    langBtn.setLayoutParams(llblp);
     paintLangBtn();
     langBtn.setOnClickListener(v -> {
       String cur = uiLocale();
@@ -187,10 +217,14 @@ public class MainActivity extends Activity {
       getSharedPreferences("ui", MODE_PRIVATE).edit().putString("locale", next).apply();
       recreate();
     });
-    titleHolder.addView(langBtn);
+    rightBtns.addView(langBtn, new FrameLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+    FrameLayout.LayoutParams rblp = new FrameLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, Gravity.END | Gravity.CENTER_VERTICAL);
+    rblp.rightMargin = Ui.dp(this, 10); rblp.topMargin = Ui.dp(this, 6);
+    rightBtns.setLayoutParams(rblp);
+    titleHolder.addView(rightBtns);
     titleBar.addView(titleHolder);
     View titleDiv = new View(this);
-    titleDiv.setBackgroundColor(0xFFE0E0E0);
+    titleDiv.setBackgroundColor(Ui.c(this, 0xFFE0E0E0, 0xFF2A2F38));
     titleBar.addView(titleDiv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 1)));
     root.addView(titleBar);
 
@@ -205,10 +239,10 @@ public class MainActivity extends Activity {
     // ---- 底部主 tab(等宽四栏) ----
     LinearLayout bar = new LinearLayout(this);
     bar.setOrientation(LinearLayout.HORIZONTAL);
-    bar.setBackgroundColor(Color.WHITE);
+    bar.setBackgroundColor(Ui.c(this, Color.WHITE, 0xFF1A1E24));
     bar.setPadding(Ui.dp(this, 4), Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 10));
     View topDiv = new View(this);
-    topDiv.setBackgroundColor(0xFFE5E5E5);
+    topDiv.setBackgroundColor(Ui.c(this, 0xFFE5E5E5, 0xFF2A2F38));
     root.addView(topDiv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 1)));
     String[] names = {getString(R.string.tab_decision), getString(R.string.tab_report), getString(R.string.tab_gateway), getString(R.string.tab_system), getString(R.string.tab_news)};
     for (int i = 0; i < 5; i++) {
@@ -256,9 +290,9 @@ public class MainActivity extends Activity {
     for (int i = 0; i < 5; i++) {
       boolean on = i == k;
       TextView tb = tabBtns[i];
-      tb.setTextColor(on ? WX_GREEN : 0xFF7F7F7F);
+      tb.setTextColor(on ? WX_GREEN : Ui.c(this, 0xFF7F7F7F, 0xFF9AA3AD));
       tb.setTypeface(on ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
-      tb.setBackground(Ui.pill(on ? 0xFFE3F7EC : Color.TRANSPARENT, Ui.dp(this, 18)));
+      tb.setBackground(Ui.pill(on ? Ui.c(this, 0xFFE3F7EC, 0xFF1D3A2E) : Color.TRANSPARENT, Ui.dp(this, 18)));
       tb.setPadding(0, on ? Ui.dp(this, 9) : Ui.dp(this, 9), 0, on ? Ui.dp(this, 9) : Ui.dp(this, 9));
     }
     body.removeAllViews();

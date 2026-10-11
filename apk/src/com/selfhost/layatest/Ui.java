@@ -15,6 +15,18 @@ import android.widget.TextView;
 final class Ui {
   private Ui() {}
 
+  // ---- 主题:pref("ui"/"theme") = sys(随系统)|light|dark;默认跟随系统夜间模式 ----
+  static boolean dark(Context c) {
+    String t = c.getSharedPreferences("ui", Context.MODE_PRIVATE).getString("theme", "sys");
+    if ("dark".equals(t)) return true;
+    if ("light".equals(t)) return false;
+    int m = c.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+    return m == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+  }
+
+  /** 语义取色:dark ? darkV : lightV(页面硬编码色经此处接入主题) */
+  static int c(Context ctx, int lightV, int darkV) { return dark(ctx) ? darkV : lightV; }
+
   /** dp → px */
   static int dp(Context c, int v) { return Math.round(v * c.getResources().getDisplayMetrics().density); }
 
@@ -31,6 +43,7 @@ final class Ui {
   static EditText fieldU(Context c, LinearLayout parent, String hint, String text) {
     EditText e = new EditText(c);
     e.setHint(hint); e.setTextSize(13); e.setText(text); e.setSingleLine(true);
+    e.setTextColor(c(c, 0xFF22262E, 0xFFE2E6EC)); e.setHintTextColor(c(c, 0xFF9AA3AD, 0xFF66707E));
     e.setPadding(dp(c, 4), dp(c, 10), dp(c, 4), dp(c, 10));
     parent.addView(e, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
     return e;
@@ -39,7 +52,7 @@ final class Ui {
   /** 小号灰色提示文本 */
   static TextView hint(Context c, String s) {
     TextView t = new TextView(c);
-    t.setText(s); t.setTextSize(12); t.setTextColor(0xFF666C77); t.setPadding(0, dp(c, 8), 0, dp(c, 4));
+    t.setText(s); t.setTextSize(12); t.setTextColor(c(c, 0xFF666C77, 0xFF8A93A0)); t.setPadding(0, dp(c, 8), 0, dp(c, 4));
     return t;
   }
 
@@ -48,7 +61,8 @@ final class Ui {
   static EditText field(Context c, LinearLayout parent, String hint, String text) {
     EditText e = new EditText(c);
     e.setHint(hint); e.setTextSize(13); e.setText(text); e.setSingleLine(true);
-    e.setBackground(pill(Color.WHITE, dp(c, 10)));
+    e.setTextColor(c(c, 0xFF22262E, 0xFFE2E6EC)); e.setHintTextColor(c(c, 0xFF9AA3AD, 0xFF66707E));
+    e.setBackground(pill(c(c, Color.WHITE, 0xFF2A3040), dp(c, 10)));
     e.setPadding(dp(c, 10), dp(c, 8), dp(c, 10), dp(c, 8));
     parent.addView(e, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
     return e;

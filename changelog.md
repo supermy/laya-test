@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-11 — v1.4.29:深色/浅色皮肤(随系统 + 手动切换)
+
+- 全局主题:pref `ui/theme` = sys(随系统夜间模式)|light|dark;`Ui.dark()`/`Ui.c()` 语义取色,标题栏新增 🌗A/☀/🌙 循环按钮;跟随系统时 uiMode 变化自动重建(onConfigurationChanged)
+- 适配范围:主页框架(标题栏/底栏/主 tab)、决策页(气泡/统计卡/业务 rail/输入区)、报表页(六类报表/下钻/数据探索表格)、网关页(三面板/LLM 槽位/左栏 chips)、系统页(业务卡片/上传面板);快讯页保持 JevLive 暗色品牌风格,DiagramView 保持白底"图纸"
+- 修复:左栏 chip 初始只漆选中项,未选中项在深色下露 Light 默认按钮样式(Gateway/Report)
+- 输入框显式文字/占位色(Light 主题默认深字在暗底不可读)
+- 真机验证:深色下决策/报表/网关截图核对,smoke 11/11(versionCode 33)
+
 ## 2026-10-11 — v1.4.28:决策页统计卡浅色适配
 
 - 决策页统计卡配色适配浅色页面:`Ui.statsCards` 新增 cardBg/labelColor 重载,卡片底 `#F7F8FA`、标签 `#66707E`;数字取业务色系(深蓝/青/琥珀/红)保证浅底对比度(DecisionPage 调用处传参)

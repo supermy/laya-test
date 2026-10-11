@@ -189,7 +189,7 @@ class GatewayPage {
       JSONObject s = llmSlots != null ? llmSlots.optJSONObject(slotIds[i]) : null;
       LinearLayout slot = new LinearLayout(m);
       slot.setOrientation(LinearLayout.VERTICAL);
-      slot.setBackground(Ui.pill(0xFFF7F8FA, Ui.dp(m,10)));
+      slot.setBackground(Ui.pill(Ui.c(m, 0xFFF7F8FA, 0xFF232833), Ui.dp(m,10)));
       slot.setPadding(Ui.dp(m,9), Ui.dp(m,6), Ui.dp(m,9), Ui.dp(m,8));
       LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
       slp.bottomMargin = Ui.dp(m,8); slot.setLayoutParams(slp);
@@ -307,8 +307,8 @@ class GatewayPage {
         gHolder.addView(scrolls[k]);
         m.scroller = scrolls[k];
         for (int j = 0; j < 3; j++) {
-          gchips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
-          gchips[j].setBackground(Ui.pill(j == k ? m.PRIMARY : 0xFFE7EAF2, Ui.dp(m,12)));
+          gchips[j].setTextColor(j == k ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+          gchips[j].setBackground(Ui.pill(j == k ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,12)));
         }
       });
       gchips[i] = c;
@@ -341,8 +341,10 @@ class GatewayPage {
     gwStatus = Ui.hint(m,m.getString(R.string.gateway_bar, com.laya.Gateway.status(m)));
     gBottom.addView(gwStatus);
     m.body.addView(gBottom);
-    // 初始高亮
-    gchips[0].setTextColor(Color.WHITE);
-    gchips[0].setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,12)));
+    // 初始漆全部 chip(选中高亮,其余 off 样式;默认 Button 样式在深色下露馅)
+    for (int j = 0; j < 3; j++) {
+      gchips[j].setTextColor(j == 0 ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+      gchips[j].setBackground(Ui.pill(j == 0 ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,12)));
+    }
   }
 }

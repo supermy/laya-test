@@ -66,13 +66,13 @@ class SystemPage {
     // ---- 语言 / Language(应用内切换,立即生效) ----
     LinearLayout langRow = new LinearLayout(m);
     langRow.setOrientation(LinearLayout.VERTICAL);
-    langRow.setBackground(Ui.pill(0xFFF0F4FF, Ui.dp(m,10)));
+    langRow.setBackground(Ui.pill(Ui.c(m, 0xFFF0F4FF, 0xFF1C2534), Ui.dp(m,10)));
     langRow.setPadding(Ui.dp(m,10), Ui.dp(m,8), Ui.dp(m,10), Ui.dp(m,8));
     LinearLayout.LayoutParams langLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
     langLp.bottomMargin = Ui.dp(m,10);
     langRow.setLayoutParams(langLp);
     TextView langHead = new TextView(m);
-    langHead.setText(m.getString(R.string.lang_label)); langHead.setTextSize(14); langHead.setTypeface(Typeface.DEFAULT_BOLD);
+    langHead.setText(m.getString(R.string.lang_label)); langHead.setTextSize(14); langHead.setTypeface(Typeface.DEFAULT_BOLD); langHead.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
     langRow.addView(langHead);
     LinearLayout langBtns = new LinearLayout(m);
     langBtns.setOrientation(LinearLayout.HORIZONTAL);
@@ -89,8 +89,8 @@ class SystemPage {
       b.setMinHeight(0); b.setMinimumWidth(0); b.setMinimumHeight(0);
       b.setPadding(Ui.dp(m,12), Ui.dp(m,6), Ui.dp(m,12), Ui.dp(m,6));
       boolean on = id.equals(curLoc);
-      b.setTextColor(on ? Color.WHITE : 0xFF1A2B4C);
-      b.setBackground(Ui.pill(on ? m.PRIMARY : 0xFFE7EAF2, Ui.dp(m,14)));
+      b.setTextColor(on ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+      b.setBackground(Ui.pill(on ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,14)));
       LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
       blp.leftMargin = Ui.dp(m,8);
       b.setLayoutParams(blp);
@@ -108,13 +108,13 @@ class SystemPage {
     // ---- 手动上传模型包输入界面 ----
     LinearLayout up = new LinearLayout(m);
     up.setOrientation(LinearLayout.VERTICAL);
-    up.setBackground(Ui.pill(0xFFF0F4FF, Ui.dp(m,10)));
+    up.setBackground(Ui.pill(Ui.c(m, 0xFFF0F4FF, 0xFF1C2534), Ui.dp(m,10)));
     up.setPadding(Ui.dp(m,10), Ui.dp(m,8), Ui.dp(m,10), Ui.dp(m,10));
     LinearLayout.LayoutParams ulp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
     ulp.bottomMargin = Ui.dp(m,10);
     up.setLayoutParams(ulp);
     TextView upHead = new TextView(m);
-    upHead.setText(m.getString(R.string.upload_head)); upHead.setTextSize(14); upHead.setTypeface(Typeface.DEFAULT_BOLD);
+    upHead.setText(m.getString(R.string.upload_head)); upHead.setTextSize(14); upHead.setTypeface(Typeface.DEFAULT_BOLD); upHead.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
     up.addView(upHead);
     upSrc = Ui.fieldU(m,up, m.getString(R.string.pkg_path_hint));
     Button pickBtn = Ui.button(m,up, m.getString(R.string.pick_zip));
@@ -127,7 +127,7 @@ class SystemPage {
     });
     upTask = Ui.fieldU(m,up, m.getString(R.string.task_name_hint));
     upStatus = new TextView(m);
-    upStatus.setTextSize(11); upStatus.setTextColor(0xFF66707E);
+    upStatus.setTextSize(11); upStatus.setTextColor(Ui.c(m, 0xFF66707E, 0xFF8A93A0));
     upStatus.setText(m.getString(R.string.upload_note));
     up.addView(upStatus);
     Button impBtn = Ui.button(m,up, m.getString(R.string.upload_register));
@@ -160,7 +160,7 @@ class SystemPage {
 
     sysView = new TextView(m);
     sysView.setText(com.laya.DecisionCore.backendInfo(m) + m.getString(R.string.sys_tail));
-    sysView.setTextSize(13);
+    sysView.setTextSize(13); sysView.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
     l.addView(sysView);
 
     // 泳道数据流独立成「数据流」子页(fig5 同构:一次决策请求的端到端路径)
@@ -204,8 +204,8 @@ class SystemPage {
         subHolder.addView(subScrolls[k]);
         m.scroller = subScrolls[k];
         for (int j = 0; j < 4; j++) {
-          chips[j].setTextColor(j == k ? Color.WHITE : 0xFF1A2B4C);
-          chips[j].setBackground(Ui.pill(j == k ? m.PRIMARY : 0xFFE7EAF2, Ui.dp(m,12)));
+          chips[j].setTextColor(j == k ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+          chips[j].setBackground(Ui.pill(j == k ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,12)));
         }
       });
       chips[i] = c;
@@ -244,7 +244,7 @@ class SystemPage {
 
     LinearLayout card = new LinearLayout(m);
     card.setOrientation(LinearLayout.VERTICAL);
-    card.setBackground(Ui.pill(loaded ? 0xFFEAF3FF : 0xFFF7F8FA, Ui.dp(m,10)));
+    card.setBackground(Ui.pill(loaded ? Ui.c(m, 0xFFEAF3FF, 0xFF1E2B44) : Ui.c(m, 0xFFF7F8FA, 0xFF232833), Ui.dp(m,10)));
     card.setPadding(Ui.dp(m,10), Ui.dp(m,8), Ui.dp(m,10), Ui.dp(m,10));
     LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
     clp.bottomMargin = Ui.dp(m,8);
@@ -252,11 +252,11 @@ class SystemPage {
 
     TextView head = new TextView(m);
     head.setText((loaded ? "✅ " : "📦 ") + label + "  [" + task + "]");
-    head.setTextSize(14); head.setTypeface(Typeface.DEFAULT_BOLD); head.setTextColor(0xFF1A2B4C);
+    head.setTextSize(14); head.setTypeface(Typeface.DEFAULT_BOLD); head.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
     card.addView(head);
     TextView st = new TextView(m);
     st.setText(m.getString(loaded ? R.string.loaded_state : R.string.not_loaded_state));
-    st.setTextSize(11); st.setTextColor(0xFF66707E);
+    st.setTextSize(11); st.setTextColor(Ui.c(m, 0xFF66707E, 0xFF8A93A0));
     st.setPadding(0, Ui.dp(m,2), 0, Ui.dp(m,4));
     card.addView(st);
 
@@ -264,8 +264,8 @@ class SystemPage {
     Button toggle = new Button(m);
     toggle.setText(m.getString(loaded ? R.string.uninstall : R.string.load_btn));
     toggle.setAllCaps(false); toggle.setTextSize(12);
-    toggle.setTextColor(loaded ? 0xFF444A55 : Color.WHITE);
-    toggle.setBackground(Ui.pill(loaded ? m.CHIP_OFF : m.PRIMARY, Ui.dp(m,14)));
+    toggle.setTextColor(loaded ? Ui.c(m, 0xFF444A55, 0xFFB8C0CC) : Color.WHITE);
+    toggle.setBackground(Ui.pill(loaded ? Ui.c(m, m.CHIP_OFF, 0xFF2A3040) : m.PRIMARY, Ui.dp(m,14)));
     toggle.setPadding(Ui.dp(m,8), Ui.dp(m,6), Ui.dp(m,8), Ui.dp(m,6));
     toggle.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
     toggle.setOnClickListener(v -> {
@@ -287,15 +287,15 @@ class SystemPage {
     row2.setOrientation(LinearLayout.HORIZONTAL);
     Button detailBtn = new Button(m);
     detailBtn.setText(m.getString(R.string.detail_btn)); detailBtn.setAllCaps(false); detailBtn.setTextSize(12);
-    detailBtn.setTextColor(0xFF444A55); detailBtn.setBackground(Ui.pill(m.CHIP_OFF, Ui.dp(m,14)));
+    detailBtn.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC)); detailBtn.setBackground(Ui.pill(Ui.c(m, m.CHIP_OFF, 0xFF2A3040), Ui.dp(m,14)));
     detailBtn.setPadding(Ui.dp(m,4), Ui.dp(m,6), Ui.dp(m,4), Ui.dp(m,6));
     Button expBtn = new Button(m);
     expBtn.setText(m.getString(R.string.export_zip)); expBtn.setAllCaps(false); expBtn.setTextSize(12);
-    expBtn.setTextColor(0xFF444A55); expBtn.setBackground(Ui.pill(m.CHIP_OFF, Ui.dp(m,14)));
+    expBtn.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC)); expBtn.setBackground(Ui.pill(Ui.c(m, m.CHIP_OFF, 0xFF2A3040), Ui.dp(m,14)));
     expBtn.setPadding(Ui.dp(m,4), Ui.dp(m,6), Ui.dp(m,4), Ui.dp(m,6));
     Button delBtn = new Button(m);
     delBtn.setText(m.getString(R.string.delete_biz)); delBtn.setAllCaps(false); delBtn.setTextSize(12);
-    delBtn.setTextColor(0xFFB3261E); delBtn.setBackground(Ui.pill(0xFFFCEAEA, Ui.dp(m,14)));
+    delBtn.setTextColor(Ui.c(m, 0xFFB3261E, 0xFFFF8A80)); delBtn.setBackground(Ui.pill(Ui.c(m, 0xFFFCEAEA, 0xFF3A2226), Ui.dp(m,14)));
     delBtn.setPadding(Ui.dp(m,4), Ui.dp(m,6), Ui.dp(m,4), Ui.dp(m,6));
     LinearLayout.LayoutParams half1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
     half1.rightMargin = Ui.dp(m,6);
@@ -312,8 +312,8 @@ class SystemPage {
     detail.setText(m.modelDetail(task));
     detail.setTextSize(9);
     detail.setTypeface(Typeface.MONOSPACE);
-    detail.setTextColor(0xFF444A55);
-    detail.setBackground(Ui.pill(0xFFFFFFFF, Ui.dp(m,8)));
+    detail.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
+    detail.setBackground(Ui.pill(Ui.c(m, 0xFFFFFFFF, 0xFF1E232B), Ui.dp(m,8)));
     detail.setPadding(Ui.dp(m,8), Ui.dp(m,6), Ui.dp(m,8), Ui.dp(m,6));
     detail.setVisibility(View.GONE);
     detail.setOnClickListener(v -> detail.setVisibility(View.GONE));
