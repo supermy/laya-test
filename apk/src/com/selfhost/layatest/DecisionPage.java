@@ -34,9 +34,9 @@ class DecisionPage {
     if (msgList == null) return;
     TextView tv = new TextView(m);
     tv.setText(text); tv.setTextSize(14);
-    tv.setTextColor(user ? Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6) : Ui.c(m, 0xFF22262E, 0xFFE2E6EC));
+    tv.setTextColor(user ? Ui.c(m, 0xFF1A2B4C, 0xFFDFF2E4) : Ui.c(m, 0xFF22262E, 0xFFE2E6EC));
     tv.setMaxWidth(Ui.dp(m,280));
-    tv.setBackground(Ui.pill(user ? m.USER_BG : Ui.c(m, m.BOT_BG, 0xFF2A3040), Ui.dp(m,8)));
+    tv.setBackground(Ui.pill(user ? Ui.c(m, m.USER_BG, 0xFF2E5D3A) : Ui.c(m, m.BOT_BG, 0xFF2A3040), Ui.dp(m,8)));
     tv.setPadding(Ui.dp(m,13), Ui.dp(m,9), Ui.dp(m,13), Ui.dp(m,9));
     LinearLayout row = new LinearLayout(m);
     row.setGravity(user ? Gravity.END : Gravity.START);

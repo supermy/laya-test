@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-11 — v1.4.30:标题栏收敛为「⋮」弹出子菜单 + 深色气泡降噪
+
+- 标题栏外观/语言两个按钮收敛为单个「⋮」:PopupMenu 弹出「外观」(跟随系统/浅色/深色)与「语言」(跟随系统/中文/English)两组子菜单,单选勾选当前项,选择即生效 recreate
+- 深色模式用户气泡降噪:亮绿底(95EC69)→暗绿底(2E5D3A)+浅绿白字(DFF2E4),消除刺眼
+- smoke「标题栏语言按钮」断言更新为「⋮」外观菜单按钮
+- 新增 strings:menu_display/theme_follow/theme_light/theme_dark(zh/en)
+
+
 ## 2026-10-11 — v1.4.29:深色/浅色皮肤(随系统 + 手动切换)
 
 - 全局主题:pref `ui/theme` = sys(随系统夜间模式)|light|dark;`Ui.dark()`/`Ui.c()` 语义取色,标题栏新增 🌗A/☀/🌙 循环按钮;跟随系统时 uiMode 变化自动重建(onConfigurationChanged)

@@ -105,25 +105,37 @@ public class MainActivity extends Activity {
     if ((getIntent() == null || getIntent().getStringExtra("tab") == null) && tab != savedTab) setTab(savedTab);
   }
 
-  // ---- UI 语言(应用内切换):attachBaseContext 包裹目标 locale,选择记忆在 prefs("ui"/"locale") ----
-  private TextView langBtn;
-
-  /** 标题栏语言按钮显示当前选择:A=跟随系统 / 中 / EN */
-  private void paintLangBtn() {
-    if (langBtn == null) return;
-    String cur = uiLocale();
-    langBtn.setText("en".equals(cur) ? "EN" : "zh".equals(cur) ? "中" : "🌐A");
-  }
-
+  // ---- 外观/语言(应用内切换):标题栏「⋮」弹出子菜单;记忆键 prefs("ui"/"theme"、"ui"/"locale") ----
   String uiLocale() { return getSharedPreferences("ui", MODE_PRIVATE).getString("locale", "sys"); }
 
-  // ---- 主题:pref("ui"/"theme") = sys|light|dark;标题栏按钮循环 A(随系统)→浅→深 ----
-  private TextView themeBtn;
+  private static final String[] THEME_IDS = {"sys", "light", "dark"};
+  private static final String[] LOCALE_IDS = {"sys", "zh", "en"};
 
-  private void paintThemeBtn() {
-    if (themeBtn == null) return;
-    String t = getSharedPreferences("ui", MODE_PRIVATE).getString("theme", "sys");
-    themeBtn.setText("dark".equals(t) ? "🌙" : "light".equals(t) ? "☀" : "🌗A");
+  /** 弹出外观(皮肤)+ 语言子菜单,勾选当前项 */
+  private void showDisplayMenu(View anchor) {
+    android.widget.PopupMenu pm = new android.widget.PopupMenu(this, anchor);
+    android.view.Menu menu = pm.getMenu();
+    android.view.SubMenu sm = menu.addSubMenu(1, 0, 0, getString(R.string.menu_display));
+    String curT = getSharedPreferences("ui", MODE_PRIVATE).getString("theme", "sys");
+    String[] tLb = {getString(R.string.theme_follow), getString(R.string.theme_light), getString(R.string.theme_dark)};
+    for (int i = 0; i < 3; i++) sm.add(1, 100 + i, i, tLb[i]).setCheckable(true).setChecked(THEME_IDS[i].equals(curT));
+    sm.setGroupCheckable(1, true, true);
+    android.view.SubMenu lm = menu.addSubMenu(2, 0, 1, getString(R.string.lang_label));
+    String curL = uiLocale();
+    String[] lLb = {getString(R.string.lang_follow), getString(R.string.lang_zh), getString(R.string.lang_en)};
+    for (int i = 0; i < 3; i++) lm.add(2, 200 + i, i, lLb[i]).setCheckable(true).setChecked(LOCALE_IDS[i].equals(curL));
+    lm.setGroupCheckable(2, true, true);
+    pm.setOnMenuItemClickListener(it -> {
+      int id = it.getItemId();
+      android.content.SharedPreferences.Editor ed = getSharedPreferences("ui", MODE_PRIVATE).edit();
+      if (id >= 100 && id < 200) ed.putString("theme", THEME_IDS[id - 100]);
+      else if (id >= 200 && id < 300) ed.putString("locale", LOCALE_IDS[id - 200]);
+      else return false;
+      ed.apply();
+      recreate(); // 重建整套 UI 取新配色/locale
+      return true;
+    });
+    pm.show();
   }
 
   @Override
@@ -187,41 +199,16 @@ public class MainActivity extends Activity {
     title.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 10));
     titleHolder.addView(title);
     titleHolder.addView(menuBtn);
-    // 标题右侧按钮组:主题切换(🌗A 随系统→☀ 浅色→🌙 深色)+ 语言切换,同一记忆风格 prefs("ui")
-    LinearLayout rightBtns = new LinearLayout(this);
-    rightBtns.setOrientation(LinearLayout.HORIZONTAL);
-    themeBtn = new TextView(this);
-    themeBtn.setTextSize(13); themeBtn.setTypeface(Typeface.DEFAULT_BOLD);
-    themeBtn.setTextColor(Ui.c(this, 0xFF1A2B4C, 0xFFCFD8E6));
-    themeBtn.setBackground(Ui.pill(Ui.c(this, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(this, 12)));
-    themeBtn.setPadding(Ui.dp(this, 10), Ui.dp(this, 5), Ui.dp(this, 10), Ui.dp(this, 5));
-    paintThemeBtn();
-    themeBtn.setOnClickListener(v -> {
-      String cur = getSharedPreferences("ui", MODE_PRIVATE).getString("theme", "sys");
-      String next = "sys".equals(cur) ? "light" : "light".equals(cur) ? "dark" : "sys";
-      getSharedPreferences("ui", MODE_PRIVATE).edit().putString("theme", next).apply();
-      recreate();
-    });
-    LinearLayout.LayoutParams tblp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    tblp.rightMargin = Ui.dp(this, 6); tblp.topMargin = Ui.dp(this, 6);
-    rightBtns.addView(themeBtn, tblp);
-    langBtn = new TextView(this);
-    langBtn.setTextSize(13); langBtn.setTypeface(Typeface.DEFAULT_BOLD);
-    langBtn.setTextColor(Ui.c(this, 0xFF1A2B4C, 0xFFCFD8E6));
-    langBtn.setBackground(Ui.pill(Ui.c(this, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(this, 12)));
-    langBtn.setPadding(Ui.dp(this, 10), Ui.dp(this, 5), Ui.dp(this, 10), Ui.dp(this, 5));
-    paintLangBtn();
-    langBtn.setOnClickListener(v -> {
-      String cur = uiLocale();
-      String next = "sys".equals(cur) ? "zh" : "zh".equals(cur) ? "en" : "sys";
-      getSharedPreferences("ui", MODE_PRIVATE).edit().putString("locale", next).apply();
-      recreate();
-    });
-    rightBtns.addView(langBtn, new FrameLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-    FrameLayout.LayoutParams rblp = new FrameLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, Gravity.END | Gravity.CENTER_VERTICAL);
-    rblp.rightMargin = Ui.dp(this, 10); rblp.topMargin = Ui.dp(this, 6);
-    rightBtns.setLayoutParams(rblp);
-    titleHolder.addView(rightBtns);
+    // 标题右侧「⋮」:弹出子菜单(外观=皮肤 随系统/浅/深;语言 随系统/中/EN),带勾选态
+    TextView moreBtn = new TextView(this);
+    moreBtn.setText("⋮"); moreBtn.setTextSize(18); moreBtn.setTypeface(Typeface.DEFAULT_BOLD);
+    moreBtn.setTextColor(Ui.c(this, 0xFF1A2B4C, 0xFFCFD8E6));
+    moreBtn.setPadding(Ui.dp(this, 14), Ui.dp(this, 2), Ui.dp(this, 14), Ui.dp(this, 2));
+    moreBtn.setOnClickListener(this::showDisplayMenu);
+    FrameLayout.LayoutParams mblp = new FrameLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, Gravity.END | Gravity.CENTER_VERTICAL);
+    mblp.rightMargin = Ui.dp(this, 8); mblp.topMargin = Ui.dp(this, 4);
+    moreBtn.setLayoutParams(mblp);
+    titleHolder.addView(moreBtn);
     titleBar.addView(titleHolder);
     View titleDiv = new View(this);
     titleDiv.setBackgroundColor(Ui.c(this, 0xFFE0E0E0, 0xFF2A2F38));
