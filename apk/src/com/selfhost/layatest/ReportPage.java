@@ -46,15 +46,6 @@ class ReportPage {
   void build() {
     LinearLayout l = new LinearLayout(m);
     l.setOrientation(LinearLayout.VERTICAL);
-    long[] as = com.laya.DecisionCore.appStats(m);
-    TextView[] rNums = Ui.statsCards(m, l, new String[]{
-        m.getString(R.string.st_total), m.getString(R.string.st_today),
-        m.getString(R.string.st_avglat), m.getString(R.string.st_highrate)},
-        new int[]{0xFF6FA8FF, 0xFF4ADE80, 0xFFE7B10A, 0xFFD62828});
-    rNums[0].setText(String.valueOf(as[0]));
-    rNums[1].setText(String.valueOf(as[1]));
-    rNums[2].setText((as[0] > 0 ? as[2] / as[0] : 0) + "ms");
-    rNums[3].setText((as[0] > 0 ? as[5] * 100 / as[0] : 0) + "%");
     l.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
     TextView cur = new TextView(m);
     cur.setText(m.getString(R.string.report_hint)); cur.setTextSize(12); cur.setTextColor(0xFF66707E);

@@ -60,25 +60,6 @@ class DecisionPage {
     m.body.addView(row);
     paintChips();
 
-    // 统计卡(总决策/今日/平均耗时/高占比)+ 检索框(过滤气泡)
-    LinearLayout statsRow = new LinearLayout(m);
-    statsRow.setPadding(Ui.dp(m,10), Ui.dp(m,4), Ui.dp(m,10), 0);
-    stNums = Ui.statsCards(m, statsRow, new String[]{
-        m.getString(R.string.st_total), m.getString(R.string.st_today),
-        m.getString(R.string.st_avglat), m.getString(R.string.st_highrate)},
-        new int[]{0xFF6FA8FF, 0xFF4ADE80, 0xFFE7B10A, 0xFFD62828});
-    m.body.addView(statsRow);
-    LinearLayout searchRow = new LinearLayout(m);
-    searchRow.setPadding(Ui.dp(m,10), Ui.dp(m,6), Ui.dp(m,10), Ui.dp(m,4));
-    searchBox = Ui.field(m, searchRow, m.getString(R.string.st_search_hint));
-    searchBox.addTextChangedListener(new android.text.TextWatcher() {
-      @Override public void beforeTextChanged(CharSequence cs, int a, int b, int cc) {}
-      @Override public void onTextChanged(CharSequence cs, int a, int b, int cc) { filterBubbles(String.valueOf(cs)); }
-      @Override public void afterTextChanged(android.text.Editable e) {}
-    });
-    m.body.addView(searchRow);
-    refreshStatsSoon();
-
     // 左侧业务 tab 菜单(竖排,可上下滑动):点 chip 切业务并载入该业务历史
     final LinearLayout rail = new LinearLayout(m);
     rail.setOrientation(LinearLayout.VERTICAL);
@@ -129,6 +110,25 @@ class DecisionPage {
     chatCol.setOrientation(LinearLayout.VERTICAL);
     chatCol.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
     top.addView(chatCol);
+
+    // 统计卡 + 检索框:放入 tab 内容区(chatCol)内部,横跨聊天列
+    LinearLayout statsRow = new LinearLayout(m);
+    statsRow.setPadding(Ui.dp(m,10), Ui.dp(m,6), Ui.dp(m,10), 0);
+    stNums = Ui.statsCards(m, statsRow, new String[]{
+        m.getString(R.string.st_total), m.getString(R.string.st_today),
+        m.getString(R.string.st_avglat), m.getString(R.string.st_highrate)},
+        new int[]{0xFF6FA8FF, 0xFF4ADE80, 0xFFE7B10A, 0xFFD62828});
+    chatCol.addView(statsRow);
+    LinearLayout searchRow = new LinearLayout(m);
+    searchRow.setPadding(Ui.dp(m,10), Ui.dp(m,6), Ui.dp(m,10), Ui.dp(m,4));
+    searchBox = Ui.field(m, searchRow, m.getString(R.string.st_search_hint));
+    searchBox.addTextChangedListener(new android.text.TextWatcher() {
+      @Override public void beforeTextChanged(CharSequence cs, int a, int b, int cc) {}
+      @Override public void onTextChanged(CharSequence cs, int a, int b, int cc) { filterBubbles(String.valueOf(cs)); }
+      @Override public void afterTextChanged(android.text.Editable e) {}
+    });
+    chatCol.addView(searchRow);
+    refreshStatsSoon();
 
     msgList = new LinearLayout(m);
     msgList.setOrientation(LinearLayout.VERTICAL);
