@@ -293,7 +293,6 @@
     <string name="st_today">今日</string>
     <string name="st_avglat">平均耗时</string>
     <string name="st_highrate">高占比</string>
-    <string name="st_search_hint">检索历史…</string>
     <string name="st_mail">邮件</string>
     <string name="st_mqtt">MQTT</string>
     <string name="st_api">决策API</string>
@@ -305,4 +304,5 @@
     <string name="st_loaded">已加载</string>
     <string name="st_models">模型占用</string>
     <string name="st_disk">磁盘剩余</string>
+    <string name="st_search_hint">检索 %1$s 历史…</string>
 </resources>

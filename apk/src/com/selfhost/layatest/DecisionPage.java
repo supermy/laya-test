@@ -19,7 +19,7 @@ class DecisionPage {
   private TextView[] stNums;
   private LinearLayout statsRowRef;
   private EditText searchBox;
-  private final java.util.HashMap<String, String> searchByTask = new java.util.HashMap<>(); // 各业务独立检索词
+
   private final android.os.Handler stHandler = new android.os.Handler(android.os.Looper.getMainLooper());
   private boolean stQueued = false;
   private TextView curBizLabel;
@@ -129,7 +129,11 @@ class DecisionPage {
       @Override public void beforeTextChanged(CharSequence cs, int a, int b, int cc) {}
       @Override public void onTextChanged(CharSequence cs, int a, int b, int cc) {
         String kw = String.valueOf(cs);
-        if (!m.taskIds.isEmpty()) searchByTask.put(m.taskIds.get(m.taskIdx), kw); // 按业务记忆
+        if (!m.taskIds.isEmpty()) {
+          String biz = m.taskIds.get(m.taskIdx);
+          m.getSharedPreferences("ui", android.app.Activity.MODE_PRIVATE)
+              .edit().putString("search_" + biz, kw).apply(); // 每个 tab 自己的检索词,持久化
+        }
         filterBubbles(kw);
       }
       @Override public void afterTextChanged(android.text.Editable e) {}
@@ -178,6 +182,7 @@ class DecisionPage {
     String biz = m.taskIds.get(m.taskIdx);
     String[] labs = {biz, m.getString(R.string.st_today),
         m.getString(R.string.st_avglat), m.getString(R.string.st_highrate)};
+    if (searchBox != null) searchBox.setHint(m.getString(R.string.st_search_hint, biz));
     int i = 0;
     for (int r = 0; r < statsRowRef.getChildCount() && i < 4; r++) {
       View gr = statsRowRef.getChildAt(r);
@@ -264,7 +269,8 @@ class DecisionPage {
     }
     m.scroller.post(() -> {
       m.scroller.scrollTo(0, m.scroller.getHeight());
-      String kw = searchByTask.getOrDefault(task, "");   // 恢复该业务自己的检索词
+      String kw = m.getSharedPreferences("ui", android.app.Activity.MODE_PRIVATE)
+          .getString("search_" + task, "");                  // 每个 tab 自己的检索词
       if (!searchBox.getText().toString().equals(kw)) searchBox.setText(kw); // setText 触发过滤
       else filterBubbles(kw);
       paintStatsBiz();
