@@ -282,14 +282,23 @@ class NewsPage {
     }
   }
 
-  // ---- LLM 评分:逐条同步调用,单线程顺序消费(一次请求一条,结果流式上屏) ----
+  // ---- 评分:优先本地 news 模型(端侧 NPU/GPU/CPU),未安装时回退 LLM 槽位;逐条同步,串行消费 ----
+  private boolean hasLocalNews() {
+    for (kotlin.Pair<String, String> p : com.laya.DecisionCore.scanTasks(m)) {
+      if ("news".equals(p.getFirst())) return true;
+    }
+    return false;
+  }
+
   private void scorePending() {
     if (scoringActive) return;
-    if (com.laya.Gateway.llmActive(m) == null) { llmMissing = true; return; }
+    boolean local = hasLocalNews();
+    if (!local && com.laya.Gateway.llmActive(m) == null) { llmMissing = true; return; }
     llmMissing = false;
     String key = pickUnscored();
     if (key == null) return;
     scoringActive = true;
+    final boolean loc = local;
     final String k = key;
     new Thread(() -> {
       try {
@@ -298,7 +307,7 @@ class NewsPage {
         if (it == null || it.has("scores")) return;
         scoringKeys.add(k);
         m.runOnUiThread(() -> setStatus(m.getString(R.string.news_scoring)));
-        JSONObject sc = llmScore(it.optString("text"));
+        JSONObject sc = loc ? localScore(it.optString("text")) : llmScore(it.optString("text"));
         synchronized (items) {
           if (sc != null && !sc.has("error")) {
             String[] dr = decide(sc);
@@ -319,6 +328,31 @@ class NewsPage {
       }
       m.runOnUiThread(() -> { render(); scorePending(); }); // 串行推进下一条
     }).start();
+  }
+
+  /** 本地 news 模型评分:choice/score/noul → JevLive 四维 {dir,drive,conf,urg,senti}
+   *  drive=重要性1-5 归一(≥3 才入信号级);conf=choice 置信;urg=noul 风险警示 */
+  private JSONObject localScore(String text) {
+    try {
+      com.laya.DecisionCore.Result r = com.laya.DecisionCore.decide(m, "news", text, false);
+      org.json.JSONObject q0 = r.answers.optJSONObject("q0");
+      org.json.JSONObject q1 = r.answers.optJSONObject("q1");
+      org.json.JSONObject q2 = r.answers.optJSONObject("q2");
+      String choice = q0.optString("choice");
+      org.json.JSONObject probs = q0.optJSONObject("probabilities");
+      double conf = probs != null ? probs.optDouble(choice, 0) : 0;
+      double drive = Math.max(0, Math.min(1, (q1.optDouble("score", 1) - 1) / 4.0));
+      return new JSONObject()
+          .put("dir", "利好".equals(choice) ? "BUY" : "利空".equals(choice) ? "SELL" : "")
+          .put("drive", drive)
+          .put("conf", conf)
+          .put("urg", q2.optDouble("noul", 0))
+          .put("senti", probs != null ? probs.optDouble("利好", 0.5) : 0.5);
+    } catch (Throwable t) {
+      String msg = t.getMessage() == null ? t.toString() : t.getMessage();
+      try { return new JSONObject().put("error", msg); }
+      catch (Exception ignore) { return null; }
+    }
   }
 
   private String pickUnscored() {

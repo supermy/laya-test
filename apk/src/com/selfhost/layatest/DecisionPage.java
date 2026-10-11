@@ -68,9 +68,9 @@ class DecisionPage {
     final Button[] bizChips = new Button[m.taskIds.size()];
     for (int i = 0; i < m.taskIds.size(); i++) {
       final int k = i;
-      // 英文单词整词旋转 90°(顺时针,自上而下读)
+      // 英文单词整词旋转 90°(顺时针,自上而下读);名称用本地化业务名(中文模式中文,英文模式英文)
       Button c = new Button(m);
-      String name = m.taskIds.get(i);
+      String name = m.taskLabels.get(i);
       c.setText(name); c.setAllCaps(false); c.setTextSize(12);
       c.setMinHeight(0); c.setMinimumWidth(0); c.setMinimumHeight(0);
       c.setPadding(0, Ui.dp(m,10), 0, Ui.dp(m,10)); // 旋转后成为左右内边距
@@ -180,10 +180,10 @@ class DecisionPage {
     });
   }
 
-  /** 统计卡标签随当前业务个性化(第一卡 = 业务名) */
+  /** 统计卡标签随当前业务个性化(第一卡 = 业务名,本地化) */
   private void paintStatsBiz() {
     if (statsRowRef == null || m.taskIds.isEmpty()) return;
-    String biz = m.taskIds.get(m.taskIdx);
+    String biz = m.taskLabels.get(m.taskIdx);
     String[] labs = {biz, m.getString(R.string.st_today),
         m.getString(R.string.st_avglat), m.getString(R.string.st_highrate)};
     if (searchBox != null) searchBox.setHint(m.getString(R.string.st_search_hint, biz));

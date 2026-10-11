@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-11 — v1.4.32:快讯页接入本地 news 模型评分 + 决策业务名本地化
+
+- 快讯页评分优先走本地 news 模型(端侧 NPU/GPU/CPU,~250ms/条,离线可用),未安装时回退 LLM 槽位;映射 choice/score/noul → JevLive 四维(dir/conf/drive/urg)
+- DecisionCore.decide 增加 followLlm 开关:快讯批量评分跳过「重要+紧急→LLM 升级」,防打爆 LLM 槽位
+- 决策页竖排业务 tab、统计卡首格、检索框业务名改用本地化名称(中文模式中文/英文模式英文);biz_news 资源双语
+- 评分状态文案改中性「评分中…」;真机验证:40 条快讯自动评分,方向/置信/风险语义正确
+
 ## 2026-10-11 — v1.4.31:决策 API 中文 body 乱码修复 + 动态业务 state 对齐训练格式
 
 - **决策 API 中文乱码修复**:NanoHTTPD 对无 charset 的 POST body 按 US-ASCII 解码,中文全变 '?'(不可逆)→ 决策输出退化为先验分布;parseBody 前注入 `charset=utf-8`(对纯 ASCII/已声明 charset 客户端无损)

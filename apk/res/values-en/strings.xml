@@ -202,6 +202,7 @@
     <string name="biz_ugc">UGC content moderation</string>
     <string name="biz_agent">Agent workflow routing</string>
     <string name="biz_risk">Financial risk pre-screen</string>
+    <string name="biz_news">Financial news scoring</string>
     <string name="biz_multi">Multilingual ticket triage (base)</string>
     <!-- DecisionCore: engine / hardware -->
     <string name="engine_uninitialized">Uninitialized (auto-selected on first decision)</string>
@@ -283,7 +284,7 @@
     <string name="news_llm_fail">Scoring failed</string>
     <string name="news_auto_on">Auto: on</string>
     <string name="news_auto_off">Auto: off</string>
-    <string name="news_scoring">LLM scoring…</string>
+    <string name="news_scoring">Scoring…</string>
     <string name="news_prompt">Triage this financial headline for trading drive. Output JSON only: {\"drive\":0-1,\"conf\":0-1 direction confidence,\"urg\":0-1 urgency,\"senti\":0-1 sentiment (0 bearish-1 bullish),\"reason\":\"reason ≤20 chars\"}\nHeadline:</string>
     <string name="news_strong">Strong signal (drive %1$s · conf %2$s)</string>
     <string name="news_f_all">All</string>

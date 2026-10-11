@@ -358,7 +358,12 @@ object DecisionCore {
   /** 三问全跑。串行契约见类头 KDoc:四个来源(UI/API/邮件/MQTT)的调用在此排队,同业务热路径、换业务冷切换。 */
   @Synchronized
   @JvmStatic
-  fun decide(ctx: Context, task: String, text: String): Result {
+  fun decide(ctx: Context, task: String, text: String): Result = decide(ctx, task, text, true)
+
+  /** followLlm=false:跳过重要+紧急的 LLM 升级(批量评分场景,如快讯页本地模型评分) */
+  @Synchronized
+  @JvmStatic
+  fun decide(ctx: Context, task: String, text: String, followLlm: Boolean): Result {
     val eng = ensureRunner(ctx, task)
     val t0 = System.nanoTime()
     val answers = JSONObject()
@@ -373,7 +378,7 @@ object DecisionCore {
     val ms = (System.nanoTime() - t0) / 1_000_000
     appendLog(ctx, task, text, answers, ms)
     // 决策分流:等级"高"(重要+紧急)→ 决策后升级,异步拉 LLM 生成处理建议(独立 llm 日志行,不阻塞本次决策)
-    llmFollowUp(ctx, task, text, answers)
+    if (followLlm) llmFollowUp(ctx, task, text, answers)
     return Result(answers, ms)
   }
 
