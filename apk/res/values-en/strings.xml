@@ -266,6 +266,13 @@
     <string name="news_ob">Low direction confidence (%1$s &lt; 0.55)</string>
     <string name="news_act">Trigger met (drive %1$s · conf %2$s)</string>
     <string name="news_act_prefix">Trigger met</string>
+    <string name="news_stats">Strong %1$d · Signal %2$d · Watch %3$d · Ignore %4$d · Seen %5$d</string>
+    <string name="news_scores_line">Drive %1$s | Conf %2$s | Urg %3$s | Senti %4$s</string>
+    <string name="news_m_drive">Drive</string>
+    <string name="news_m_conf">Conf</string>
+    <string name="news_m_urg">Urg</string>
+    <string name="news_m_senti">Senti</string>
+    <string name="news_copy">Copy</string>
     <string name="news_ob_prefix">Low direction confidence</string>
     <string name="news_wait">Pending score</string>
     <string name="news_nollm">LLM not configured (set in Gateway)</string>

@@ -266,6 +266,13 @@
     <string name="news_ob">方向置信不足(%1$s &lt; 0.55)</string>
     <string name="news_act">触发条件满足(驱动 %1$s · 置信 %2$s)</string>
     <string name="news_act_prefix">触发条件满足</string>
+    <string name="news_stats">强信号 %1$d · 信号 %2$d · 观察 %3$d · 忽略 %4$d · 已见 %5$d</string>
+    <string name="news_scores_line">驱动力 %1$s | 置信 %2$s | 紧迫 %3$s | 情绪 %4$s</string>
+    <string name="news_m_drive">驱动</string>
+    <string name="news_m_conf">置信</string>
+    <string name="news_m_urg">紧迫</string>
+    <string name="news_m_senti">情绪</string>
+    <string name="news_copy">复制</string>
     <string name="news_ob_prefix">方向置信不足</string>
     <string name="news_wait">待评分</string>
     <string name="news_nollm">未配置 LLM(网关页配置后评分)</string>
@@ -273,7 +280,7 @@
     <string name="news_auto_on">自动:开</string>
     <string name="news_auto_off">自动:关</string>
     <string name="news_scoring">LLM 评分中…</string>
-    <string name="news_prompt">对下述财经快讯做交易驱动力分诊,只输出 JSON,不要任何其他文字:{\"drive\":0-1驱动力,\"conf\":0-1方向置信,\"urg\":0-1紧迫性,\"senti\":0-1情绪(0偏空-1偏多),\"reason\":\"20字内理由\"}\n快讯:</string>
+    <string name="news_prompt">对下述财经快讯做交易驱动力分诊,只输出 JSON,不要任何其他文字:{\"drive\":0-1驱动力,\"conf\":0-1方向置信,\"urg\":0-1紧迫性,\"senti\":0-1情绪(0偏空-1偏多),\"dir\":\"BUY或SELL或NONE\",\"reason\":\"20字内理由\"}\n快讯:</string>
     <string name="news_strong">强信号(驱动 %1$s · 置信 %2$s)</string>
     <string name="news_f_all">全部</string>
     <string name="news_lvl_strong">强信号</string>
