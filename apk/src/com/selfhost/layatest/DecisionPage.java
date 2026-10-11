@@ -16,13 +16,18 @@ import org.json.JSONObject;
 class DecisionPage {
   private final MainActivity m;
   private LinearLayout msgList;
+  private TextView[] stNums;
+  private EditText searchBox;
+  private String searchKw = "";
+  private final android.os.Handler stHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+  private boolean stQueued = false;
   private TextView curBizLabel;
   private EditText input;
   private boolean busy = false;
 
   DecisionPage(MainActivity m) { this.m = m; }
 
-  void bot(String t) { bubble(t, false); }
+  void bot(String t) { bubble(t, false); refreshStatsSoon(); }
 
   private void bubble(String text, boolean user) {
     if (msgList == null) return;
@@ -54,6 +59,25 @@ class DecisionPage {
     row.addView(curBizLabel);
     m.body.addView(row);
     paintChips();
+
+    // 统计卡(总决策/今日/平均耗时/高占比)+ 检索框(过滤气泡)
+    LinearLayout statsRow = new LinearLayout(m);
+    statsRow.setPadding(Ui.dp(m,10), Ui.dp(m,4), Ui.dp(m,10), 0);
+    stNums = Ui.statsCards(m, statsRow, new String[]{
+        m.getString(R.string.st_total), m.getString(R.string.st_today),
+        m.getString(R.string.st_avglat), m.getString(R.string.st_highrate)},
+        new int[]{0xFF6FA8FF, 0xFF4ADE80, 0xFFE7B10A, 0xFFD62828});
+    m.body.addView(statsRow);
+    LinearLayout searchRow = new LinearLayout(m);
+    searchRow.setPadding(Ui.dp(m,10), Ui.dp(m,6), Ui.dp(m,10), Ui.dp(m,4));
+    searchBox = Ui.field(m, searchRow, m.getString(R.string.st_search_hint));
+    searchBox.addTextChangedListener(new android.text.TextWatcher() {
+      @Override public void beforeTextChanged(CharSequence cs, int a, int b, int cc) {}
+      @Override public void onTextChanged(CharSequence cs, int a, int b, int cc) { filterBubbles(String.valueOf(cs)); }
+      @Override public void afterTextChanged(android.text.Editable e) {}
+    });
+    m.body.addView(searchRow);
+    refreshStatsSoon();
 
     // 左侧业务 tab 菜单(竖排,可上下滑动):点 chip 切业务并载入该业务历史
     final LinearLayout rail = new LinearLayout(m);
@@ -141,6 +165,49 @@ class DecisionPage {
     });
   }
 
+  /** 统计卡刷新(防抖):决策/载入历史后调用 */
+  private void refreshStatsSoon() {
+    if (stQueued) return;
+    stQueued = true;
+    stHandler.postDelayed(() -> {
+      stQueued = false;
+      final android.app.Activity act = m;
+      new Thread(() -> {
+        final long[] st = com.laya.DecisionCore.appStats(act);
+        m.runOnUiThread(() -> {
+          if (stNums == null) return;
+          stNums[0].setText(String.valueOf(st[0]));
+          stNums[1].setText(String.valueOf(st[1]));
+          stNums[2].setText((st[0] > 0 ? st[2] / st[0] : 0) + "ms");
+          stNums[3].setText((st[0] > 0 ? st[5] * 100 / st[0] : 0) + "%");
+        });
+      }).start();
+    }, 400);
+  }
+
+  /** 检索:隐藏不含关键字的气泡(空关键字全显) */
+  private void filterBubbles(String kw) {
+    if (msgList == null) return;
+    searchKw = kw == null ? "" : kw.trim();
+    for (int i = 0; i < msgList.getChildCount(); i++) {
+      View v = msgList.getChildAt(i);
+      v.setVisibility(bubbleText(v).contains(searchKw) ? View.VISIBLE : View.GONE);
+    }
+  }
+
+  private String bubbleText(View v) {
+    StringBuilder sb = new StringBuilder();
+    if (v instanceof android.view.ViewGroup) {
+      android.view.ViewGroup vg = (android.view.ViewGroup) v;
+      for (int i = 0; i < vg.getChildCount(); i++) {
+        View c = vg.getChildAt(i);
+        if (c instanceof TextView) sb.append(((TextView) c).getText()).append(' ');
+        else if (c instanceof android.view.ViewGroup) sb.append(bubbleText(c));
+      }
+    }
+    return sb.toString();
+  }
+
   /** 业务↔日志联动:切换业务时,聊天区载入该业务的历史决策 */
   void loadHistory(String task) {
     if (msgList == null) return;
@@ -163,7 +230,11 @@ class DecisionPage {
       if (!c.isEmpty()) bot(m.getString(R.string.last_llm_analysis, when, c));
       else if (llm.has("error")) bot(m.getString(R.string.last_llm_fail, when, llm.optString("error")));
     }
-    m.scroller.post(() -> m.scroller.scrollTo(0, m.scroller.getHeight()));
+    m.scroller.post(() -> {
+      m.scroller.scrollTo(0, m.scroller.getHeight());
+      filterBubbles(searchKw);
+      refreshStatsSoon();
+    });
   }
 
   void paintChips() {

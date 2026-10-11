@@ -1,6 +1,8 @@
 package com.selfhost.layatest;
 
 import android.content.Context;
+import android.graphics.Typeface;
+import android.view.Gravity;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.widget.Button;
@@ -50,6 +52,37 @@ final class Ui {
     e.setPadding(dp(c, 10), dp(c, 8), dp(c, 10), dp(c, 8));
     parent.addView(e, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
     return e;
+  }
+
+  /** JevLive 式统计卡行:深底大数字卡(每行最多4张);返回数字 TextView 数组供实时刷新 */
+  public static TextView[] statsCards(Context c, LinearLayout parent, String[] labels, int[] colors) {
+    TextView[] nums = new TextView[labels.length];
+    int per = 4;
+    int rows = (labels.length + per - 1) / per;
+    for (int r = 0; r < rows; r++) {
+      LinearLayout gr = new LinearLayout(c);
+      for (int i = r * per; i < Math.min(labels.length, (r + 1) * per); i++) {
+        LinearLayout card = new LinearLayout(c);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(Gravity.CENTER);
+        card.setBackground(pill(0xFF161A22, dp(c, 10)));
+        TextView num = new TextView(c);
+        num.setText("0"); num.setTextSize(16); num.setTypeface(Typeface.DEFAULT_BOLD);
+        num.setTextColor(colors[i]); num.setGravity(Gravity.CENTER);
+        card.addView(num, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        TextView lab = new TextView(c);
+        lab.setText(labels[i]); lab.setTextSize(10); lab.setTextColor(0xFF8A93A0); lab.setGravity(Gravity.CENTER);
+        card.addView(lab, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        clp.rightMargin = (i % per == per - 1 || i == labels.length - 1) ? 0 : dp(c, 6);
+        clp.bottomMargin = dp(c, 6);
+        card.setLayoutParams(clp);
+        nums[i] = num;
+        gr.addView(card);
+      }
+      parent.addView(gr, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+    }
+    return nums;
   }
 
   /** 主色圆角按钮,加入 parent 并带 8dp 底间距 */

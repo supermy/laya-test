@@ -50,7 +50,7 @@ class NewsPage {
   private boolean timerStarted = false;
   private boolean llmMissing = false;
   private TextView[] filterChips;              // 过滤 chips:全部/强信号/信号/观察/忽略
-  private TextView statsView;                  // 统计行
+  private TextView[] statsNum;                 // 统计卡数字(JevLive 式大数字,实时刷新)
   private LinearLayout sourceRow;              // 源过滤 chips 行
   private String sourceFilter = "all";         // 源过滤:all|<来源名>
   private String newsFilter = "all";           // 当前过滤:all|strong|signal|observe|ignore
@@ -89,11 +89,37 @@ class NewsPage {
     paintAuto();
     l.addView(head);
 
-    // ---- 统计行(JevLive 统计卡简版) ----
-    statsView = new TextView(m);
-    statsView.setTextSize(12); statsView.setTypeface(Typeface.DEFAULT_BOLD);
-    statsView.setPadding(Ui.dp(m, 2), Ui.dp(m, 6), 0, Ui.dp(m, 2));
-    l.addView(statsView);
+    // ---- 统计卡(JevLive 式):大数字实时刷新 ----
+    String[] sl = {m.getString(R.string.news_lvl_strong), m.getString(R.string.news_lvl_signal),
+        m.getString(R.string.news_lvl_observe), m.getString(R.string.news_lvl_ignore),
+        m.getString(R.string.news_s_seen), m.getString(R.string.news_s_scored)};
+    int[] scol = {0xFF4ADE80, 0xFF34D399, 0xFFF5C518, 0xFF9AA3AD, 0xFFE8ECF1, 0xFF6FA8FF};
+    statsNum = new TextView[6];
+    for (int row = 0; row < 2; row++) {
+      LinearLayout gr = new LinearLayout(m);
+      for (int c = 0; c < 3; c++) {
+        int i = row * 3 + c;
+        LinearLayout card = new LinearLayout(m);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(Gravity.CENTER);
+        card.setBackground(Ui.pill(0xFF161A22, Ui.dp(m, 10)));
+        TextView num = new TextView(m);
+        num.setText("0"); num.setTextSize(18); num.setTypeface(Typeface.DEFAULT_BOLD);
+        num.setTextColor(scol[i]); num.setGravity(Gravity.CENTER);
+        card.addView(num, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        TextView lab = new TextView(m);
+        lab.setText(sl[i]); lab.setTextSize(11); lab.setTextColor(0xFF8A93A0);
+        lab.setGravity(Gravity.CENTER);
+        card.addView(lab, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        clp.rightMargin = (c == 2 ? 0 : Ui.dp(m, 6));
+        clp.bottomMargin = (row == 0 ? Ui.dp(m, 6) : 0);
+        card.setLayoutParams(clp);
+        statsNum[i] = num;
+        gr.addView(card);
+      }
+      l.addView(gr, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+    }
 
     // ---- 源过滤 chips(按来源动态) ----
     sourceRow = new LinearLayout(m);
@@ -421,8 +447,13 @@ class NewsPage {
         list.addView(card(it));
       }
     }
-    statsView.setText(String.format(Locale.US, m.getString(R.string.news_stats),
-        cnt[1], cnt[2], cnt[3], cnt[4], items.size()));
+    // 统计卡实时刷新:强信号/信号/观察/忽略/已见/已评
+    statsNum[0].setText(String.valueOf(cnt[1]));
+    statsNum[1].setText(String.valueOf(cnt[2]));
+    statsNum[2].setText(String.valueOf(cnt[3]));
+    statsNum[3].setText(String.valueOf(cnt[4]));
+    statsNum[4].setText(String.valueOf(items.size()));
+    statsNum[5].setText(String.valueOf(cnt[1] + cnt[2] + cnt[3] + cnt[4]));
     // 源 chips
     String[] sIds = new String[sources.size() + 1];
     String[] sNames = new String[sources.size() + 1];

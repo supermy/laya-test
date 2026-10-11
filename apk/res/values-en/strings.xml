@@ -287,4 +287,22 @@
     <string name="news_lvl_signal">Signal</string>
     <string name="news_lvl_observe">Watch</string>
     <string name="news_lvl_ignore">Ignore</string>
+    <string name="news_s_seen">Seen</string>
+    <string name="news_s_scored">Scored</string>
+    <string name="st_total">Total</string>
+    <string name="st_today">Today</string>
+    <string name="st_avglat">Avg latency</string>
+    <string name="st_highrate">High rate</string>
+    <string name="st_search_hint">Search history…</string>
+    <string name="st_mail">Mail</string>
+    <string name="st_mqtt">MQTT</string>
+    <string name="st_api">API</string>
+    <string name="st_llm">LLM</string>
+    <string name="st_on">On</string>
+    <string name="st_off">Off</string>
+    <string name="st_none">None</string>
+    <string name="st_biz">Businesses</string>
+    <string name="st_loaded">Loaded</string>
+    <string name="st_models">Model size</string>
+    <string name="st_disk">Disk free</string>
 </resources>

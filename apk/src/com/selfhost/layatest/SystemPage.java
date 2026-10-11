@@ -63,6 +63,22 @@ class SystemPage {
     l.setOrientation(LinearLayout.VERTICAL);
     l.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
 
+    // ---- 统计卡:已装业务/已加载/模型占用/磁盘剩余 ----
+    String loaded = com.laya.DecisionCore.loadedTask();
+    long usedBytes = 0;
+    java.io.File mroot = new java.io.File("/sdcard/models");
+    java.io.File[] mdirs = mroot.listFiles(f -> f.isDirectory() && f.getName().startsWith("laya-"));
+    if (mdirs != null) for (java.io.File d : mdirs) for (java.io.File f : d.listFiles()) usedBytes += f.length();
+    java.io.File sroot = new java.io.File("/sdcard");
+    TextView[] sNums = Ui.statsCards(m, l, new String[]{
+        m.getString(R.string.st_biz), m.getString(R.string.st_loaded),
+        m.getString(R.string.st_models), m.getString(R.string.st_disk)},
+        new int[]{0xFF6FA8FF, 0xFF4ADE80, 0xFFE7B10A, 0xFF9AA3AD});
+    sNums[0].setText(String.valueOf(m.taskIds.size()));
+    sNums[1].setText(loaded.isEmpty() ? m.getString(R.string.st_none) : loaded);
+    sNums[2].setText(String.format(java.util.Locale.US, "%.1fG", usedBytes / 1e9));
+    sNums[3].setText(String.format(java.util.Locale.US, "%.0fG", sroot.getUsableSpace() / 1e9));
+
     // ---- 语言 / Language(应用内切换,立即生效) ----
     LinearLayout langRow = new LinearLayout(m);
     langRow.setOrientation(LinearLayout.VERTICAL);

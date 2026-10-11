@@ -750,6 +750,33 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
     return JSONObject().put("total", total).put("rows", outRows)
   }
 
+  /** 全局统计(各页统计卡):[total, today, latSum, scoreSum(×1000), scoreCnt, high] */
+  @JvmStatic
+  fun appStats(ctx: Context): LongArray {
+    val dayStart = System.currentTimeMillis() - System.currentTimeMillis() % 86_400_000L
+    var total = 0L; var today = 0L; var lat = 0L; var sSum = 0L; var sCnt = 0L; var high = 0L
+    for (e in readLogEntries(ctx)) {
+      total++
+      if (e.optLong("ts") >= dayStart) today++
+      lat += e.optLong("latencyMs")
+      val dec = e.optJSONObject("decoded")
+      if (dec != null) {
+        var n = 0; var ss = 0.0
+        for (k in dec.keys()) {
+          val a = dec.optJSONObject(k) ?: continue
+          if (a.optString("type") == "score") { ss += a.optDouble("score"); n++ }
+        }
+        if (n > 0) { sSum += Math.round(ss / n * 1000); sCnt++ }
+      }
+      if (levelOf(e).optString("level") == "高") high++
+    }
+    return longArrayOf(total, today, lat, sSum, sCnt, high)
+  }
+
+  /** 当前已加载引擎的业务(未加载为空) */
+  @JvmStatic
+  fun loadedTask(): String = engineTask ?: ""
+
   /** 数据探索:按维度聚合全指标。dim = task|date|level → rows:[{key,count,latSum,scoreSum,scoreCnt,humanCnt,highCnt}] */
   @JvmStatic
   fun explore(ctx: Context, rangeDays: Int, dim: String): JSONObject {

@@ -287,4 +287,22 @@
     <string name="news_lvl_signal">信号</string>
     <string name="news_lvl_observe">观察</string>
     <string name="news_lvl_ignore">忽略</string>
+    <string name="news_s_seen">已见快讯</string>
+    <string name="news_s_scored">已评分</string>
+    <string name="st_total">总决策</string>
+    <string name="st_today">今日</string>
+    <string name="st_avglat">平均耗时</string>
+    <string name="st_highrate">高占比</string>
+    <string name="st_search_hint">检索历史…</string>
+    <string name="st_mail">邮件</string>
+    <string name="st_mqtt">MQTT</string>
+    <string name="st_api">决策API</string>
+    <string name="st_llm">LLM</string>
+    <string name="st_on">开</string>
+    <string name="st_off">关</string>
+    <string name="st_none">无</string>
+    <string name="st_biz">已装业务</string>
+    <string name="st_loaded">已加载</string>
+    <string name="st_models">模型占用</string>
+    <string name="st_disk">磁盘剩余</string>
 </resources>

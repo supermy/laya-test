@@ -38,6 +38,22 @@ class GatewayPage {
     pMail.setOrientation(LinearLayout.VERTICAL);
     pMail.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
     LinearLayout l = pMail;
+    // 通道状态统计卡(邮件/MQTT/决策API/LLM)
+    org.json.JSONObject gc = com.laya.Gateway.cfg(m);
+    org.json.JSONObject ge = gc.optJSONObject(com.laya.Cfg.EMAIL), gm = gc.optJSONObject(com.laya.Cfg.MQTT), ga = gc.optJSONObject(com.laya.Cfg.API);
+    boolean stMail = ge != null && ge.optBoolean(com.laya.Cfg.ENABLED);
+    boolean stMqtt = gm != null && gm.optBoolean(com.laya.Cfg.ENABLED);
+    boolean stApi = ga != null && ga.optBoolean(com.laya.Cfg.ENABLED);
+    boolean stLlm = com.laya.Gateway.llmActive(m) != null;
+    String on = m.getString(R.string.st_on), off = m.getString(R.string.st_off);
+    TextView[] gNums = Ui.statsCards(m, l, new String[]{
+        m.getString(R.string.st_mail), m.getString(R.string.st_mqtt),
+        m.getString(R.string.st_api), m.getString(R.string.st_llm)},
+        new int[]{0xFF4ADE80, 0xFF4ADE80, 0xFF6FA8FF, 0xFF9B7EDE});
+    gNums[0].setText(stMail ? on : off);
+    gNums[1].setText(stMqtt ? on : off);
+    gNums[2].setText(stApi ? on : off);
+    gNums[3].setText(stLlm ? on : off);
     l.addView(Ui.hint(m,m.getString(R.string.mail_hint)));
     gwEmailHost = Ui.fieldU(m,l, m.getString(R.string.mail_host_hint));
     gwEmailUser = Ui.fieldU(m,l, m.getString(R.string.mail_user_hint));
