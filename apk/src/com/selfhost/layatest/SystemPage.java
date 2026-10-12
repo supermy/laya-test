@@ -235,8 +235,8 @@ class SystemPage {
     new Thread(() -> {
       String err = null;
       try {
-        String pfxBase = "cpu".equals(variant) ? biz + "/cpu/" : biz + "/base/";
-        String pfxVar = "cpu".equals(variant) ? biz + "/cpu/" : biz + "/" + variant + "/";
+        String pfxBase = biz + "/base/";
+        String pfxVar = biz + "/" + variant + "/";
         JSONArray all = ModelDownloader.listFiles();
         java.util.ArrayList<JSONObject> picks = new java.util.ArrayList<>();
         long total = 0;
@@ -247,9 +247,7 @@ class SystemPage {
           if (p.startsWith(pfxBase) || p.startsWith(pfxVar)) { picks.add(f); total += f.optLong("Size", 0); }
         }
         if (picks.isEmpty()) err = m.getString(R.string.dl_none, biz + "/" + variant);
-        String pkgDir = "cpu".equals(variant)
-            ? "/sdcard/models/laya-litert-" + biz + "/cpu"
-            : pkgDirOf(biz);
+        String pkgDir = pkgDirOf(biz);
         long done = 0; int idx = 0;
         for (JSONObject f : picks) {
           String p = f.optString("Path");
@@ -465,15 +463,16 @@ class SystemPage {
       ensureRepoTree();
       if (repoTree != null) {
         LinearLayout btnRow = new LinearLayout(m);
-        String[][] vs = {{"npu", "NPU", "★"}, {"gpu", "GPU", "★"}, {"cpu", "CPU", ""}};
+        String[][] vs = {{"npu", "NPU"}, {"gpu", "GPU"}};
         for (String[] v : vs) {
           long size = variantSize(biz, v[0]);
           if (size <= 0) continue; // 无包不显示(如未上传的 cpu 变体)
+          String rec = v[0].equals(dlVariant()) ? "★" : ""; // 仅标本机推荐变体
           LinearLayout col = new LinearLayout(m);
           col.setOrientation(LinearLayout.VERTICAL);
           col.setGravity(android.view.Gravity.CENTER);
           Button btn = new Button(m);
-          btn.setText(v[1] + (v[2].isEmpty() ? "" : "\n" + v[2]));
+          btn.setText(v[1] + (rec.isEmpty() ? "" : "\n" + rec));
           btn.setAllCaps(false); btn.setTextSize(11);
           btn.setMinHeight(0); btn.setMinimumHeight(0); btn.setMinimumWidth(0);
           btn.setPadding(Ui.dp(m,4), Ui.dp(m,6), Ui.dp(m,4), Ui.dp(m,6));
@@ -506,7 +505,7 @@ class SystemPage {
     }).start();
   }
 
-  /** 变体包大小 = base + <variant>(字节;树未加载/无文件返回 0) */
+  /** 变体包大小(字节;树未加载/无文件返回 0);phone=整包,其余=base+变体 */
   private long variantSize(String biz, String variant) {
     if (repoTree == null) return 0;
     JSONArray files = repoTree.optJSONArray("Files"); if (files == null) return 0;
