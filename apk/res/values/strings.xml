@@ -148,7 +148,7 @@
     <string name="flow_hint_data">数据流泳道:一次决策请求的端到端路径 — 业务输入 → 引擎链(NPU→GPU→CPU)→ 主图+scorer → 分流(60.9%% 本端 / 39.1%% 升级 LLM)</string>
     <string name="flow_hint_arch">分层决策架构:云端微调闭环 + LLM 升级通道(与 README fig2 同构)</string>
     <string name="flow_hint_proc">业务流程:决策完成 → 本端自动处理 / LLM 进一步处理(重要+紧急)→ 日志回流 → 微调闭环(与 README fig4 同构)</string>
-    <string name="sub_sys">系统</string>
+    <string name="sub_sys">模型</string>
     <string name="sub_arch">架构图</string>
     <string name="sub_flow">流程图</string>
     <string name="sub_data">数据流</string>

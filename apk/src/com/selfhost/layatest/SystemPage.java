@@ -335,7 +335,8 @@ class SystemPage {
           final long doneSoFar = done;
           final int fIdx = idx, fTotal = picks.size();
           final long fAll = total;
-          ModelDownloader.download(p, new File(pkgDir, name), prog -> {
+          final long fSize = sz;
+          ModelDownloader.download(p, new File(pkgDir, name), fSize, prog -> {
             long cur = doneSoFar + parseProg(prog);
             String s2 = m.getString(R.string.dl_progress, fIdx, fTotal, cur / 1048576 + "/" + fAll / 1048576 + "MB");
             m.runOnUiThread(() -> { TextView tv = dlStatus.get(biz); if (tv != null) tv.setText(s2); });

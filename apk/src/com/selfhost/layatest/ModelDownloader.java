@@ -31,10 +31,15 @@ final class ModelDownloader {
     return new JSONObject(body).getJSONObject("Data").getJSONArray("Files");
   }
 
-  /** 单文件流式下载(覆盖写),progress 收到已下载字节数 */
-  static void download(String path, File dst, Progress progress) throws Exception {
+  /** 单文件流式下载(覆盖写),progress 收到已下载字节数;expectedSize>0 时校验防截断 */
+  static void download(String path, File dst, long expectedSize, Progress progress) throws Exception {
     dst.getParentFile().mkdirs(); // 先建目标目录(phone/ 下载前不存在)
-    HttpURLConnection c = (HttpURLConnection) new URL(API + "/repo?FilePath=" + path + "&Revision=master").openConnection();
+    StringBuilder spec = new StringBuilder(API + "/repo?FilePath=");
+    for (String seg : path.split("/")) // 逐段 URL 编码(保留 /;防空格/中文/特殊字符断链)
+      spec.append(java.net.URLEncoder.encode(seg, StandardCharsets.UTF_8.name())).append("%2F");
+    spec.setLength(spec.length() - 3); // 去掉末尾多余的 %2F
+    spec.append("&Revision=master");
+    HttpURLConnection c = (HttpURLConnection) new URL(spec.toString()).openConnection();
     c.setConnectTimeout(10_000); c.setReadTimeout(60_000);
     int code = c.getResponseCode();
     check2(code < 400, "HTTP " + code + " " + path);
@@ -50,6 +55,8 @@ final class ModelDownloader {
       }
     }
     in.close();
+    check2(expectedSize <= 0 || total == expectedSize,
+        "截断: " + path + " 期望 " + expectedSize + "B 实得 " + total + "B");
     if (!tmp.renameTo(dst)) { // 跨文件系统 rename 失败则复制
       java.nio.file.Files.copy(tmp.toPath(), dst.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
       tmp.delete();
