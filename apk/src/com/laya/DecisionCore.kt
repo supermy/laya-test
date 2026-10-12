@@ -86,6 +86,7 @@ object DecisionCore {
   }
 
   /** MTK 天玑:dispatch 库已打包(APK 内 libLiteRtDispatch_MediaTek.so)即具备 MDLA NPU 能力 */
+  @JvmStatic
   fun mtkNpuAvailable(ctx: Context): Boolean {
     val soc = if (android.os.Build.VERSION.SDK_INT >= 31)
       android.os.Build.SOC_MANUFACTURER else ""

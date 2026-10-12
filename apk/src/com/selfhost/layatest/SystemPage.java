@@ -17,11 +17,16 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 /** ④ 系统页(从 MainActivity 拆出):语言切换 / 模型包上传 / 业务卡片管理 / 图表子页 */
 class SystemPage {
   private final MainActivity m;
   private LinearLayout bizListPanel;
+  private LinearLayout dlPanel;                 // 模型包下载区(包不存在时从 myjev 拉取)
+  private volatile String downloadingBiz = null; // 单并发下载
+  private final java.util.HashMap<String, TextView> dlStatus = new java.util.HashMap<>();
   private EditText upSrc, upTask;
   private TextView upStatus, sysView;
 
@@ -158,6 +163,18 @@ class SystemPage {
     l.addView(bizListPanel);
     rebuildBizList();
 
+    // ---- 模型包下载:包不存在时从 ModelScope myjev 拉取(按机型选 npu/gpu 变体) ----
+    l.addView(Ui.hint(m,m.getString(R.string.dl_title)));
+    dlPanel = new LinearLayout(m);
+    dlPanel.setOrientation(LinearLayout.VERTICAL);
+    dlPanel.setBackground(Ui.pill(Ui.c(m, 0xFFF0F4FF, 0xFF1C2534), Ui.dp(m,10)));
+    dlPanel.setPadding(Ui.dp(m,10), Ui.dp(m,8), Ui.dp(m,10), Ui.dp(m,8));
+    LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+    dlp.bottomMargin = Ui.dp(m,10);
+    dlPanel.setLayoutParams(dlp);
+    l.addView(dlPanel);
+    rebuildDlPanel();
+
     sysView = new TextView(m);
     sysView.setText(com.laya.DecisionCore.backendInfo(m) + m.getString(R.string.sys_tail));
     sysView.setTextSize(13); sysView.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
@@ -235,6 +252,113 @@ class SystemPage {
     sysTop.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
     m.body.addView(sysTop);
     chips[0].performClick();
+  }
+
+  // ---- 模型包下载 ----
+  private static final String[][] DL_BIZS = {
+      {"ticket", "biz_ticket"}, {"ugc", "biz_ugc"}, {"agent", "biz_agent"},
+      {"risk", "biz_risk"}, {"news", "biz_news"}, {"multi", "biz_multi"},
+  };
+  private static String pkgDirOf(String biz) {
+    return "/sdcard/models/" + ("multi".equals(biz) ? "laya-litert" : "laya-litert-" + biz) + "/phone";
+  }
+  private static boolean pkgInstalled(String biz) {
+    File pkg = new File(pkgDirOf(biz));
+    return pkg.isDirectory() && (new File(pkg, "laya_ml_s256_embeds_npu.tflite").isFile()
+        || new File(pkg, "laya_ml_s256_embeds_wfp16.tflite").isFile()
+        || new File(pkg, "laya_ml_s256_embeds.tflite").isFile());
+  }
+  private int resId(String name) {
+    try { return R.string.class.getField(name).getInt(null); } catch (Exception e) { return 0; }
+  }
+  private void rebuildDlPanel() {
+    if (dlPanel == null) return;
+    dlPanel.removeAllViews();
+    for (String[] b : DL_BIZS) {
+      final String biz = b[0];
+      LinearLayout row = new LinearLayout(m);
+      row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+      row.setPadding(0, Ui.dp(m,4), 0, Ui.dp(m,4));
+      TextView name = new TextView(m);
+      String label = resId(b[1]) != 0 ? m.getString(resId(b[1])) : biz;
+      name.setText((pkgInstalled(biz) ? "✅ " : "⬇ ") + label);
+      name.setTextSize(13); name.setTypeface(Typeface.DEFAULT_BOLD);
+      name.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+      row.addView(name, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+      TextView st = new TextView(m);
+      st.setTextSize(10); st.setTextColor(Ui.c(m, 0xFF66707E, 0xFF8A93A0));
+      dlStatus.put(biz, st);
+      row.addView(st, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+      if (!pkgInstalled(biz) && !biz.equals(downloadingBiz)) {
+        Button btn = new Button(m);
+        btn.setText(m.getString(R.string.dl_btn)); btn.setAllCaps(false); btn.setTextSize(11);
+        btn.setMinHeight(0); btn.setMinimumHeight(0); btn.setMinimumWidth(0);
+        btn.setPadding(Ui.dp(m,10), Ui.dp(m,4), Ui.dp(m,10), Ui.dp(m,4));
+        btn.setTextColor(Color.WHITE); btn.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,12)));
+        btn.setOnClickListener(v -> downloadBiz(biz));
+        row.addView(btn);
+      }
+      dlPanel.addView(row);
+    }
+  }
+
+  /** 下载业务包:base + (npu|gpu,按机型) → /sdcard/models/.../phone;完成后重建列表 */
+  private void downloadBiz(String biz) {
+    if (downloadingBiz != null) return;
+    downloadingBiz = biz;
+    rebuildDlPanel();
+    new Thread(() -> {
+      String err = null;
+      try {
+        String variant = com.laya.DecisionCore.mtkNpuAvailable(m) ? "npu" : "gpu";
+        String pfxBase = biz + "/base/", pfxVar = biz + "/" + variant + "/";
+        JSONArray all = ModelDownloader.listFiles();
+        java.util.ArrayList<JSONObject> picks = new java.util.ArrayList<>();
+        long total = 0;
+        for (int i = 0; i < all.length(); i++) {
+          JSONObject f = all.optJSONObject(i); if (f == null) continue;
+          String p = f.optString("Path");
+          if (!f.optString("Type").equals("blob")) continue;
+          if (p.startsWith(pfxBase) || p.startsWith(pfxVar)) { picks.add(f); total += f.optLong("Size", 0); }
+        }
+        if (picks.isEmpty()) err = m.getString(R.string.dl_none, biz);
+        String pkgDir = pkgDirOf(biz);
+        long done = 0; int idx = 0;
+        for (JSONObject f : picks) {
+          String p = f.optString("Path");
+          String name = p.substring(p.lastIndexOf('/') + 1);
+          long sz = f.optLong("Size", 0);
+          idx++;
+          final String stat = m.getString(R.string.dl_progress, idx, picks.size(),
+              (done + sz) / 1048576 + "/" + total / 1048576 + "MB");
+          m.runOnUiThread(() -> { TextView tv = dlStatus.get(biz); if (tv != null) tv.setText(stat); });
+          final long doneSoFar = done;
+          final int fIdx = idx, fTotal = picks.size();
+          final long fAll = total;
+          ModelDownloader.download(p, new File(pkgDir, name), prog -> {
+            long cur = doneSoFar + parseProg(prog);
+            String s2 = m.getString(R.string.dl_progress, fIdx, fTotal, cur / 1048576 + "/" + fAll / 1048576 + "MB");
+            m.runOnUiThread(() -> { TextView tv = dlStatus.get(biz); if (tv != null) tv.setText(s2); });
+          });
+        }
+      } catch (Throwable t) {
+        err = t.getMessage() != null ? t.getMessage() : t.toString();
+      }
+      final String ferr = err;
+      m.runOnUiThread(() -> {
+        downloadingBiz = null;
+        rebuildDlPanel();
+        rebuildBizList();
+        if (ferr != null && upStatus != null)
+          upStatus.setText("❌ " + m.getString(R.string.dl_fail, biz, ferr));
+      });
+    }).start();
+  }
+  private static long parseProg(String s) { // "… 12MB" → 12<<20
+    try { int b = s.indexOf("… "); int e = s.indexOf("MB");
+      if (b >= 0 && e > b) return Long.parseLong(s.substring(b + 2, e).trim()) << 20;
+    } catch (Exception ignored) {}
+    return 0;
   }
 
   /** 单个业务卡片(加载态/操作按钮/详情/导出/删除) */

@@ -202,6 +202,11 @@
     <string name="biz_ugc">UGC 内容审核</string>
     <string name="biz_agent">Agent 工作流路由</string>
     <string name="biz_risk">金融风控前置</string>
+    <string name="dl_title">模型包下载:未安装的业务可从 ModelScope 拉取(按机型自动选 NPU/GPU 变体)</string>
+    <string name="dl_btn">下载</string>
+    <string name="dl_progress">下载中 %1$d/%2$d · %3$s</string>
+    <string name="dl_none">myjev 仓库无此业务包: %1$s</string>
+    <string name="dl_fail">%1$s 下载失败: %2$s</string>
     <string name="biz_news">财经资讯评分</string>
     <string name="biz_multi">多语言工单分流(基础)</string>
     <!-- DecisionCore:引擎/硬件 -->
