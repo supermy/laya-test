@@ -24,9 +24,15 @@ import org.json.JSONObject;
 class SystemPage {
   private final MainActivity m;
   private LinearLayout bizListPanel;
-  private LinearLayout dlPanel;                 // 模型包下载区(包不存在时从 myjev 拉取)
   private volatile String downloadingBiz = null; // 单并发下载
+
+  /** 下载变体:NPU 优先(MTK),否则 GPU */
+  private String dlVariant() {
+    return com.laya.DecisionCore.mtkNpuAvailable(m) ? "npu" : "gpu";
+  }
   private final java.util.HashMap<String, TextView> dlStatus = new java.util.HashMap<>();
+  private org.json.JSONObject repoTree;          // myjev 文件树缓存(算各变体包大小)
+  private boolean repoTreeLoading = false;
   private EditText upSrc, upTask;
   private TextView upStatus, sysView;
 
@@ -68,48 +74,7 @@ class SystemPage {
     l.setOrientation(LinearLayout.VERTICAL);
     l.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
 
-    // ---- 语言 / Language(应用内切换,立即生效) ----
-    LinearLayout langRow = new LinearLayout(m);
-    langRow.setOrientation(LinearLayout.VERTICAL);
-    langRow.setBackground(Ui.pill(Ui.c(m, 0xFFF0F4FF, 0xFF1C2534), Ui.dp(m,10)));
-    langRow.setPadding(Ui.dp(m,10), Ui.dp(m,8), Ui.dp(m,10), Ui.dp(m,8));
-    LinearLayout.LayoutParams langLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    langLp.bottomMargin = Ui.dp(m,10);
-    langRow.setLayoutParams(langLp);
-    TextView langHead = new TextView(m);
-    langHead.setText(m.getString(R.string.lang_label)); langHead.setTextSize(14); langHead.setTypeface(Typeface.DEFAULT_BOLD); langHead.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
-    langRow.addView(langHead);
-    LinearLayout langBtns = new LinearLayout(m);
-    langBtns.setOrientation(LinearLayout.HORIZONTAL);
-    LinearLayout.LayoutParams btnsLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    btnsLp.topMargin = Ui.dp(m,4);
-    langBtns.setLayoutParams(btnsLp);
-    String curLoc = m.uiLocale();
-    String[] locIds = {"sys", "zh", "en"};
-    for (String id : locIds) {
-      final String fid = id;
-      Button b = new Button(m);
-      b.setText("sys".equals(id) ? m.getString(R.string.lang_follow) : "zh".equals(id) ? m.getString(R.string.lang_zh) : m.getString(R.string.lang_en));
-      b.setAllCaps(false); b.setTextSize(12);
-      b.setMinHeight(0); b.setMinimumWidth(0); b.setMinimumHeight(0);
-      b.setPadding(Ui.dp(m,12), Ui.dp(m,6), Ui.dp(m,12), Ui.dp(m,6));
-      boolean on = id.equals(curLoc);
-      b.setTextColor(on ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
-      b.setBackground(Ui.pill(on ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,14)));
-      LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-      blp.leftMargin = Ui.dp(m,8);
-      b.setLayoutParams(blp);
-      b.setOnClickListener(v -> {
-        if (!fid.equals(m.uiLocale())) {
-          m.getSharedPreferences("ui", m.MODE_PRIVATE).edit().putString("locale", fid).apply();
-          m.recreate(); // attachBaseContext 读取新 locale 重建整套 UI
-        }
-      });
-      langBtns.addView(b);
-    }
-    langRow.addView(langBtns);
-    l.addView(langRow);
-
+    // 语言切换已并入标题栏「⋮」菜单(与外观同面板),此处不再重复
     // ---- 手动上传模型包输入界面 ----
     LinearLayout up = new LinearLayout(m);
     up.setOrientation(LinearLayout.VERTICAL);
@@ -163,17 +128,7 @@ class SystemPage {
     l.addView(bizListPanel);
     rebuildBizList();
 
-    // ---- 模型包下载:包不存在时从 ModelScope myjev 拉取(按机型选 npu/gpu 变体) ----
-    l.addView(Ui.hint(m,m.getString(R.string.dl_title)));
-    dlPanel = new LinearLayout(m);
-    dlPanel.setOrientation(LinearLayout.VERTICAL);
-    dlPanel.setBackground(Ui.pill(Ui.c(m, 0xFFF0F4FF, 0xFF1C2534), Ui.dp(m,10)));
-    dlPanel.setPadding(Ui.dp(m,10), Ui.dp(m,8), Ui.dp(m,10), Ui.dp(m,8));
-    LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    dlp.bottomMargin = Ui.dp(m,10);
-    dlPanel.setLayoutParams(dlp);
-    l.addView(dlPanel);
-    rebuildDlPanel();
+    // ---- 模型包下载已并入业务卡片(未安装 → ⬇ 下载;已安装 → 删除/加载) ----
 
     sysView = new TextView(m);
     sysView.setText(com.laya.DecisionCore.backendInfo(m) + m.getString(R.string.sys_tail));
@@ -271,47 +226,17 @@ class SystemPage {
   private int resId(String name) {
     try { return R.string.class.getField(name).getInt(null); } catch (Exception e) { return 0; }
   }
-  private void rebuildDlPanel() {
-    if (dlPanel == null) return;
-    dlPanel.removeAllViews();
-    for (String[] b : DL_BIZS) {
-      final String biz = b[0];
-      LinearLayout row = new LinearLayout(m);
-      row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-      row.setPadding(0, Ui.dp(m,4), 0, Ui.dp(m,4));
-      TextView name = new TextView(m);
-      String label = resId(b[1]) != 0 ? m.getString(resId(b[1])) : biz;
-      name.setText((pkgInstalled(biz) ? "✅ " : "⬇ ") + label);
-      name.setTextSize(13); name.setTypeface(Typeface.DEFAULT_BOLD);
-      name.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
-      row.addView(name, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-      TextView st = new TextView(m);
-      st.setTextSize(10); st.setTextColor(Ui.c(m, 0xFF66707E, 0xFF8A93A0));
-      dlStatus.put(biz, st);
-      row.addView(st, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-      if (!pkgInstalled(biz) && !biz.equals(downloadingBiz)) {
-        Button btn = new Button(m);
-        btn.setText(m.getString(R.string.dl_btn)); btn.setAllCaps(false); btn.setTextSize(11);
-        btn.setMinHeight(0); btn.setMinimumHeight(0); btn.setMinimumWidth(0);
-        btn.setPadding(Ui.dp(m,10), Ui.dp(m,4), Ui.dp(m,10), Ui.dp(m,4));
-        btn.setTextColor(Color.WHITE); btn.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,12)));
-        btn.setOnClickListener(v -> downloadBiz(biz));
-        row.addView(btn);
-      }
-      dlPanel.addView(row);
-    }
-  }
 
-  /** 下载业务包:base + (npu|gpu,按机型) → /sdcard/models/.../phone;完成后重建列表 */
-  private void downloadBiz(String biz) {
+  /** 下载业务包:variant=npu/gpu → base+变体 → phone/;variant=cpu → int8 ONNX → cpu/(ORT 服务用) */
+  private void downloadBiz(String biz, String variant) {
     if (downloadingBiz != null) return;
-    downloadingBiz = biz;
-    rebuildDlPanel();
+    downloadingBiz = biz + ":" + variant;
+    rebuildBizList(); // 业务卡片切换为下载态
     new Thread(() -> {
       String err = null;
       try {
-        String variant = com.laya.DecisionCore.mtkNpuAvailable(m) ? "npu" : "gpu";
-        String pfxBase = biz + "/base/", pfxVar = biz + "/" + variant + "/";
+        String pfxBase = "cpu".equals(variant) ? biz + "/cpu/" : biz + "/base/";
+        String pfxVar = "cpu".equals(variant) ? biz + "/cpu/" : biz + "/" + variant + "/";
         JSONArray all = ModelDownloader.listFiles();
         java.util.ArrayList<JSONObject> picks = new java.util.ArrayList<>();
         long total = 0;
@@ -321,21 +246,22 @@ class SystemPage {
           if (!f.optString("Type").equals("blob")) continue;
           if (p.startsWith(pfxBase) || p.startsWith(pfxVar)) { picks.add(f); total += f.optLong("Size", 0); }
         }
-        if (picks.isEmpty()) err = m.getString(R.string.dl_none, biz);
-        String pkgDir = pkgDirOf(biz);
+        if (picks.isEmpty()) err = m.getString(R.string.dl_none, biz + "/" + variant);
+        String pkgDir = "cpu".equals(variant)
+            ? "/sdcard/models/laya-litert-" + biz + "/cpu"
+            : pkgDirOf(biz);
         long done = 0; int idx = 0;
         for (JSONObject f : picks) {
           String p = f.optString("Path");
           String name = p.substring(p.lastIndexOf('/') + 1);
           long sz = f.optLong("Size", 0);
           idx++;
-          final String stat = m.getString(R.string.dl_progress, idx, picks.size(),
-              (done + sz) / 1048576 + "/" + total / 1048576 + "MB");
-          m.runOnUiThread(() -> { TextView tv = dlStatus.get(biz); if (tv != null) tv.setText(stat); });
           final long doneSoFar = done;
           final int fIdx = idx, fTotal = picks.size();
           final long fAll = total;
           final long fSize = sz;
+          m.runOnUiThread(() -> { TextView tv = dlStatus.get(biz); if (tv != null)
+              tv.setText(m.getString(R.string.dl_progress, fIdx, fTotal, (doneSoFar + sz) / 1048576 + "/" + fAll / 1048576 + "MB")); });
           ModelDownloader.download(p, new File(pkgDir, name), fSize, prog -> {
             long cur = doneSoFar + parseProg(prog);
             String s2 = m.getString(R.string.dl_progress, fIdx, fTotal, cur / 1048576 + "/" + fAll / 1048576 + "MB");
@@ -348,7 +274,6 @@ class SystemPage {
       final String ferr = err;
       m.runOnUiThread(() -> {
         downloadingBiz = null;
-        rebuildDlPanel();
         rebuildBizList();
         if (ferr != null && upStatus != null)
           upStatus.setText("❌ " + m.getString(R.string.dl_fail, biz, ferr));
@@ -490,11 +415,122 @@ class SystemPage {
     return card;
   }
 
-  /** 局部刷新:仅重建业务卡片列表(替代整页 setTab(3) 重建,避免闪烁) */
+  /** 局部刷新:6 固定业务(未安装 → 下载卡片)+ 自定义业务;下载与删除按钮随包状态合并切换 */
   private void rebuildBizList() {
     m.refreshTasks();
     if (bizListPanel == null) return;
     bizListPanel.removeAllViews();
-    for (int i = 0; i < m.taskIds.size(); i++) bizListPanel.addView(bizCard(m.taskIds.get(i), m.taskLabels.get(i)));
+    dlStatus.clear();
+    java.util.ArrayList<String> shown = new java.util.ArrayList<>();
+    for (String[] b : DL_BIZS) {
+      shown.add(b[0]);
+      int idx = m.taskIds.indexOf(b[0]);
+      if (idx >= 0) {
+        bizListPanel.addView(bizCard(b[0], m.taskLabels.get(idx)));
+        if (downloadingBiz != null && downloadingBiz.startsWith(b[0] + ":")) {
+          // 重建后恢复下载进度显示
+          bizListPanel.addView(downloadRow(b[0], m.getString(R.string.dl_progress, 0, 0, "…")));
+        }
+      } else {
+        bizListPanel.addView(dlCard(b[0], resId(b[1])));
+      }
+    }
+    for (int i = 0; i < m.taskIds.size(); i++) {
+      if (!shown.contains(m.taskIds.get(i)))
+        bizListPanel.addView(bizCard(m.taskIds.get(i), m.taskLabels.get(i)));
+    }
+  }
+
+  /** 未安装业务的下载卡片:名称 + 三变体下载按钮(NPU/GPU 推荐 + CPU)+ 进度行 */
+  private LinearLayout dlCard(String biz, int labelRes) {
+    LinearLayout card = new LinearLayout(m);
+    card.setOrientation(LinearLayout.VERTICAL);
+    card.setBackground(Ui.pill(Ui.c(m, 0xFFF7F8FA, 0xFF232833), Ui.dp(m,10)));
+    card.setPadding(Ui.dp(m,10), Ui.dp(m,8), Ui.dp(m,10), Ui.dp(m,10));
+    LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+    clp.bottomMargin = Ui.dp(m,8); card.setLayoutParams(clp);
+
+    TextView head = new TextView(m);
+    head.setText((downloadingBiz != null && downloadingBiz.startsWith(biz + ":") ? "⏳ " : "⬇ ") + m.getString(labelRes) + "  [" + biz + "]");
+    head.setTextSize(14); head.setTypeface(Typeface.DEFAULT_BOLD);
+    head.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+    card.addView(head);
+    TextView st = new TextView(m);
+    st.setTextSize(11); st.setTextColor(Ui.c(m, 0xFF66707E, 0xFF8A93A0));
+    st.setText(downloadingBiz != null && downloadingBiz.startsWith(biz + ":") ? m.getString(R.string.dl_progress, 0, 0, "…") : m.getString(R.string.dl_missing));
+    dlStatus.put(biz, st);
+    card.addView(st);
+
+    if (!biz.equals(downloadingBiz)) {
+      ensureRepoTree();
+      if (repoTree != null) {
+        LinearLayout btnRow = new LinearLayout(m);
+        String[][] vs = {{"npu", "NPU", "★"}, {"gpu", "GPU", "★"}, {"cpu", "CPU", ""}};
+        for (String[] v : vs) {
+          long size = variantSize(biz, v[0]);
+          if (size <= 0) continue; // 无包不显示(如未上传的 cpu 变体)
+          LinearLayout col = new LinearLayout(m);
+          col.setOrientation(LinearLayout.VERTICAL);
+          col.setGravity(android.view.Gravity.CENTER);
+          Button btn = new Button(m);
+          btn.setText(v[1] + (v[2].isEmpty() ? "" : "\n" + v[2]));
+          btn.setAllCaps(false); btn.setTextSize(11);
+          btn.setMinHeight(0); btn.setMinimumHeight(0); btn.setMinimumWidth(0);
+          btn.setPadding(Ui.dp(m,4), Ui.dp(m,6), Ui.dp(m,4), Ui.dp(m,6));
+          btn.setTextColor(Color.WHITE); btn.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,10)));
+          btn.setOnClickListener(v2 -> downloadBiz(biz, v[0]));
+          col.addView(btn, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+          TextView sz = new TextView(m);
+          sz.setText(size / 1048576 + "MB");
+          sz.setTextSize(10); sz.setGravity(android.view.Gravity.CENTER);
+          sz.setTextColor(Ui.c(m, 0xFF66707E, 0xFF8A93A0));
+          col.addView(sz, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+          btnRow.addView(col, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        }
+        card.addView(btnRow, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+      }
+    }
+    return card;
+  }
+
+  /** 拉取 myjev 文件树(一次),完成后重建列表以标注各包大小 */
+  private void ensureRepoTree() {
+    if (repoTree != null || repoTreeLoading) return;
+    repoTreeLoading = true;
+    new Thread(() -> {
+      try {
+        JSONArray files = ModelDownloader.listFiles();
+        repoTree = new org.json.JSONObject().put("Files", files);
+        m.runOnUiThread(() -> { repoTreeLoading = false; rebuildBizList(); });
+      } catch (Throwable t) { repoTreeLoading = false; }
+    }).start();
+  }
+
+  /** 变体包大小 = base + <variant>(字节;树未加载/无文件返回 0) */
+  private long variantSize(String biz, String variant) {
+    if (repoTree == null) return 0;
+    JSONArray files = repoTree.optJSONArray("Files"); if (files == null) return 0;
+    long sum = 0; boolean any = false;
+    for (String pfx : new String[]{biz + "/base/", biz + "/" + variant + "/"}) {
+      for (int i = 0; i < files.length(); i++) {
+        JSONObject f = files.optJSONObject(i); if (f == null) continue;
+        String p = f.optString("Path");
+        if (f.optString("Type").equals("blob") && p.startsWith(pfx)) { sum += f.optLong("Size", 0); any = true; }
+      }
+    }
+    return any ? sum : 0;
+  }
+
+  /** 下载中的行(卡片重建后恢复进度显示) */
+  private LinearLayout downloadRow(String biz, String text) {
+    LinearLayout row = new LinearLayout(m);
+    row.setOrientation(LinearLayout.VERTICAL);
+    row.setPadding(Ui.dp(m,10), 0, Ui.dp(m,10), Ui.dp(m,8));
+    TextView t = new TextView(m);
+    t.setTextSize(11); t.setTextColor(Ui.c(m, 0xFF66707E, 0xFF8A93A0));
+    dlStatus.put(biz, t);
+    t.setText(text);
+    row.addView(t);
+    return row;
   }
 }

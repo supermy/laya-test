@@ -358,6 +358,7 @@ class NewsPage {
    *  drive=重要性1-5 归一(≥3 才入信号级);conf=choice 置信;urg=noul 风险警示 */
   private JSONObject localScore(String text) {
     try {
+      // 截断行为与训练一致(训练只见文本头部);双端拼接需配合重训,暂不启用
       com.laya.DecisionCore.Result r = com.laya.DecisionCore.decide(m, "news", text, false);
       org.json.JSONObject q0 = r.answers.optJSONObject("q0");
       org.json.JSONObject q1 = r.answers.optJSONObject("q1");

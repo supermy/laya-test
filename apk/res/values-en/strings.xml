@@ -124,7 +124,7 @@
     <string name="fill_path_task">Fill in package path and business name</string>
     <string name="uploading">Uploading… (zip ≈250MB, verifying 6 files)</string>
     <string name="upload_ok">✅ Uploaded, business [%1$s] registered</string>
-    <string name="rescan">⟳ Rescan businesses</string>
+    <string name="rescan">⟳ Rescan models</string>
     <string name="biz_list_hint">Registered businesses; Load = install into app for decisions; Details = expand the 8-file list (tap to collapse); Delete = remove source &amp; copy (irreversible)</string>
     <string name="loaded_state">Installed (~650MB) · ready for decisions / gateway commands</string>
     <string name="not_loaded_state">Not installed · auto-installs on demand, or tap [Load] below</string>
@@ -203,6 +203,8 @@
     <string name="biz_agent">Agent workflow routing</string>
     <string name="biz_risk">Financial risk pre-screen</string>
     <string name="dl_title">Model download: fetch missing businesses from ModelScope (NPU/GPU variant auto-selected)</string>
+    <string name="dl_missing">Not installed</string>
+    <string name="dl_btn_variant">Download %1$s model</string>
     <string name="dl_btn">Download</string>
     <string name="dl_progress">Downloading %1$d/%2$d · %3$s</string>
     <string name="dl_none">No package in myjev repo: %1$s</string>

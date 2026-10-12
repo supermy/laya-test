@@ -124,7 +124,7 @@
     <string name="fill_path_task">请填包路径和业务名</string>
     <string name="uploading">上传中…(zip 约 250MB,校验六文件)</string>
     <string name="upload_ok">✅ 上传成功,已注册业务 [%1$s]</string>
-    <string name="rescan">⟳ 重新扫描业务</string>
+    <string name="rescan">⟳ 重新扫描模型</string>
     <string name="biz_list_hint">已注册业务列表;加载=装入 app 可决策;模型详情=展开八文件清单(点清单收起);删除=移除源包与副本(不可恢复)</string>
     <string name="loaded_state">已装入 app(约 650MB)· 可决策 / 收网关指令</string>
     <string name="not_loaded_state">未装入 · 决策时自动安装,或点下方[加载]</string>
@@ -203,6 +203,8 @@
     <string name="biz_agent">Agent 工作流路由</string>
     <string name="biz_risk">金融风控前置</string>
     <string name="dl_title">模型包下载:未安装的业务可从 ModelScope 拉取(按机型自动选 NPU/GPU 变体)</string>
+    <string name="dl_missing">未安装</string>
+    <string name="dl_btn_variant">⬇ 下载 %1$s 模型</string>
     <string name="dl_btn">下载</string>
     <string name="dl_progress">下载中 %1$d/%2$d · %3$s</string>
     <string name="dl_none">myjev 仓库无此业务包: %1$s</string>
