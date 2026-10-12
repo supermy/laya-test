@@ -31,6 +31,11 @@ class SystemPage {
     return com.laya.DecisionCore.mtkNpuAvailable(m) ? "npu" : "gpu";
   }
   private final java.util.HashMap<String, TextView> dlStatus = new java.util.HashMap<>();
+  private final java.util.HashMap<String, String> dlProgressText = new java.util.HashMap<>(); // biz → 最新进度文本
+  private final java.util.HashMap<String, Integer> dlProgressPct = new java.util.HashMap<>(); // biz → 百分比
+  private final java.util.HashMap<String, Button> dlBtns = new java.util.HashMap<>(); // biz → 下载中变体按钮(实时百分比)
+  private final java.util.HashMap<String, TextView> cardStatus = new java.util.HashMap<>();  // biz → 卡片状态行
+  private final java.util.HashMap<String, Button> cardToggle = new java.util.HashMap<>();    // biz → 加载/卸载按钮
   private org.json.JSONObject repoTree;          // myjev 文件树缓存(算各变体包大小)
   private boolean repoTreeLoading = false;
   private EditText upSrc, upTask;
@@ -260,10 +265,22 @@ class SystemPage {
           final long fSize = sz;
           m.runOnUiThread(() -> { TextView tv = dlStatus.get(biz); if (tv != null)
               tv.setText(m.getString(R.string.dl_progress, fIdx, fTotal, (doneSoFar + sz) / 1048576 + "/" + fAll / 1048576 + "MB")); });
+          final String headStat = m.getString(R.string.dl_progress, fIdx, fTotal, (doneSoFar + sz) / 1048576 + "/" + fAll / 1048576 + "MB");
+          m.runOnUiThread(() -> {
+            dlProgressText.put(biz, headStat);
+            TextView tv = dlStatus.get(biz); if (tv != null) tv.setText(headStat);
+          });
           ModelDownloader.download(p, new File(pkgDir, name), fSize, prog -> {
             long cur = doneSoFar + parseProg(prog);
             String s2 = m.getString(R.string.dl_progress, fIdx, fTotal, cur / 1048576 + "/" + fAll / 1048576 + "MB");
-            m.runOnUiThread(() -> { TextView tv = dlStatus.get(biz); if (tv != null) tv.setText(s2); });
+            final int pct = fAll > 0 ? (int) (cur * 100 / fAll) : 0;
+            final String btnTxt = variant.toUpperCase() + " " + pct + "%";
+            m.runOnUiThread(() -> {
+              dlProgressText.put(biz, s2);
+              dlProgressPct.put(biz, pct);
+              TextView tv = dlStatus.get(biz); if (tv != null) tv.setText(s2);
+              Button bb = dlBtns.get(biz); if (bb != null) bb.setText(btnTxt); // 按钮标签右侧百分比实时刷新
+            });
           });
         }
       } catch (Throwable t) {
@@ -286,9 +303,56 @@ class SystemPage {
   }
 
   /** 单个业务卡片(加载态/操作按钮/详情/导出/删除) */
+  private static final java.util.HashMap<String, String> SAMPLES = new java.util.HashMap<>();
+  static {
+    SAMPLES.put("ticket", "my account was charged twice, please refund");
+    SAMPLES.put("ugc", "加我微信领红包,点击链接轻松日赚五百,错过再等一年");
+    SAMPLES.put("agent", "帮我查一下最近一笔订单的物流状态,如果延迟了帮我申请退款");
+    SAMPLES.put("risk", "客户申请全额退款并威胁向监管投诉,账户近期出现多次异常登录");
+    SAMPLES.put("news", "公司公告预计上半年净利润同比增长120%至150%,主因产品量价齐升");
+    SAMPLES.put("multi", "My phone fell in water, the screen is broken and it will not turn on");
+  }
+  /** 卡片局部刷新:状态行 + 加载/卸载按钮文本(不重建列表) */
+  private void updateBizState(String task) {
+    TextView st = cardStatus.get(task); Button tg = cardToggle.get(task);
+    if (st == null || tg == null) { rebuildBizList(); return; }
+    File fd = new File(m.getFilesDir(), "laya-" + task);
+    boolean loadedF = new File(fd, "laya_ml_s256_embeds_wfp16.tflite").isFile()
+        || new File(fd, "laya_ml_s256_embeds_npu.tflite").isFile();
+    boolean downloading = isDownloading(task);
+    String state = downloading ? "下载中 ⏳ · " + dlProgressText.getOrDefault(task, "…")
+        : loadedF ? (com.laya.DecisionCore.isEngineLoaded(task)
+            ? m.getString(R.string.dl_state_loaded) + " · " + variantOf(fd)
+            : m.getString(R.string.dl_state_downloaded) + " · " + variantOf(fd) + "(点击加载)")
+        : pkgInstalled(task) ? m.getString(R.string.dl_state_downloaded) + " · " + variantOf(new File(pkgDirOf(task))) + "(待加载)"
+        : m.getString(R.string.not_loaded_state);
+    st.setText(state);
+    String varTxt = variantOf(loadedF ? fd : new File(pkgDirOf(task)));
+    tg.setText((loadedF ? m.getString(R.string.uninstall) : m.getString(R.string.load_btn)) + " · " + varTxt);
+    tg.setVisibility(downloading ? View.GONE : View.VISIBLE);
+  }
+
+  private static String sampleOf(String task) {
+    String s = SAMPLES.get(task);
+    return s != null ? s : "这是一条用于手动决策测试的示例数据";
+  }
+
+  /** 模型类型:包目录含 npu 主图 → NPU,wfp16 → GPU,两者 → NPU/GPU */
+  private static String variantOf(File dir) {
+    boolean npu = new File(dir, "laya_ml_s256_embeds_npu.tflite").isFile();
+    boolean gpu = new File(dir, "laya_ml_s256_embeds_wfp16.tflite").isFile();
+    return npu && gpu ? "NPU/GPU" : npu ? "NPU" : gpu ? "GPU" : "—";
+  }
+  private boolean isDownloading(String biz) {
+    return downloadingBiz != null && downloadingBiz.startsWith(biz + ":");
+  }
+
   private LinearLayout bizCard(String task, String label) {
     boolean loaded = new File(m.getFilesDir(), "laya-" + task + "/laya_ml_s256_embeds_wfp16.tflite").isFile()
         || new File(m.getFilesDir(), "laya-" + task + "/laya_ml_s256_embeds_npu.tflite").isFile();
+    boolean downloading = isDownloading(task);
+    File sdPkg = new File(pkgDirOf(task));
+    boolean pkgReady = pkgInstalled(task) && !downloading; // 下载完成(无 .part)才算已下载
 
     LinearLayout card = new LinearLayout(m);
     card.setOrientation(LinearLayout.VERTICAL);
@@ -303,14 +367,24 @@ class SystemPage {
     head.setTextSize(14); head.setTypeface(Typeface.DEFAULT_BOLD); head.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
     card.addView(head);
     TextView st = new TextView(m);
-    st.setText(m.getString(loaded ? R.string.loaded_state : R.string.not_loaded_state));
+    String state = downloading ? "下载中 ⏳ · " + dlProgressText.getOrDefault(task, "…") + "(完成后可加载)"
+        : loaded ? (com.laya.DecisionCore.isEngineLoaded(task)
+            ? m.getString(R.string.dl_state_loaded) + " · " + variantOf(new File(m.getFilesDir(), "laya-" + task))
+            : m.getString(R.string.dl_state_downloaded) + " · " + variantOf(new File(m.getFilesDir(), "laya-" + task)) + "(点击加载)")
+        : pkgReady ? m.getString(R.string.dl_state_downloaded) + " · " + variantOf(sdPkg) + "(待加载)"
+        : m.getString(R.string.not_loaded_state);
+    st.setText(state);
     st.setTextSize(11); st.setTextColor(Ui.c(m, 0xFF66707E, 0xFF8A93A0));
     st.setPadding(0, Ui.dp(m,2), 0, Ui.dp(m,4));
     card.addView(st);
+    cardStatus.put(task, st);
 
-    // 单按钮动态切换:未加载=加载(装入 app);已加载=卸载(释放空间)
+    // 单按钮动态切换:未加载=加载(装入 app);已加载=卸载(释放空间);下载中隐藏
     Button toggle = new Button(m);
-    toggle.setText(m.getString(loaded ? R.string.uninstall : R.string.load_btn));
+    toggle.setVisibility(downloading ? View.GONE : View.VISIBLE);
+    String varTxt = variantOf(loaded ? new File(m.getFilesDir(), "laya-" + task) : sdPkg);
+    toggle.setText((loaded ? m.getString(R.string.uninstall) : m.getString(R.string.load_btn)) + " · " + varTxt);
+    cardToggle.put(task, toggle);
     toggle.setAllCaps(false); toggle.setTextSize(12);
     toggle.setTextColor(loaded ? Ui.c(m, 0xFF444A55, 0xFFB8C0CC) : Color.WHITE);
     toggle.setBackground(Ui.pill(loaded ? Ui.c(m, m.CHIP_OFF, 0xFF2A3040) : m.PRIMARY, Ui.dp(m,14)));
@@ -319,11 +393,11 @@ class SystemPage {
     toggle.setOnClickListener(v -> {
       if (loaded) {
         com.laya.DecisionCore.unload(m, task);
-        rebuildBizList();
+        updateBizState(task); // 局部刷新
       } else {
         st.setText(m.getString(R.string.loading_model));
         new Thread(() -> {
-          try { com.laya.DecisionCore.preload(m, task); m.runOnUiThread(() -> rebuildBizList()); }
+          try { com.laya.DecisionCore.preload(m, task); m.runOnUiThread(() -> updateBizState(task)); }
           catch (Throwable e) { m.runOnUiThread(() -> st.setText(m.getString(R.string.load_failed, e.getMessage()))); }
         }).start();
       }
@@ -368,6 +442,61 @@ class SystemPage {
     card.addView(detail);
     detailBtn.setOnClickListener(v ->
         detail.setVisibility(detail.getVisibility() == View.GONE ? View.VISIBLE : View.GONE));
+
+    // ---- 手动单条决策测试(模型详情下方展开;示例数据预填) ----
+    if (loaded) {
+      Button testBtn = new Button(m);
+      testBtn.setText(m.getString(R.string.test_btn)); testBtn.setAllCaps(false); testBtn.setTextSize(12);
+      testBtn.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
+      testBtn.setBackground(Ui.pill(Ui.c(m, m.CHIP_OFF, 0xFF2A3040), Ui.dp(m,14)));
+      testBtn.setPadding(Ui.dp(m,4), Ui.dp(m,6), Ui.dp(m,4), Ui.dp(m,6));
+      testBtn.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+      card.addView(testBtn);
+      LinearLayout testBox = new LinearLayout(m);
+      testBox.setOrientation(LinearLayout.VERTICAL);
+      testBox.setBackground(Ui.pill(Ui.c(m, 0xFFFFFFFF, 0xFF1E232B), Ui.dp(m,8)));
+      testBox.setPadding(Ui.dp(m,8), Ui.dp(m,6), Ui.dp(m,8), Ui.dp(m,6));
+      testBox.setVisibility(View.GONE);
+      EditText testIn = new EditText(m);
+      testIn.setText(sampleOf(task));
+      testIn.setTextSize(11); testIn.setMaxLines(4);
+      testIn.setTextColor(Ui.c(m, 0xFF22262E, 0xFFE2E6EC));
+      testIn.setHintTextColor(Ui.c(m, 0xFF9AA3AD, 0xFF66707E));
+      testBox.addView(testIn);
+      Button runBtn = new Button(m);
+      runBtn.setText(m.getString(R.string.test_run)); runBtn.setAllCaps(false); runBtn.setTextSize(12);
+      runBtn.setTextColor(Color.WHITE); runBtn.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,14)));
+      testBox.addView(runBtn, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+      TextView testOut = new TextView(m);
+      testOut.setTextSize(10); testOut.setTypeface(Typeface.MONOSPACE);
+      testOut.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
+      testOut.setVisibility(View.GONE);
+      testBox.addView(testOut);
+      card.addView(testBox);
+      testBtn.setOnClickListener(v ->
+          testBox.setVisibility(testBox.getVisibility() == View.GONE ? View.VISIBLE : View.GONE));
+      runBtn.setOnClickListener(v -> {
+        String text = testIn.getText().toString().trim();
+        if (text.isEmpty()) { testOut.setVisibility(View.VISIBLE); testOut.setText("输入为空"); return; }
+        runBtn.setEnabled(false);
+        testOut.setVisibility(View.VISIBLE); testOut.setText("决策中…");
+        new Thread(() -> {
+          String out;
+          try {
+            com.laya.DecisionCore.Result r = com.laya.DecisionCore.decide(m, task, text);
+            out = com.laya.DecisionCore.fmt(m, task, r.answers) + "\n· " + com.laya.DecisionCore.currentEngine(m) + " " + r.latencyMs + "ms";
+          } catch (Throwable t) {
+            out = "失败: " + (t.getMessage() != null ? t.getMessage() : t.toString());
+          }
+          final String fo = out;
+          m.runOnUiThread(() -> {
+            testOut.setText(fo);
+            runBtn.setEnabled(true);
+            updateBizState(task); // 首次决策后引擎已载入,局部刷新状态行
+          });
+        }).start();
+      });
+    }
 
     expBtn.setOnClickListener(v -> {
       final File dst = new File("/sdcard/Download", "laya-litert-" + task + ".zip");
@@ -427,7 +556,7 @@ class SystemPage {
         bizListPanel.addView(bizCard(b[0], m.taskLabels.get(idx)));
         if (downloadingBiz != null && downloadingBiz.startsWith(b[0] + ":")) {
           // 重建后恢复下载进度显示
-          bizListPanel.addView(downloadRow(b[0], m.getString(R.string.dl_progress, 0, 0, "…")));
+          bizListPanel.addView(downloadRow(b[0], dlProgressText.getOrDefault(b[0], m.getString(R.string.dl_progress, 0, 0, "…"))));
         }
       } else {
         bizListPanel.addView(dlCard(b[0], resId(b[1])));
@@ -459,28 +588,32 @@ class SystemPage {
     dlStatus.put(biz, st);
     card.addView(st);
 
-    if (!biz.equals(downloadingBiz)) {
-      ensureRepoTree();
-      if (repoTree != null) {
+    {
+      boolean dl = downloadingBiz != null && downloadingBiz.startsWith(biz + ":");
+      String dlVar = dl ? downloadingBiz.substring(biz.length() + 1) : "";
+      if (!dl) ensureRepoTree();
+      if (!dl || repoTree != null) {
         LinearLayout btnRow = new LinearLayout(m);
         String[][] vs = {{"npu", "NPU"}, {"gpu", "GPU"}};
         for (String[] v : vs) {
           long size = variantSize(biz, v[0]);
-          if (size <= 0) continue; // 无包不显示(如未上传的 cpu 变体)
+          boolean isDl = dl && v[0].equals(dlVar);
+          if (size <= 0 && !isDl) continue; // 无包不显示(如未上传的 cpu 变体)
           String rec = v[0].equals(dlVariant()) ? "★" : ""; // 仅标本机推荐变体
           LinearLayout col = new LinearLayout(m);
           col.setOrientation(LinearLayout.VERTICAL);
           col.setGravity(android.view.Gravity.CENTER);
           Button btn = new Button(m);
-          btn.setText(v[1] + (rec.isEmpty() ? "" : "\n" + rec));
+          btn.setText(v[1] + (isDl ? " " + dlProgressPct.getOrDefault(biz, 0) + "%" : rec.isEmpty() ? "" : " " + rec));
+          if (isDl) dlBtns.put(biz, btn);
           btn.setAllCaps(false); btn.setTextSize(11);
           btn.setMinHeight(0); btn.setMinimumHeight(0); btn.setMinimumWidth(0);
           btn.setPadding(Ui.dp(m,4), Ui.dp(m,6), Ui.dp(m,4), Ui.dp(m,6));
           btn.setTextColor(Color.WHITE); btn.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,10)));
-          btn.setOnClickListener(v2 -> downloadBiz(biz, v[0]));
+          if (!dl) btn.setOnClickListener(v2 -> downloadBiz(biz, v[0]));
           col.addView(btn, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
           TextView sz = new TextView(m);
-          sz.setText(size / 1048576 + "MB");
+          sz.setText(isDl ? "下载中" : size / 1048576 + "MB");
           sz.setTextSize(10); sz.setGravity(android.view.Gravity.CENTER);
           sz.setTextColor(Ui.c(m, 0xFF66707E, 0xFF8A93A0));
           col.addView(sz, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));

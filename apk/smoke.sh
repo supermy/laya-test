@@ -95,7 +95,7 @@ chk "POST /decide(level)" bash -c "curl -s --max-time 30 -X POST http://127.0.0.
 echo "== [5/5] 系统页断言 =="
 $A shell "input tap 1067 2528; sleep 1.5; uiautomator dump /sdcard/smoke.xml" >/dev/null 2>&1
 SYS_XML=$(dumpfile smoke_sys.xml)
-chk "业务卡片" grep -q "已装入\|未装入\|Installed\|Not installed" "$SYS_XML"
+chk "业务卡片" grep -q "已装入\|未装入\|已下载\|已载入\|Installed\|Not installed\|Downloaded\|Loaded" "$SYS_XML"
 
 # 卡片重复检测:health tasks 的每个业务名在 dump 中至多出现 1 次(双面板会让每名 ×2)
 DUP=$(curl -s --max-time 8 http://127.0.0.1:8790/health | python3 -c "

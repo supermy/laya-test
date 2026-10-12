@@ -96,6 +96,10 @@ object DecisionCore {
         File(nl, "libnpu_rt.so").isFile
   }
 
+  /** 该业务引擎当前是否已载入(单引擎槽:仅 engineTask 匹配时为真) */
+  @JvmStatic
+  fun isEngineLoaded(task: String): Boolean = runnerEngine != null && engineTask == task
+
   /** 业务模型包是否携带 NPU dispatch 主图 + scorer bin */
   fun npuModelReady(base: File): Boolean =
     File(base, "laya_ml_s256_embeds_npu.tflite").isFile && File(base, "laya_ml_scorer.bin").isFile

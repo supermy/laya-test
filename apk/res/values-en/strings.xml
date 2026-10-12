@@ -205,6 +205,10 @@
     <string name="dl_title">Model download: fetch missing businesses from ModelScope (NPU/GPU variant auto-selected)</string>
     <string name="dl_missing">Not installed</string>
     <string name="dl_btn_variant">Download %1$s model</string>
+    <string name="dl_state_downloaded">Downloaded</string>
+    <string name="test_btn">Test</string>
+    <string name="test_run">▶ Run</string>
+    <string name="dl_state_loaded">Loaded</string>
     <string name="dl_btn">Download</string>
     <string name="dl_progress">Downloading %1$d/%2$d · %3$s</string>
     <string name="dl_none">No package in myjev repo: %1$s</string>
