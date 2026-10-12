@@ -307,6 +307,31 @@ class NewsPage {
   }
 
   // ---- 评分:优先本地 news 模型(端侧 NPU/GPU/CPU),未安装时回退 LLM 槽位;逐条同步,串行消费 ----
+  /** 模拟采集测试:注入一条快讯并走本地评分→决策日志(验证采集→决策链路) */
+  void injectTestFeed(String text, String source) {
+    String key = "test_" + System.currentTimeMillis();
+    synchronized (items) {
+      JSONObject n = new JSONObject();
+      try {
+        n.put("ts", System.currentTimeMillis());
+        n.put("source", source);
+        n.put("text", text);
+        items.put(key, n);
+      } catch (Exception e) { return; }
+    }
+    m.runOnUiThread(() -> { try { render(); } catch (Throwable ignore) {} });
+    scorePending();
+  }
+
+  /** 指定来源的快讯条数(网关渠道状态显示用) */
+  int feedCount(String source) {
+    synchronized (items) {
+      int c = 0;
+      for (JSONObject e : items.values()) if (source.equals(e.optString("source"))) c++;
+      return c;
+    }
+  }
+
   private boolean hasLocalNews() {
     for (kotlin.Pair<String, String> p : com.laya.DecisionCore.scanTasks(m)) {
       if ("news".equals(p.getFirst())) return true;

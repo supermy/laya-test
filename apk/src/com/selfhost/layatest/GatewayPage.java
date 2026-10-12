@@ -297,6 +297,75 @@ class GatewayPage {
         wscCfg != null ? wscCfg.optString(com.laya.Cfg.URL) : "");
     gwNewsInterval = Ui.fieldU(m,l, m.getString(R.string.news_interval_hint),
         newsCfg != null && newsCfg.has(com.laya.Cfg.INTERVAL) ? String.valueOf(newsCfg.optLong(com.laya.Cfg.INTERVAL, 60)) : "60");
+    // ---- 自动数据采集→决策 链路测试(三条示例快讯,注入后走本地评分→决策日志) ----
+    // ---- 已配置采集渠道状态:启用/来源/快讯条数 ----
+    String[][] chans = {{"sina", "新浪财经"}, {"wsc", "华尔街见闻"}};
+    for (String[] ch : chans) {
+      org.json.JSONObject sc = newsCfg != null ? newsCfg.optJSONObject(ch[0]) : null;
+      boolean on = sc == null || sc.optBoolean(com.laya.Cfg.ENABLED, true);
+      String urlKind = sc != null && !sc.optString(com.laya.Cfg.URL).isEmpty() ? "自定义源" : "默认源";
+      LinearLayout crow = new LinearLayout(m);
+      crow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+      crow.setPadding(0, Ui.dp(m,2), 0, Ui.dp(m,2));
+      TextView ct = new TextView(m);
+      ct.setTextSize(11);
+      ct.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
+      ct.setText("· " + ch[1] + (on ? " ✅启用" : " ⛔停用") + " · " + urlKind + " · " + m.newsPage.feedCount(ch[1]) + " 条");
+      crow.addView(ct, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+      Button tog = new Button(m);
+      tog.setText(on ? "停止" : "启用"); tog.setAllCaps(false); tog.setTextSize(10);
+      tog.setMinHeight(0); tog.setMinimumHeight(0); tog.setMinimumWidth(0);
+      tog.setPadding(Ui.dp(m,8), Ui.dp(m,3), Ui.dp(m,8), Ui.dp(m,3));
+      tog.setTextColor(Color.WHITE);
+      tog.setBackground(Ui.pill(on ? 0xFF8894A6 : m.PRIMARY, Ui.dp(m,10)));
+      tog.setOnClickListener(v -> {
+        try {
+          JSONObject c2 = com.laya.Gateway.cfg(m.getApplicationContext());
+          JSONObject n2 = c2.optJSONObject(com.laya.Cfg.NEWS); if (n2 == null) n2 = new JSONObject();
+          JSONObject s2 = n2.optJSONObject(ch[0]); if (s2 == null) s2 = new JSONObject();
+          s2.put(com.laya.Cfg.ENABLED, !on);
+          n2.put(com.laya.Cfg.SINA, n2.optJSONObject(com.laya.Cfg.SINA) != null ? n2.optJSONObject(com.laya.Cfg.SINA) : s2); // 保结构
+          n2.put(ch[0].toUpperCase(), s2); // 双写兼容
+          if ("sina".equals(ch[0])) n2.put(com.laya.Cfg.SINA, s2); else n2.put(com.laya.Cfg.WSC, s2);
+          c2.put(com.laya.Cfg.NEWS, n2);
+          com.laya.Gateway.saveCfg(m.getApplicationContext(), c2);
+          m.setTab(2); // 刷新面板
+        } catch (Exception e) { ct.setText("操作失败: " + e.getMessage()); }
+      });
+      crow.addView(tog);
+      Button test = new Button(m);
+      test.setText("测试"); test.setAllCaps(false); test.setTextSize(10);
+      test.setMinHeight(0); test.setMinimumHeight(0); test.setMinimumWidth(0);
+      test.setPadding(Ui.dp(m,8), Ui.dp(m,3), Ui.dp(m,8), Ui.dp(m,3));
+      test.setTextColor(Color.WHITE); test.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,10)));
+      final String sample = "sina".equals(ch[0])
+          ? "央行宣布下调存款准备金率0.5个百分点,释放长期资金约1万亿元"
+          : "美联储宣布加息25个基点,并表示将继续缩表以抑制通胀";
+      test.setOnClickListener(v -> m.newsPage.injectTestFeed(sample, "测试-" + ch[1]));
+      crow.addView(test);
+      l.addView(crow);
+    }
+    l.addView(Ui.hint(m,m.getString(R.string.news_test_hint)));
+    LinearLayout testRow = new LinearLayout(m);
+    String[][] tests = {
+        {"利好", "公司公告预计上半年净利润同比增长120%至150%,主因产品量价齐升"},
+        {"利空", "公司收到证监会立案调查通知书,涉嫌信息披露违法违规"},
+        {"中性", "公司定于下月15日召开年度股东大会,审议年度报告等议案"},
+    };
+    for (String[] t : tests) {
+      final String tag = t[0], text = t[1];
+      Button tb = new Button(m);
+      tb.setText("测试·" + tag); tb.setAllCaps(false); tb.setTextSize(11);
+      tb.setMinHeight(0); tb.setMinimumHeight(0); tb.setMinimumWidth(0);
+      tb.setPadding(Ui.dp(m,6), Ui.dp(m,5), Ui.dp(m,6), Ui.dp(m,5));
+      tb.setTextColor(Color.WHITE); tb.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,10)));
+      tb.setOnClickListener(v -> m.newsPage.injectTestFeed(text, "模拟-" + tag));
+      testRow.addView(tb, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+    }
+    LinearLayout.LayoutParams trp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+    trp.bottomMargin = Ui.dp(m,8);
+    l.addView(testRow, trp);
+
     Button newsSave = Ui.button(m,l, m.getString(R.string.news_cfg_save));
     newsSave.setOnClickListener(v -> {
       try {
@@ -314,7 +383,7 @@ class GatewayPage {
     });
 
     // ---- 左侧竖排 tab(与报表页同款):邮件/队列/LLM/资讯 ----
-    LinearLayout[] panels = {pMail, pMq, pLlm, pNews};
+    LinearLayout[] panels = {pNews, pMail, pMq, pLlm}; // 资讯第一
     final ScrollView[] scrolls = new ScrollView[4];
     for (int i = 0; i < 4; i++) {
       ScrollView sv = new ScrollView(m);
@@ -325,7 +394,7 @@ class GatewayPage {
     final FrameLayout gHolder = new FrameLayout(m);
     gHolder.addView(scrolls[0]);
     gHolder.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
-    String[] gkinds = {m.getString(R.string.gw_mail), m.getString(R.string.gw_mq), "LLM", m.getString(R.string.gw_news)};
+    String[] gkinds = {m.getString(R.string.gw_news), m.getString(R.string.gw_mail), m.getString(R.string.gw_mq), "LLM"};
     final Button[] gchips = new Button[4];
     final LinearLayout grail = new LinearLayout(m);
     grail.setOrientation(LinearLayout.VERTICAL);

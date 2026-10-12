@@ -434,9 +434,29 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
    * 异步调 OpenAI 兼容 /chat/completions 生成处理建议,追加独立日志行 {"type":"llm",...}。
    * 不阻塞本次决策返回;LLM 失败只记 error 字段,不影响决策主流程。
    */
+  /** 系统通知推送(重要+紧急决策 / LLM 分析结果);失败静默 */
+  @JvmStatic
+  fun notifyUser(ctx: Context, title: String, text: String) {
+    try {
+      val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+      if (android.os.Build.VERSION.SDK_INT >= 26)
+        nm.createNotificationChannel(android.app.NotificationChannel("laya_decisions", "决策消息", android.app.NotificationManager.IMPORTANCE_HIGH))
+      val launch = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
+      val pi = android.app.PendingIntent.getActivity(ctx, 0, launch,
+          android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+      val n = android.app.Notification.Builder(ctx, "laya_decisions")
+        .setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle(title.take(60))
+        .setContentText(text.take(120)).setStyle(android.app.Notification.BigTextStyle().bigText(text))
+        .setContentIntent(pi).setAutoCancel(true).build()
+      nm.notify((System.currentTimeMillis() and 0x7fffffff).toInt(), n)
+    } catch (_: Throwable) {}
+  }
+
   private fun llmFollowUp(ctx: Context, task: String, text: String, answers: JSONObject) {
     try {
+      val brief = fmt(ctx, task, answers)
       if (levelOf(JSONObject().put("decoded", answers)).optString("level") != "高") return
+      notifyUser(ctx, "重要+紧急决策 · $task", brief)
       val slot = Gateway.llmActive(ctx) ?: return
       val base = slot.optString("baseURL").trim().trimEnd('/')
       val model = slot.optString("model").trim()
@@ -476,6 +496,8 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
           java.io.FileOutputStream(logFile(ctx), true).use { it.write((o.toString() + "\n").toByteArray()) }
         } catch (_: Exception) {}
         try { llmListener?.onLlmDone(task, out.optString("content"), err) } catch (_: Throwable) {}
+        if (err == null) notifyUser(ctx, "LLM 深度分析 · $task", out.optString("content"))
+        else notifyUser(ctx, "LLM 分析失败 · $task", err)
       }.apply { isDaemon = true; name = "LlmFollowUp"; start() }
     } catch (_: Throwable) {}
   }

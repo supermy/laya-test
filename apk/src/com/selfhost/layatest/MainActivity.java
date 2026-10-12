@@ -270,7 +270,7 @@ public class MainActivity extends Activity {
     if (gwBarText != null) gwBarText.setText(getString(R.string.gateway_bar, com.laya.Gateway.status(this)));
   }
 
-  private void setTab(int k) {
+  void setTab(int k) {
     tab = k;
     getSharedPreferences("ui", MODE_PRIVATE).edit().putInt("tab", k).apply();
     refreshGatewayBar();

@@ -213,6 +213,64 @@
     <string name="dl_progress">Downloading %1$d/%2$d · %3$s</string>
     <string name="dl_none">No package in myjev repo: %1$s</string>
     <string name="dl_fail">%1$s download failed: %2$s</string>
+    <string name="diag_arch_tune_t">Cloud finetune (5060 GPU)</string>
+    <string name="diag_arch_tune">RLCD→evaluate→export\nint8 / LiteRT delivery</string>
+    <string name="diag_arch_llm_t">Cloud LLM (post-decision)</string>
+    <string formatted="false" name="diag_arch_llm">Takes over important+urgent 39.1%\nFurther reasoning · reply generation\nToken cost ↓~60%</string>
+    <string name="diag_a_push">Model delivery</string>
+    <string name="diag_a_escalate">Post-decision escalation</string>
+    <string name="diag_arch_channel_t">Channel layer</string>
+    <string name="diag_arch_channel">Decision UI · MQTT client · mail commands</string>
+    <string name="diag_a_intent">Intent / MQTT / SMTP-IMAP</string>
+    <string name="diag_arch_gw_t">Access layer GatewayService (FGS)</string>
+    <string name="diag_arch_gw">IMAP poll→parse→SMTP reply · daily report\nSubscribe laya/req/+ → publish laya/resp</string>
+    <string name="diag_arch_core_t">Decision core DecisionCore (triage)</string>
+    <string name="diag_arch_core">Single engine · 3-question orchestration · JSONL logs\nRoutine → on-device auto 60.9%\nImportant+urgent → escalate to LLM</string>
+    <string name="diag_arch_infer_t">Inference layer auto-degrading engine chain (SoC probe)</string>
+    <string name="diag_arch_infer">NPU:MTK Dimensity 9500 → dispatch runner (MDLA)\nNPU split:main 54-59ms/q + scorer C impl &lt;1ms\nGPU fallback:runner process → JNI C API (OpenCL) ~150ms\nCPU fallback:ORT int8;chain NPU→GPU→CPU</string>
+    <string name="diag_arch_model_t">Model bundle</string>
+    <string name="diag_arch_model">wfp16 main + NPU dispatch\nscorer bin + act head + vocab + calibration</string>
+    <string name="diag_arch_out_t">Output / storage</string>
+    <string name="diag_arch_out">UI · SMTP · MQTT resp\nJSONL → reports</string>
+    <string name="diag_a_load">Load</string>
+    <string name="diag_a_log">Write log</string>
+    <string formatted="false" name="diag_arch_foot">Full model triage;LLM only 39.1% → compute ↓57%</string>
+    <string name="diag_flow_input_t">Business input</string>
+    <string name="diag_flow_input">Ticket/SMS/UGC/risk</string>
+    <string name="diag_flow_laya_t">Laya decision (3-question forward)</string>
+    <string name="diag_flow_laya">NPU ~0.08s/q · GPU ~0.15s/q\nFinetuned choice acc 67.4%</string>
+    <string name="diag_flow_local_t">On-device handling 60.9%</string>
+    <string name="diag_flow_local">Post-decision:routine → template reply\nSmart routing · verdict-as-block\n~0.2s · &lt;1J/item</string>
+    <string name="diag_flow_llm_t">LLM handling 39.1%</string>
+    <string name="diag_flow_llm">Post-decision:important+urgent\nCloud API / on-device LLM fallback\nComplex reasoning · reply\n~22 TFLOP · ~700J/item</string>
+    <string name="diag_flow_result_t">Result + decision log</string>
+    <string name="diag_flow_result">Data feedback:quality labels → training corpus</string>
+    <string name="diag_flow_pipe_t">New business pipeline (finetune/ + litert-conv)</string>
+    <string name="diag_flow_pipe">prepare→RLCD→evaluate→split_negfix\nGPU wfp16 / NPU dispatch+scorer dual format</string>
+    <string name="diag_flow_newbiz">New business online</string>
+    <string formatted="false" name="diag_flow_foot">Compute:full LLM 22 TFLOP/item → layered 9.5,↓57% (escalation 39.1%)</string>
+    <string name="diag_sw_lanes">① User / business system\n② APK on-device · DecisionCore\n③ runner process\n④ Accelerator (NPU · GPU · CPU)\n⑤ Cloud LLM (post-decision)</string>
+    <string name="diag_sw_input_t">Business input</string>
+    <string name="diag_sw_input">Ticket/SMS/UGC/risk</string>
+    <string name="diag_sw_tok_t">tokenize</string>
+    <string name="diag_sw_tok">Tokenize/encode</string>
+    <string name="diag_sw_chain_t">Engine chain</string>
+    <string name="diag_sw_chain">NPU→GPU→CPU auto</string>
+    <string name="diag_sw_cal_t">Calibration · decode · triage</string>
+    <string formatted="false" name="diag_sw_cal">60.9% on-device\n39.1% escalate to LLM</string>
+    <string name="diag_sw_main_t">Main graph forward</string>
+    <string name="diag_sw_main">dispatch 54-59ms/q</string>
+    <string name="diag_sw_scorer_t">scorer head</string>
+    <string name="diag_sw_scorer">C impl &lt;1ms</string>
+    <string name="diag_sw_acc_t">Accelerator</string>
+    <string name="diag_sw_acc">MDLA / OpenCL / ORT int8</string>
+    <string name="diag_sw_llm_t">Cloud LLM</string>
+    <string name="diag_sw_llm">Important+urgent · reply · token ↓~60%</string>
+    <string name="diag_a_dispatch">Dispatch</string>
+    <string name="diag_sw_hidden">hidden states</string>
+    <string name="diag_sw_logits">logits</string>
+    <string name="diag_sw_escalate">39.1% escalate</string>
+    <string formatted="false" name="diag_sw_foot">NPU ~0.23s/3q · routine 60.9% on-device · important+urgent 39.1% to LLM</string>
     <string name="biz_news">Financial news scoring</string>
     <string name="biz_multi">Multilingual ticket triage (base)</string>
     <!-- DecisionCore: engine / hardware -->
@@ -299,6 +357,7 @@
     <string name="news_sina_hint">Sina Finance API URL</string>
     <string name="news_wsc_hint">Wallstreet CN API URL</string>
     <string name="news_interval_hint">Refresh interval (seconds, min 15)</string>
+    <string name="news_test_hint">Collection→decision test:tap to inject a sample feed;scored locally and logged</string>
     <string name="news_cfg_save">Save news collection</string>
     <string name="news_cfg_done">News collection config saved</string>
     <string name="gw_news">News</string>
