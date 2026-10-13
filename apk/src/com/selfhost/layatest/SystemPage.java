@@ -36,6 +36,8 @@ class SystemPage {
   private final java.util.HashMap<String, Button> dlBtns = new java.util.HashMap<>(); // biz → 下载中变体按钮(实时百分比)
   private final java.util.HashMap<String, TextView> cardStatus = new java.util.HashMap<>();  // biz → 卡片状态行
   private final java.util.HashMap<String, Button> cardToggle = new java.util.HashMap<>();    // biz → 加载/卸载按钮
+  private final java.util.HashMap<String, Button> cardTestBtn = new java.util.HashMap<>();   // biz → 决策测试按钮(随加载态显隐)
+  private final java.util.HashMap<String, LinearLayout> cardTestBox = new java.util.HashMap<>(); // biz → 测试展开框
   private org.json.JSONObject repoTree;          // myjev 文件树缓存(算各变体包大小)
   private boolean repoTreeLoading = false;
   private EditText upSrc, upTask;
@@ -330,6 +332,10 @@ class SystemPage {
     String varTxt = variantOf(loadedF ? fd : new File(pkgDirOf(task)));
     tg.setText((loadedF ? m.getString(R.string.uninstall) : m.getString(R.string.load_btn)) + " · " + varTxt);
     tg.setVisibility(downloading ? View.GONE : View.VISIBLE);
+    // 决策测试按钮/展开框随加载态显隐(修复:卸载后残留、首加载后不出现)
+    Button tb = cardTestBtn.get(task); LinearLayout tbox = cardTestBox.get(task);
+    if (tb != null) tb.setVisibility(loadedF && !downloading ? View.VISIBLE : View.GONE);
+    if (tbox != null && !(loadedF && !downloading)) tbox.setVisibility(View.GONE);
   }
 
   private static String sampleOf(String task) {
@@ -391,9 +397,16 @@ class SystemPage {
     toggle.setPadding(Ui.dp(m,8), Ui.dp(m,6), Ui.dp(m,8), Ui.dp(m,6));
     toggle.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
     toggle.setOnClickListener(v -> {
-      if (loaded) {
-        com.laya.DecisionCore.unload(m, task);
-        updateBizState(task); // 局部刷新
+      // 点击时重算加载态(不捕获构建时的 loaded——否则加载后点击仍走旧分支,状态永不刷新)
+      File fdNow = new File(m.getFilesDir(), "laya-" + task);
+      boolean nowLoaded = new File(fdNow, "laya_ml_s256_embeds_wfp16.tflite").isFile()
+          || new File(fdNow, "laya_ml_s256_embeds_npu.tflite").isFile();
+      if (nowLoaded) {
+        st.setText(m.getString(R.string.loading_model));
+        new Thread(() -> { // 卸载删除数百 MB 文件,后台执行防 UI 冻结
+          try { com.laya.DecisionCore.unload(m, task); } catch (Throwable ignored) {}
+          m.runOnUiThread(() -> updateBizState(task));
+        }).start();
       } else {
         st.setText(m.getString(R.string.loading_model));
         new Thread(() -> {
@@ -443,20 +456,23 @@ class SystemPage {
     detailBtn.setOnClickListener(v ->
         detail.setVisibility(detail.getVisibility() == View.GONE ? View.VISIBLE : View.GONE));
 
-    // ---- 手动单条决策测试(模型详情下方展开;示例数据预填) ----
-    if (loaded) {
+    // ---- 手动单条决策测试(常驻创建,随加载状态显隐——updateBizState 局部刷新) ----
+    {
       Button testBtn = new Button(m);
+      testBtn.setVisibility(loaded ? View.VISIBLE : View.GONE);
       testBtn.setText(m.getString(R.string.test_btn)); testBtn.setAllCaps(false); testBtn.setTextSize(12);
       testBtn.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
       testBtn.setBackground(Ui.pill(Ui.c(m, m.CHIP_OFF, 0xFF2A3040), Ui.dp(m,14)));
       testBtn.setPadding(Ui.dp(m,4), Ui.dp(m,6), Ui.dp(m,4), Ui.dp(m,6));
       testBtn.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
       card.addView(testBtn);
+      cardTestBtn.put(task, testBtn);
       LinearLayout testBox = new LinearLayout(m);
       testBox.setOrientation(LinearLayout.VERTICAL);
       testBox.setBackground(Ui.pill(Ui.c(m, 0xFFFFFFFF, 0xFF1E232B), Ui.dp(m,8)));
       testBox.setPadding(Ui.dp(m,8), Ui.dp(m,6), Ui.dp(m,8), Ui.dp(m,6));
       testBox.setVisibility(View.GONE);
+      cardTestBox.put(task, testBox);
       EditText testIn = new EditText(m);
       testIn.setText(sampleOf(task));
       testIn.setTextSize(11); testIn.setMaxLines(4);
