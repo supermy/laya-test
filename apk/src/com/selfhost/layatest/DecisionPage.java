@@ -365,18 +365,20 @@ class DecisionPage {
     bubble(text, true);
     bubble(m.getString(R.string.inferring), false);
     final int ti = m.taskIdx;
+    final String taskF = m.taskIds.get(ti);
     new Thread(() -> {
       String reply;
       com.laya.DecisionCore.Result r = null;
       try {
-        r = com.laya.DecisionCore.decide(m, m.taskIds.get(ti), text);
-        reply = fmtAnswers(m.taskIds.get(ti), r.answers, (int) r.latencyMs) + m.getString(R.string.backend_prefix, com.laya.DecisionCore.currentEngine(m));
+        r = com.laya.DecisionCore.decide(m, taskF, text);
+        reply = fmtAnswers(taskF, r.answers, (int) r.latencyMs)
+            + m.getString(R.string.backend_prefix, com.laya.DecisionCore.currentEngine(m))
+            + com.laya.DecisionCore.replyAppendix(m, taskF, r.answers, text);
       } catch (Throwable e) {
         android.util.Log.e("LayaApp", "decision failed", e);
         reply = m.getString(R.string.infer_failed, e.getClass().getSimpleName(), e.getMessage());
       }
       final com.laya.DecisionCore.Result rf = r;
-      final String taskF = m.taskIds.get(ti);
       final String r2 = reply;
       m.runOnUiThread(() -> {
         TextView bv = bubble(r2, false);

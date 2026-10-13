@@ -463,14 +463,34 @@ class SystemPage {
       testIn.setTextColor(Ui.c(m, 0xFF22262E, 0xFFE2E6EC));
       testIn.setHintTextColor(Ui.c(m, 0xFF9AA3AD, 0xFF66707E));
       testBox.addView(testIn);
+      final TextView testOut = new TextView(m);
+      testOut.setTextSize(10); testOut.setTypeface(Typeface.MONOSPACE);
+      testOut.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
+      testOut.setVisibility(View.GONE);
+      // 客服类业务:两个示例一键填入(自动回复路径 / 人工回复路径),输出按决策结果二选一。
+      // 示例用英文——ticket 语料为英文工单,中文输入下 urgency/escalate 判别偏保守
+      if (task.equals("ticket") || task.equals("multi")) {
+        LinearLayout smpRow = new LinearLayout(m);
+        String[][] samples = {
+            {"示例·自动回复", "How do I export reports to PDF? Where is the export option in the free plan?"},
+            {"示例·人工回复", "I was charged twice last week and both refund requests were ignored. This is urgent: refund my money immediately or I will file a formal complaint."},
+        };
+        for (String[] s : samples) {
+          Button sb = new Button(m);
+          sb.setText(s[0]); sb.setAllCaps(false); sb.setTextSize(10);
+          sb.setTextColor(Color.WHITE); sb.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,10)));
+          sb.setPadding(Ui.dp(m,6), Ui.dp(m,5), Ui.dp(m,6), Ui.dp(m,5));
+          sb.setOnClickListener(v -> { testIn.setText(s[1]); testOut.setVisibility(View.GONE); });
+          smpRow.addView(sb, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        }
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        slp.topMargin = Ui.dp(m,4);
+        testBox.addView(smpRow, slp);
+      }
       Button runBtn = new Button(m);
       runBtn.setText(m.getString(R.string.test_run)); runBtn.setAllCaps(false); runBtn.setTextSize(12);
       runBtn.setTextColor(Color.WHITE); runBtn.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,14)));
       testBox.addView(runBtn, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-      TextView testOut = new TextView(m);
-      testOut.setTextSize(10); testOut.setTypeface(Typeface.MONOSPACE);
-      testOut.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
-      testOut.setVisibility(View.GONE);
       testBox.addView(testOut);
       card.addView(testBox);
       testBtn.setOnClickListener(v ->
@@ -485,11 +505,8 @@ class SystemPage {
           try {
             com.laya.DecisionCore.Result r = com.laya.DecisionCore.decide(m, task, text);
             out = com.laya.DecisionCore.fmt(m, task, r.answers) + "\n· " + com.laya.DecisionCore.currentEngine(m) + " " + r.latencyMs + "ms";
-            // 客服类业务附带回复模板信息(自动回复正文 + 人工话术建议稿)
-            if (task.equals("ticket") || task.equals("multi")) {
-              out += "\n----\n【自动回复】\n" + com.laya.DecisionCore.autoReply(m, task, r.answers)
-                  + "\n----\n" + com.laya.DecisionCore.humanScript(m, task, r.answers, text);
-            }
+            // 客服类业务按决策结果二选一:须转人工→人工回复话术;否则→自动回复正文(不并列展示)
+            out += com.laya.DecisionCore.replyAppendix(m, task, r.answers, text);
           } catch (Throwable t) {
             out = "失败: " + (t.getMessage() != null ? t.getMessage() : t.toString());
           }

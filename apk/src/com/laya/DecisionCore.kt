@@ -646,12 +646,13 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
   private fun tplLocale(ctx: Context?): String =
     if (ctx?.resources?.configuration?.locale?.language == "en") "en" else "zh"
 
-  /** 解析 ticket/multi 三问 → (部门, 紧急度1-5, 是否必须转人工);非该类业务返回 null */
+  /** 解析 ticket/multi 三问 → (部门, 紧急度1-5, 是否必须转人工);非该类业务返回 null。
+   *  升级条件 = q2(noul)≥0.5 或 紧急度≥4:训练语料 escalate 真值全 0(q2 头无正样本),高紧急度兜底走人工 */
   private fun ticketParts(task: String, answers: JSONObject): Pair<String, Pair<Int, Boolean>>? {
     if (task != "ticket" && task != "multi") return null
     val dept = answers.optJSONObject("q0")?.optString("choice") ?: return null
     val urgency = (answers.optJSONObject("q1")?.optDouble("score", 3.0) ?: 3.0).toInt().coerceIn(1, 5)
-    val escalate = (answers.optJSONObject("q2")?.optDouble("noul", 0.0) ?: 0.0) >= 0.5
+    val escalate = (answers.optJSONObject("q2")?.optDouble("noul", 0.0) ?: 0.0) >= 0.5 || urgency >= 4
     return dept to (urgency to escalate)
   }
 
@@ -667,6 +668,15 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
   fun humanScript(ctx: Context?, task: String, answers: JSONObject, text: String): String {
     val p = ticketParts(task, answers) ?: return fmt(ctx, task, answers)
     return ReplyTemplates.humanScript(tplLocale(ctx), p.first, p.second.first, text)
+  }
+
+  /** 决策输出附带的回复模板段(须转人工→人工话术;否则→自动回复正文);非客服业务返回空串。
+   *  SystemPage 测试输出与 DecisionPage 结果气泡共用,二选一不并列 */
+  @JvmStatic
+  fun replyAppendix(ctx: Context?, task: String, answers: JSONObject, text: String): String {
+    val p = ticketParts(task, answers) ?: return ""
+    return if (p.second.second) "\n----\n【人工回复】\n" + ReplyTemplates.humanScript(tplLocale(ctx), p.first, p.second.first, text)
+    else "\n----\n【自动回复】\n" + ReplyTemplates.autoReply(tplLocale(ctx), p.first, p.second.first, p.second.second)
   }
 
   // ---- 报表(日报 0 / 月报 1 / 年报 2 / 详单 3) ----

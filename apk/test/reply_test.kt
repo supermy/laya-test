@@ -1,5 +1,5 @@
 // ReplyTemplates 100% 覆盖测试:6部门 × 5紧急度 × 2升级 × 2模式(自动/人工) × 2语言 = 120 组合逐项断言
-// 加上未知部门回退与非法紧急度钳制。JVM 直跑: java Reply_testKt
+// 加未知部门回退/紧急度钳制/DecisionCore.replyAppendix 升级条件。JVM 直跑: java Reply_testKt
 import com.laya.ReplyTemplates
 
 fun main() {
@@ -47,6 +47,20 @@ fun main() {
     ck(ReplyTemplates.autoReply(locale, "技术支持", 9, false).contains(if (en) toneEn[5]!! else toneZh[5]!!), "urgency clamp high $locale")
     ck(ReplyTemplates.autoReply(locale, "技术支持", 0, false).contains(if (en) toneEn[1]!! else toneZh[1]!!), "urgency clamp low $locale")
   }
+
+  // ---- DecisionCore.replyAppendix(升级条件:q2 noul≥0.5 或 urgency≥4;非客服业务空串) ----
+  fun answers(score: Int, noul: Double) = org.json.JSONObject(
+    "{\"q0\":{\"type\":\"choice\",\"choice\":\"账单计费\"}," +
+    "\"q1\":{\"type\":\"score\",\"score\":$score}," +
+    "\"q2\":{\"type\":\"noul\",\"noul\":$noul}}")
+  val hi = com.laya.DecisionCore.replyAppendix(null, "ticket", answers(5, 0.1), "T1")
+  ck(hi.contains("【人工回复】") && hi.contains("优先级较高"), "urgency>=4 → human")
+  val byNoul = com.laya.DecisionCore.replyAppendix(null, "ticket", answers(2, 0.9), "T2")
+  ck(byNoul.contains("【人工回复】"), "noul>=0.5 → human")
+  val auto = com.laya.DecisionCore.replyAppendix(null, "ticket", answers(2, 0.1), "T3")
+  ck(auto.contains("【自动回复】") && !auto.contains("人工话术"), "low urgency+noul → auto only")
+  ck(com.laya.DecisionCore.replyAppendix(null, "news", answers(5, 0.9), "T4") == "", "non-ticket → empty")
+
   println("REPLY_COVER PASS=$pass FAIL=$fail")
   if (fail > 0) kotlin.system.exitProcess(1)
 }
