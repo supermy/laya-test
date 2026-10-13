@@ -485,6 +485,11 @@ class SystemPage {
           try {
             com.laya.DecisionCore.Result r = com.laya.DecisionCore.decide(m, task, text);
             out = com.laya.DecisionCore.fmt(m, task, r.answers) + "\n· " + com.laya.DecisionCore.currentEngine(m) + " " + r.latencyMs + "ms";
+            // 客服类业务附带回复模板信息(自动回复正文 + 人工话术建议稿)
+            if (task.equals("ticket") || task.equals("multi")) {
+              out += "\n----\n【自动回复】\n" + com.laya.DecisionCore.autoReply(m, task, r.answers)
+                  + "\n----\n" + com.laya.DecisionCore.humanScript(m, task, r.answers, text);
+            }
           } catch (Throwable t) {
             out = "失败: " + (t.getMessage() != null ? t.getMessage() : t.toString());
           }
