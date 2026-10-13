@@ -35,7 +35,8 @@ echo "== kotlinc 编译(src 全包 + test) =="
 rm -rf "$OUT"; mkdir -p "$OUT"
 GWJARS="$HOME/litert-conv/gwjars"
 kotlinc -jvm-target 11 -cp "$SDK:$JSON_JAR:$AAR_RT:$AAR_API:$GWJARS/android-mail-1.6.7.jar:$GWJARS/android-activation-1.6.7.jar:$GWJARS/paho-mqttv3-1.2.5.jar:$GWJARS/nanohttpd-2.3.1.jar" -d "$OUT" \
-  $(find "$HERE/src" -name '*.kt') $(find "$GEN" -name '*.java') "$HERE/test/levelOf_test.kt"
+  $(find "$HERE/src" -name '*.kt') $(find "$GEN" -name '*.java') "$HERE/test/levelOf_test.kt" "$HERE/test/reply_test.kt"
 
 echo "== JVM 运行 =="
 java -cp "$OUT:$KLIB:$JSON_JAR:$AAR_RT:$AAR_API:$GWJARS/nanohttpd-2.3.1.jar:$GWJARS/paho-mqttv3-1.2.5.jar:$GWJARS/android-mail-1.6.7.jar:$GWJARS/android-activation-1.6.7.jar:$SDK" LevelOf_testKt
+java -cp "$OUT:$KLIB:$JSON_JAR:$AAR_RT:$AAR_API:$GWJARS/nanohttpd-2.3.1.jar:$GWJARS/paho-mqttv3-1.2.5.jar:$GWJARS/android-mail-1.6.7.jar:$GWJARS/android-activation-1.6.7.jar:$SDK" Reply_testKt

@@ -641,6 +641,34 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
     return sb.toString()
   }
 
+  // ---- 自动回复模板 / 人工话术(ticket/multi 专用,其他业务回退 fmt 摘要) ----
+
+  private fun tplLocale(ctx: Context?): String =
+    if (ctx?.resources?.configuration?.locale?.language == "en") "en" else "zh"
+
+  /** 解析 ticket/multi 三问 → (部门, 紧急度1-5, 是否必须转人工);非该类业务返回 null */
+  private fun ticketParts(task: String, answers: JSONObject): Pair<String, Pair<Int, Boolean>>? {
+    if (task != "ticket" && task != "multi") return null
+    val dept = answers.optJSONObject("q0")?.optString("choice") ?: return null
+    val urgency = (answers.optJSONObject("q1")?.optDouble("score", 3.0) ?: 3.0).toInt().coerceIn(1, 5)
+    val escalate = (answers.optJSONObject("q2")?.optDouble("noul", 0.0) ?: 0.0) >= 0.5
+    return dept to (urgency to escalate)
+  }
+
+  /** 自动回复正文(邮件/MQTT 回执用) */
+  @JvmStatic
+  fun autoReply(ctx: Context?, task: String, answers: JSONObject): String {
+    val p = ticketParts(task, answers) ?: return fmt(ctx, task, answers)
+    return ReplyTemplates.autoReply(tplLocale(ctx), p.first, p.second.first, p.second.second)
+  }
+
+  /** 人工坐席话术建议稿(含复述客户原文) */
+  @JvmStatic
+  fun humanScript(ctx: Context?, task: String, answers: JSONObject, text: String): String {
+    val p = ticketParts(task, answers) ?: return fmt(ctx, task, answers)
+    return ReplyTemplates.humanScript(tplLocale(ctx), p.first, p.second.first, text)
+  }
+
   // ---- 报表(日报 0 / 月报 1 / 年报 2 / 详单 3) ----
   @JvmStatic
   fun report(ctx: Context, kind: Int): String {

@@ -387,4 +387,5 @@
     <string name="st_models">模型占用</string>
     <string name="st_disk">磁盘剩余</string>
     <string name="st_search_hint">检索 %1$s 历史…</string>
+    <string name="human_script_title">人工话术 · 长按气泡可查看</string>
 </resources>

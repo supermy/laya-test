@@ -387,4 +387,5 @@
     <string name="st_models">Model size</string>
     <string name="st_disk">Disk free</string>
     <string name="st_search_hint">Search %1$s history…</string>
+    <string name="human_script_title">Human script · long-press a result bubble</string>
 </resources>

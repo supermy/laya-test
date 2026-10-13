@@ -32,10 +32,10 @@ class DecisionPage {
 
   DecisionPage(MainActivity m) { this.m = m; }
 
-  void bot(String t) { bubble(t, false); refreshStatsSoon(); }
+  TextView bot(String t) { return bubble(t, false); }
 
-  private void bubble(String text, boolean user) {
-    if (msgList == null) return;
+  private TextView bubble(String text, boolean user) {
+    if (msgList == null) return null;
     TextView tv = new TextView(m);
     tv.setText(text); tv.setTextSize(14);
     tv.setTextColor(user ? Ui.c(m, 0xFF1A2B4C, 0xFFDFF2E4) : Ui.c(m, 0xFF22262E, 0xFFE2E6EC));
@@ -48,6 +48,7 @@ class DecisionPage {
     row.addView(tv);
     msgList.addView(row);
     m.scroller.post(() -> m.scroller.fullScroll(View.FOCUS_DOWN));
+    return tv;
   }
 
   // ================= ① 决策 =================
@@ -323,7 +324,13 @@ class DecisionPage {
     for (org.json.JSONObject h : hs) {
       bubble(h.optString("state"), true);
       String when = df.format(new java.util.Date(h.optLong("ts")));
-      bot(fmtAnswers(task, h.optJSONObject("decoded"), (int) h.optLong("latencyMs")) + "\n· " + when);
+      org.json.JSONObject dec = h.optJSONObject("decoded");
+      TextView bv = bot(fmtAnswers(task, dec, (int) h.optLong("latencyMs")) + "\n· " + when);
+      if (dec != null && bv != null) {
+        final org.json.JSONObject decF = dec;
+        final String stateF = h.optString("state");
+        bv.setOnLongClickListener(v -> { showHumanScript(task, decF, stateF); return true; });
+      }
     }
     // 回显最近一次 LLM 风险分析(升级通道产物)
     org.json.JSONObject llm = com.laya.DecisionCore.lastLlm(m, task);
@@ -360,16 +367,36 @@ class DecisionPage {
     final int ti = m.taskIdx;
     new Thread(() -> {
       String reply;
+      com.laya.DecisionCore.Result r = null;
       try {
-        com.laya.DecisionCore.Result r = com.laya.DecisionCore.decide(m, m.taskIds.get(ti), text);
+        r = com.laya.DecisionCore.decide(m, m.taskIds.get(ti), text);
         reply = fmtAnswers(m.taskIds.get(ti), r.answers, (int) r.latencyMs) + m.getString(R.string.backend_prefix, com.laya.DecisionCore.currentEngine(m));
       } catch (Throwable e) {
         android.util.Log.e("LayaApp", "decision failed", e);
         reply = m.getString(R.string.infer_failed, e.getClass().getSimpleName(), e.getMessage());
       }
+      final com.laya.DecisionCore.Result rf = r;
+      final String taskF = m.taskIds.get(ti);
       final String r2 = reply;
-      m.runOnUiThread(() -> { bubble(r2, false); busy = false; });
+      m.runOnUiThread(() -> {
+        TextView bv = bubble(r2, false);
+        if (rf != null && bv != null) {
+          final org.json.JSONObject ans = rf.answers;
+          bv.setOnLongClickListener(v -> { showHumanScript(taskF, ans, text); return true; });
+        }
+        busy = false;
+      });
     }).start();
+  }
+
+  /** 长按决策气泡 → 人工话术建议稿 */
+  private void showHumanScript(String task, org.json.JSONObject answers, String text) {
+    String s = com.laya.DecisionCore.humanScript(m, task, answers, text);
+    new android.app.AlertDialog.Builder(m)
+        .setTitle(m.getString(R.string.human_script_title))
+        .setMessage(s)
+        .setPositiveButton(android.R.string.ok, null)
+        .show();
   }
 
   String fmtAnswers(String task, org.json.JSONObject decoded, int ms) {
