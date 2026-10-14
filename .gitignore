@@ -14,11 +14,14 @@ multi-test.onnx
 # 模型与第三方(ORT 头文件已 vendor:第三方 Apache-2.0,本地已验证可编译)
 laya-onnx-int8/
 laya-multilingual-int8/
+md-news/
+md-news2/
 
 # 一次性调试/实验脚本
 dbg*.mjs
 batchprobe.mjs
 probe-multi.mjs
+probe-news2.mjs
 direct-multi.mjs
 tok-exp.mjs
 hdrtest.c
@@ -54,9 +57,20 @@ service/config/
 
 # apk:构建产物与二进制依赖(源码 src/ 与 build.sh 入库)
 apk/out/
+apk/build/
 apk/*.apk
 apk/*.apk.idsig
 apk/jniExec/
+# apk:测试/调试产物(UI dump、配置导出、坐标);注意勿用 apk/*.xml——api/ex/gw3/rpt/st/sys 等已跟踪
+apk/bz*.xml
+apk/gw*.xml
+apk/llm*.xml
+apk/nf*.xml
+apk/nw*.xml
+apk/se*.xml
+apk/tb*.xml
+apk/gw_cfg.json
+apk/tb_coords.txt
 
 # finetune:数据/模型包/云端产物(脚本与任务定义、metrics 入库)
 finetune/data/
@@ -69,3 +83,7 @@ verify/
 apk/sys*.xml
 apk/dec.xml
 apk/pg*.xml
+
+# 测试噪声(2026-10-15):仅新增截图与临时目录(shots/scr*.png 已入库,勿整体忽略 shots/)
+shots/collect_*.png
+tmp-en/
