@@ -18,7 +18,7 @@ import java.nio.charset.StandardCharsets;
 import com.laya.Cfg;
 import org.json.JSONObject;
 
-/** ③ 网关页(从 MainActivity 拆出):邮件/MQTT/LLM 三面板 + 决策 API 开关 + 底栏 */
+/** ③ 网关页(从 MainActivity 拆出):资讯/邮件/MQTT/采集 四面板 + 决策 API 开关 + 底栏(LLM 面板已删除,v1.4.50 决策链下线升级通道) */
 class GatewayPage {
   private final MainActivity m;
   private TextView gwStatus;
@@ -168,121 +168,151 @@ class GatewayPage {
       gwStatus.setText(m.getString(R.string.gateway_bar, com.laya.Gateway.status(m)));
     });
 
-    // ---- LLM 设置(重要+紧急升级通道,3 槽位供可选) ----
-    LinearLayout pLlm = new LinearLayout(m);
-    pLlm.setOrientation(LinearLayout.VERTICAL);
-    pLlm.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
-    l = pLlm;
-    l.addView(Ui.hint(m,m.getString(R.string.llm_hint)));
-    JSONObject llmCfg = com.laya.Gateway.cfg(m).optJSONObject(Cfg.LLM);
-    JSONObject llmSlots = llmCfg != null ? llmCfg.optJSONObject(Cfg.SLOTS) : null;
-    String actId = llmCfg != null ? llmCfg.optString(Cfg.ACTIVE, "llm1") : "llm1";
-    String[] slotIds = {"llm1", "llm2", "llm3"};
-    String[] defNames = {"DeepSeek", "Qwen(通义)", "GLM(智谱)"};
-    String[] defUrls = {"https://api.deepseek.com", "https://dashscope.aliyuncs.com/compatible-mode/v1", "https://open.bigmodel.cn/api/paas/v4"};
-    String[] defModels = {"deepseek-chat", "qwen-flash", "glm-4-flash"};
-    final EditText[] llmName = new EditText[3];
-    final EditText[] llmUrl = new EditText[3];
-    final EditText[] llmModel = new EditText[3];
-    final EditText[] llmKey = new EditText[3];
-    final RadioButton[] llmRb = new RadioButton[3];
-    for (int i = 0; i < 3; i++) {
-      JSONObject s = llmSlots != null ? llmSlots.optJSONObject(slotIds[i]) : null;
-      LinearLayout slot = new LinearLayout(m);
-      slot.setOrientation(LinearLayout.VERTICAL);
-      slot.setBackground(Ui.pill(Ui.c(m, 0xFFF7F8FA, 0xFF232833), Ui.dp(m,10)));
-      slot.setPadding(Ui.dp(m,9), Ui.dp(m,6), Ui.dp(m,9), Ui.dp(m,8));
-      LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-      slp.bottomMargin = Ui.dp(m,8); slot.setLayoutParams(slp);
+    // ---- 全业务数据采集维护(所有模型包:启停/样本/测试;决策→回复模板全链生效) ----
+    LinearLayout pCollect = new LinearLayout(m);
+    pCollect.setOrientation(LinearLayout.VERTICAL);
+    pCollect.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
+    l = pCollect;
+    l.addView(Ui.hint(m,m.getString(R.string.collect_hint)));
+    org.json.JSONObject collectCfg = com.laya.Gateway.cfg(m).optJSONObject("collect");
+    EditText gwCollectInterval = Ui.fieldU(m,l, m.getString(R.string.collect_interval_hint),
+        String.valueOf(collectCfg != null ? collectCfg.optLong("intervalSec", 60) : 60));
+    java.util.List<kotlin.Pair<String, String>> tasks = com.laya.DecisionCore.scanTasks(m);
+    final java.util.HashMap<String, EditText> sampleEts = new java.util.HashMap<>();
+    // 默认样本:未配置样本时预填,启用即可采集(用户可改)
+    final java.util.HashMap<String, String> DEF_SAMPLE = new java.util.HashMap<>();
+    DEF_SAMPLE.put("multi", "The invoice shows a double charge for last month's subscription, I request a refund.");
+    DEF_SAMPLE.put("ticket", "Our projectors stopped syncing after the firmware update; the field team cannot present today.");
+    DEF_SAMPLE.put("ugc", "加微信 xxx888 领取免费福利,限时推广,名额有限速来!");
+    DEF_SAMPLE.put("agent", "对比三款投影仪的价格、亮度和售后政策,生成选型报告并预约采购流程。");
+    DEF_SAMPLE.put("risk", "新注册账户当日跨境转账6笔共80万元,收款方均为境外个人账户。");
+    DEF_SAMPLE.put("news", "央行宣布下调存款准备金率0.5个百分点,释放长期流动性约1万亿元。");
+    DEF_SAMPLE.put("news2", "某芯片公司遭主要客户大幅砍单,股价盘前下跌9%。");
+    for (kotlin.Pair<String, String> t : tasks) {
+      final String task = t.getFirst();
+      org.json.JSONObject cc = collectCfg != null ? collectCfg.optJSONObject(task) : null;
+      boolean on = cc != null && cc.optBoolean("enabled", false);
+      org.json.JSONArray samples = cc != null ? cc.optJSONArray("samples") : null;
+      StringBuilder sb = new StringBuilder();
+      if (samples != null) for (int i = 0; i < samples.length(); i++) { if (i > 0) sb.append('\n'); sb.append(samples.optString(i)); }
+      if (sb.length() == 0) { String def = DEF_SAMPLE.get(task); if (def != null) sb.append(def); }
+
+      LinearLayout card = new LinearLayout(m);
+      card.setOrientation(LinearLayout.VERTICAL);
+      card.setBackground(Ui.pill(Ui.c(m, 0xFFF7F8FA, 0xFF232833), Ui.dp(m,10)));
+      card.setPadding(Ui.dp(m,9), Ui.dp(m,6), Ui.dp(m,9), Ui.dp(m,8));
+      LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+      clp.bottomMargin = Ui.dp(m,8); card.setLayoutParams(clp);
+
       LinearLayout head = new LinearLayout(m);
       head.setGravity(Gravity.CENTER_VERTICAL);
-      llmRb[i] = new RadioButton(m);
-      llmRb[i].setText(m.getString(R.string.llm_enable)); llmRb[i].setTextSize(12);
-      llmRb[i].setChecked(slotIds[i].equals(actId));
-      head.addView(llmRb[i]);
-      llmName[i] = Ui.fieldU(m,head, m.getString(R.string.name_hint));
-      JSONObject fs = s;
-      String nm = s != null ? s.optString(Cfg.NAME, defNames[i]) : defNames[i];
-      llmName[i].setText(nm);
-      llmName[i].setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-      slot.addView(head);
-      llmUrl[i] = Ui.fieldU(m,slot, m.getString(R.string.base_url_hint));
-      llmUrl[i].setText(s != null ? s.optString("baseURL", defUrls[i]) : defUrls[i]);
-      LinearLayout mr = new LinearLayout(m);
-      llmModel[i] = Ui.fieldU(m,mr, "Model");
-      llmModel[i].setText(s != null ? s.optString("model", defModels[i]) : defModels[i]);
-      llmModel[i].setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-      llmKey[i] = Ui.fieldU(m,mr, "API Key");
-      if (s != null) llmKey[i].setText(s.optString("apiKey", ""));
-      llmKey[i].setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-      LinearLayout.LayoutParams mlp0 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-      mlp0.rightMargin = Ui.dp(m,8); llmModel[i].setLayoutParams(mlp0);
-      slot.addView(mr);
-      l.addView(slot);
-    }
-    llmRb[0].setId(901); llmRb[1].setId(902); llmRb[2].setId(903);
-    // 手动互斥(RadioGroup 纵向占太高):点一个清其余
-    for (int i = 0; i < 3; i++) {
-      final int k = i;
-      llmRb[i].setOnClickListener(v -> { for (int j = 0; j < 3; j++) llmRb[j].setChecked(j == k); });
-    }
-    Button llmSave = Ui.button(m,l, m.getString(R.string.save_llm));
-    llmSave.setOnClickListener(v -> {
-      try {
-        JSONObject slots = new JSONObject();
-        int checked = -1;
-        for (int i = 0; i < 3; i++) {
-          if (llmRb[i].isChecked()) checked = i;
-          slots.put(slotIds[i], new JSONObject()
-              .put(Cfg.NAME, llmName[i].getText().toString())
-              .put("baseURL", llmUrl[i].getText().toString().trim())
-              .put("model", llmModel[i].getText().toString().trim())
-              .put("apiKey", llmKey[i].getText().toString().trim()));
-        }
-        gwStatus.setText(com.laya.Gateway.saveLlm(m,
-            new JSONObject().put(Cfg.ACTIVE, checked < 0 ? "llm1" : slotIds[checked]).put(Cfg.SLOTS, slots)));
-      } catch (Exception e) { gwStatus.setText(m.getString(R.string.llm_cfg_failed, e.getMessage())); }
-    });
-    Button llmTest = Ui.button(m,l, m.getString(R.string.test_llm_btn));
-    llmTest.setOnClickListener(v -> {
-      try {
-        int checked = -1;
-        for (int i = 0; i < 3; i++) if (llmRb[i].isChecked()) checked = i;
-        if (checked < 0) { gwStatus.setText(m.getString(R.string.llm_pick_first)); return; }
-        final String url = llmUrl[checked].getText().toString().trim().replaceAll("/+$", "");
-        final String model = llmModel[checked].getText().toString().trim();
-        final String key = llmKey[checked].getText().toString().trim();
-        final String nm = llmName[checked].getText().toString();
-        gwStatus.setText(m.getString(R.string.testing_x, nm));
+      TextView title = new TextView(m);
+      title.setText(t.getSecond() + "(" + task + ")");
+      title.setTextSize(12); title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+      title.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+      head.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+      Button tog = new Button(m);
+      tog.setText(on ? m.getString(R.string.collect_disable) : m.getString(R.string.collect_enable));
+      tog.setAllCaps(false); tog.setTextSize(10);
+      tog.setMinHeight(0); tog.setMinimumHeight(0); tog.setMinimumWidth(0);
+      tog.setPadding(Ui.dp(m,8), Ui.dp(m,3), Ui.dp(m,8), Ui.dp(m,3));
+      tog.setTextColor(Color.WHITE);
+      tog.setBackground(Ui.pill(on ? 0xFF8894A6 : m.PRIMARY, Ui.dp(m,10)));
+      tog.setOnClickListener(v -> {
+        try {
+          JSONObject c2 = com.laya.Gateway.cfg(m.getApplicationContext());
+          JSONObject all = c2.optJSONObject("collect"); if (all == null) all = new JSONObject();
+          JSONObject cc2 = all.optJSONObject(task); if (cc2 == null) cc2 = new JSONObject();
+          cc2.put("enabled", !cc2.optBoolean("enabled", false));
+          // 样本一并落盘:未点保存就切开关也不丢编辑
+          java.util.ArrayList<String> ls = new java.util.ArrayList<>();
+          for (String ln : sampleEts.get(task).getText().toString().split("\n")) {
+            if (!ln.trim().isEmpty()) ls.add(ln.trim());
+          }
+          cc2.put("samples", new org.json.JSONArray(ls));
+          all.put(task, cc2); c2.put("collect", all);
+          com.laya.Gateway.saveCfg(m.getApplicationContext(), c2);
+          m.setTab(2); // 重建面板刷新状态
+        } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
+      });
+      head.addView(tog);
+      Button del = new Button(m);
+      del.setText(m.getString(R.string.collect_delete)); del.setAllCaps(false); del.setTextSize(10);
+      del.setMinHeight(0); del.setMinimumHeight(0); del.setMinimumWidth(0);
+      del.setPadding(Ui.dp(m,8), Ui.dp(m,3), Ui.dp(m,8), Ui.dp(m,3));
+      del.setTextColor(Color.WHITE); del.setBackground(Ui.pill(0xFFD64545, Ui.dp(m,10)));
+      del.setOnClickListener(v -> {
+        try {
+          JSONObject c2 = com.laya.Gateway.cfg(m.getApplicationContext());
+          JSONObject all = c2.optJSONObject("collect");
+          if (all != null) { all.remove(task); c2.put("collect", all); }
+          com.laya.Gateway.saveCfg(m.getApplicationContext(), c2);
+          m.setTab(2);
+        } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
+      });
+      head.addView(del);
+      card.addView(head);
+
+      final EditText sampleEt = new EditText(m);
+      sampleEt.setHint(m.getString(R.string.collect_samples_hint));
+      sampleEt.setText(sb.toString());
+      sampleEt.setTextSize(11);
+      sampleEt.setMinLines(2);
+      sampleEt.setBackground(Ui.pill(Ui.c(m, 0xFFFFFFFF, 0xFF1E232B), Ui.dp(m,8)));
+      sampleEt.setPadding(Ui.dp(m,8), Ui.dp(m,6), Ui.dp(m,8), Ui.dp(m,6));
+      card.addView(sampleEt);
+      sampleEts.put(task, sampleEt);
+
+      Button test = new Button(m);
+      test.setText(m.getString(R.string.collect_test_btn)); test.setAllCaps(false); test.setTextSize(10);
+      test.setMinHeight(0); test.setMinimumHeight(0); test.setMinimumWidth(0);
+      test.setPadding(Ui.dp(m,8), Ui.dp(m,3), Ui.dp(m,8), Ui.dp(m,3));
+      test.setTextColor(Color.WHITE); test.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,10)));
+      test.setOnClickListener(v -> {
+        String text = sampleEt.getText().toString().split("\n")[0].trim();
+        if (text.isEmpty()) { gwStatus.setText(m.getString(R.string.collect_no_sample)); return; }
+        gwStatus.setText(m.getString(R.string.testing_x, task));
         new Thread(() -> {
           String r;
           try {
-            HttpURLConnection c = (HttpURLConnection) new URL(url + "/chat/completions").openConnection();
-            c.setRequestMethod("POST"); c.setConnectTimeout(8000); c.setReadTimeout(120000);
-            c.setDoOutput(true); c.setRequestProperty("Content-Type", "application/json");
-            if (!key.isEmpty()) c.setRequestProperty("Authorization", "Bearer " + key);
-            try (OutputStream os = c.getOutputStream()) {
-              os.write(new JSONObject().put("model", model).put("max_tokens", 300)
-                  .put("messages", new org.json.JSONArray().put(new JSONObject()
-                      .put("role", "user").put("content", "只回复两个字母:OK"))).toString().getBytes(StandardCharsets.UTF_8));
-            }
-            int code = c.getResponseCode();
-            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-            (code < 400 ? c.getInputStream() : c.getErrorStream()).transferTo(bos);
-            String body = bos.toString("UTF-8");
-            if (code < 400) {
-              String txt = new JSONObject(body).optJSONArray("choices") != null
-                  ? new JSONObject(body).optJSONArray("choices").optJSONObject(0).optJSONObject("message").optString("content") : "";
-              r = m.getString(R.string.llm_ok, nm, code, txt.trim());
-            } else r = m.getString(R.string.llm_http_err, nm, code, body.substring(0, Math.min(160, body.length())));
-          } catch (Exception e) { r = m.getString(R.string.llm_fail, nm, e.getMessage()); }
+            com.laya.DecisionCore.Result dr = com.laya.DecisionCore.decide(m.getApplicationContext(), task, text);
+            org.json.JSONObject a0 = dr.answers.optJSONObject("q0");
+            String main = a0 != null && a0.has("choice") ? a0.optString("choice")
+                : (a0 != null && a0.has("score") ? String.valueOf(a0.optDouble("score", 0)) : "?");
+            String tplLine = "";
+            for (String ln : com.laya.DecisionCore.replyAppendix(m.getApplicationContext(), task, dr.answers, text).split("\n"))
+              if (ln.startsWith("【")) { tplLine = ln; break; }
+            r = m.getString(R.string.collect_test_done, task, main, dr.latencyMs, tplLine);
+          } catch (Exception e) { r = m.getString(R.string.test_failed, e.getMessage()); }
           final String fr = r;
           m.runOnUiThread(() -> gwStatus.setText(fr));
         }).start();
-      } catch (Exception e) { gwStatus.setText(m.getString(R.string.test_failed, e.getMessage())); }
+      });
+      card.addView(test);
+      l.addView(card);
+    }
+    Button collectSave = Ui.button(m,l, m.getString(R.string.collect_save));
+    collectSave.setOnClickListener(v -> {
+      try {
+        JSONObject cfg = com.laya.Gateway.cfg(m.getApplicationContext());
+        JSONObject all = cfg.optJSONObject("collect"); if (all == null) all = new JSONObject();
+        for (kotlin.Pair<String, String> t : tasks) {
+          JSONObject cc = all.optJSONObject(t.getFirst()); if (cc == null) cc = new JSONObject();
+          java.util.ArrayList<String> ls = new java.util.ArrayList<>();
+          for (String ln : sampleEts.get(t.getFirst()).getText().toString().split("\n")) {
+            if (!ln.trim().isEmpty()) ls.add(ln.trim());
+          }
+          cc.put("samples", new org.json.JSONArray(ls));
+          all.put(t.getFirst(), cc);
+        }
+        try { all.put("intervalSec", Math.max(15, Integer.parseInt(gwCollectInterval.getText().toString().trim()))); } catch (Exception ignore) {}
+        cfg.put("collect", all);
+        com.laya.Gateway.saveCfg(m.getApplicationContext(), cfg);
+        com.laya.Gateway.restartCollect(m.getApplicationContext());
+        gwStatus.setText(m.getString(R.string.collect_done));
+      } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
     });
 
-    // ---- 资讯采集(快讯页数据源与刷新频率;cfg.news) ----
     LinearLayout pNews = new LinearLayout(m);
     pNews.setOrientation(LinearLayout.VERTICAL);
     pNews.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
@@ -382,8 +412,8 @@ class GatewayPage {
       } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
     });
 
-    // ---- 左侧竖排 tab(与报表页同款):邮件/队列/LLM/资讯 ----
-    LinearLayout[] panels = {pNews, pMail, pMq, pLlm}; // 资讯第一
+    // ---- 左侧竖排 tab(与报表页同款):资讯/邮件/队列/采集 ----
+    LinearLayout[] panels = {pNews, pMail, pMq, pCollect}; // 资讯第一
     final ScrollView[] scrolls = new ScrollView[4];
     for (int i = 0; i < 4; i++) {
       ScrollView sv = new ScrollView(m);
@@ -394,7 +424,7 @@ class GatewayPage {
     final FrameLayout gHolder = new FrameLayout(m);
     gHolder.addView(scrolls[0]);
     gHolder.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
-    String[] gkinds = {m.getString(R.string.gw_news), m.getString(R.string.gw_mail), m.getString(R.string.gw_mq), "LLM"};
+    String[] gkinds = {m.getString(R.string.gw_news), m.getString(R.string.gw_mail), m.getString(R.string.gw_mq), m.getString(R.string.gw_collect)};
     final Button[] gchips = new Button[4];
     final LinearLayout grail = new LinearLayout(m);
     grail.setOrientation(LinearLayout.VERTICAL);

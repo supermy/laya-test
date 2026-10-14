@@ -73,18 +73,74 @@ object Gateway {
     mqtt = null; mqttRunning = false
     UploadServer.stopServer()
     DecisionApiServer.stopServer()
+    stopCollect()
     ctx.stopService(Intent(ctx, GatewayService::class.java))
     return ctx.getString(com.selfhost.layatest.R.string.gw_stopped)
   }
 
-  // ---- LLM 设置(重要+紧急升级通道,3 槽位供可选) ----
-  @JvmStatic
-  fun saveLlm(ctx: Context, llm: JSONObject): String {
-    ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit()
-      .putString(Cfg.DOC, cfg(ctx).put(Cfg.LLM, llm).toString()).apply()
-    val a = llm.optJSONObject(Cfg.SLOTS)?.optJSONObject(llm.optString(Cfg.ACTIVE))
-    return ctx.getString(com.selfhost.layatest.R.string.llm_saved_prefix,
-        a?.optString("name")?.ifBlank { null } ?: llm.optString(Cfg.ACTIVE, "?"))
+  // ---- LLM 设置已随决策链下线移除(v1.4.50):决策以本地模型输出 + 回复模板收尾 ----
+
+  // ---- 全业务数据采集(网关自动采集:按模型包启停,样本轮询送决策,写决策日志) ----
+  private val collectHandler = android.os.Handler(android.os.Looper.getMainLooper())
+  @Volatile private var collectRunning = false
+  private val collectIdx = HashMap<String, Int>()
+
+  /** cfg.collect = {"intervalSec":60, "<task>":{"enabled":true,"samples":["..."]}} */
+  private fun collectEnabledCount(c: JSONObject): Int {
+    val cc = c.optJSONObject("collect") ?: return 0
+    var n = 0
+    for (k in cc.keys()) if (k != "intervalSec" && cc.optJSONObject(k)?.optBoolean("enabled") == true) n++
+    return n
+  }
+
+  @JvmStatic fun startCollect(ctx: Context) {
+    if (collectRunning) return
+    collectRunning = true
+    scheduleNext(ctx.getApplicationContext())
+    Log.i(TAG, "collect scheduler up")
+  }
+
+  @JvmStatic fun stopCollect() {
+    collectRunning = false
+    collectHandler.removeCallbacksAndMessages(null)
+    Log.i(TAG, "collect scheduler stopped")
+  }
+
+  /** 保存采集配置后重载调度(间隔/样本生效,无需重启网关) */
+  @JvmStatic fun restartCollect(ctx: Context) {
+    stopCollect()
+    startCollect(ctx)
+  }
+
+  private fun scheduleNext(ctx: Context) {
+    if (!collectRunning) return
+    val intervalSec = (cfg(ctx).optJSONObject("collect")?.optLong("intervalSec", 60) ?: 60).coerceAtLeast(15)
+    collectHandler.postDelayed({
+      try { runCollectOnce(ctx) } catch (_: Exception) {}
+      scheduleNext(ctx)
+    }, intervalSec * 1000)
+  }
+
+  /** 一轮采集:每个启用业务取一条样本(轮询)→ decide(写决策日志,回复模板随决策产出) */
+  @JvmStatic fun runCollectOnce(ctx: Context) {
+    val c = cfg(ctx)
+    if (collectEnabledCount(c) == 0) return
+    val cc = c.optJSONObject("collect") ?: return
+    val app = ctx.applicationContext
+    Thread {
+      for (k in cc.keys()) {
+        if (k == "intervalSec") continue
+        val c1 = cc.optJSONObject(k) ?: continue
+        if (!c1.optBoolean("enabled")) continue
+        val samples = c1.optJSONArray("samples") ?: continue
+        if (samples.length() == 0) continue
+        val i = (collectIdx[k] ?: 0) % samples.length()
+        collectIdx[k] = i + 1
+        try {
+          DecisionCore.decide(app, k, samples.optString(i)) // 决策+日志+模板全链;串行锁内排队,勿在此打印大对象
+        } catch (e: Exception) { Log.w(TAG, "collect $k: ${e.message}") }
+      }
+    }.start()
   }
 
   /** 当前选中的 LLM 槽位(含 id),未配置返回 null */
@@ -105,6 +161,8 @@ object Gateway {
     if (c.optJSONObject(Cfg.MQTT)?.optBoolean(Cfg.ENABLED) == true) parts.add(ctx.getString(com.selfhost.layatest.R.string.mqtt_connected, c.optJSONObject(Cfg.MQTT)?.optString(Cfg.URL)))
     if (UploadServer.running()) parts.add(ctx.getString(com.selfhost.layatest.R.string.upload_running, UploadServer.url()))
     if (DecisionApiServer.running()) parts.add(ctx.getString(com.selfhost.layatest.R.string.api_running, DecisionApiServer.url()))
+    val nCollect = collectEnabledCount(c)
+    if (nCollect > 0) parts.add(ctx.getString(com.selfhost.layatest.R.string.collect_running, nCollect))
     return if (parts.isEmpty()) ctx.getString(com.selfhost.layatest.R.string.gw_enabled_no_ch) else parts.joinToString(";")
   }
 
@@ -124,6 +182,7 @@ object Gateway {
     if (email?.optBoolean(Cfg.ENABLED) == true && !emailRunning) startEmail(ctx, email, c.optJSONObject(Cfg.REPORT))
     val mq = c.optJSONObject(Cfg.MQTT)
     if (mq?.optBoolean(Cfg.ENABLED) == true && !mqttRunning) startMqtt(ctx, mq, c.optJSONObject(Cfg.TOPICS))
+    startCollect(ctx) // 全业务数据采集调度(未启用业务自动跳过)
   }
 
   // ---- 邮件网关 ----
