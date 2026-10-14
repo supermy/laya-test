@@ -232,7 +232,11 @@ class GatewayPage {
           cc2.put("samples", new org.json.JSONArray(ls));
           all.put(task, cc2); c2.put("collect", all);
           com.laya.Gateway.saveCfg(m.getApplicationContext(), c2);
-          m.setTab(2); // 重建面板刷新状态
+          // 局部刷新:原地翻转按钮态,不重建面板
+          boolean nowOn = cc2.optBoolean("enabled", false);
+          tog.setText(nowOn ? m.getString(R.string.collect_disable) : m.getString(R.string.collect_enable));
+          tog.setBackground(Ui.pill(nowOn ? 0xFF8894A6 : m.PRIMARY, Ui.dp(m,10)));
+          gwStatus.setText(m.getString(R.string.gateway_bar, com.laya.Gateway.status(m)));
         } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
       });
       head.addView(tog);
@@ -247,7 +251,12 @@ class GatewayPage {
           JSONObject all = c2.optJSONObject("collect");
           if (all != null) { all.remove(task); c2.put("collect", all); }
           com.laya.Gateway.saveCfg(m.getApplicationContext(), c2);
-          m.setTab(2);
+          // 局部刷新:卡片复位为未配置态(启用按钮 + 预填默认样本),不重建面板
+          tog.setText(m.getString(R.string.collect_enable));
+          tog.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,10)));
+          String def = DEF_SAMPLE.get(task);
+          sampleEts.get(task).setText(def != null ? def : "");
+          gwStatus.setText(m.getString(R.string.gateway_bar, com.laya.Gateway.status(m)));
         } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
       });
       head.addView(del);
