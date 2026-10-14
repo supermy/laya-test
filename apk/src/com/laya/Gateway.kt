@@ -81,8 +81,11 @@ object Gateway {
   // ---- LLM 设置已随决策链下线移除(v1.4.50):决策以本地模型输出 + 回复模板收尾 ----
 
   // ---- 全业务数据采集(网关自动采集:按模型包启停,样本轮询送决策,写决策日志) ----
+  // 采集方式按业务的现有数据源决定:无实时源的业务(工单/UGC/Agent/风控/多语言)用本调度器轮询样本;
+  // 有实时源的业务(资讯)由 NewsPage/NewsAutoService 直接拉流,采集开关走 cfg.news.<source>.enabled,不在此轮询。
   private val collectHandler = android.os.Handler(android.os.Looper.getMainLooper())
   @Volatile private var collectRunning = false
+  @Volatile private var collectBusy = false
   private val collectIdx = HashMap<String, Int>()
 
   /** cfg.collect = {"intervalSec":60, "<task>":{"enabled":true,"samples":["..."]}} */
@@ -94,6 +97,9 @@ object Gateway {
   }
 
   @JvmStatic fun startCollect(ctx: Context) {
+    // 采集随网关启停:网关未启用时不启动样本轮询。
+    // 否则「保存采集配置」经 restartCollect 会在网关关闭状态下静默起采集(状态栏还不显示)。
+    if (!cfg(ctx).optBoolean(Cfg.ENABLED)) { Log.i(TAG, "collect idle: gateway disabled"); return }
     if (collectRunning) return
     collectRunning = true
     scheduleNext(ctx.getApplicationContext())
@@ -116,7 +122,9 @@ object Gateway {
     if (!collectRunning) return
     val intervalSec = (cfg(ctx).optJSONObject("collect")?.optLong("intervalSec", 60) ?: 60).coerceAtLeast(15)
     collectHandler.postDelayed({
-      try { runCollectOnce(ctx) } catch (_: Exception) {}
+      // 上一轮线程未收尾则跳过本轮,避免 decide 慢于 interval 时线程堆积在串行锁上
+      if (collectBusy) Log.i(TAG, "collect skip: previous round still running")
+      else try { runCollectOnce(ctx) } catch (_: Exception) {}
       scheduleNext(ctx)
     }, intervalSec * 1000)
   }
@@ -127,19 +135,24 @@ object Gateway {
     if (collectEnabledCount(c) == 0) return
     val cc = c.optJSONObject("collect") ?: return
     val app = ctx.applicationContext
+    collectBusy = true
     Thread {
-      for (k in cc.keys()) {
-        if (k == "intervalSec") continue
-        val c1 = cc.optJSONObject(k) ?: continue
-        if (!c1.optBoolean("enabled")) continue
-        val samples = c1.optJSONArray("samples") ?: continue
-        if (samples.length() == 0) continue
-        val i = (collectIdx[k] ?: 0) % samples.length()
-        collectIdx[k] = i + 1
-        try {
-          DecisionCore.decide(app, k, samples.optString(i)) // 决策+日志+模板全链;串行锁内排队,勿在此打印大对象
-        } catch (e: Exception) { Log.w(TAG, "collect $k: ${e.message}") }
-      }
+      try {
+        // 清理已删除业务的轮询游标(cfg 中不再存在的键)
+        collectIdx.keys.retainAll(cc.keys().asSequence().filter { it != "intervalSec" }.toHashSet())
+        for (k in cc.keys()) {
+          if (k == "intervalSec") continue
+          val c1 = cc.optJSONObject(k) ?: continue
+          if (!c1.optBoolean("enabled")) continue
+          val samples = c1.optJSONArray("samples") ?: continue
+          if (samples.length() == 0) continue
+          val i = (collectIdx[k] ?: 0) % samples.length()
+          collectIdx[k] = i + 1
+          try {
+            DecisionCore.decide(app, k, samples.optString(i)) // 决策+日志+模板全链;串行锁内排队,勿在此打印大对象
+          } catch (e: Exception) { Log.w(TAG, "collect $k: ${e.message}") }
+        }
+      } finally { collectBusy = false }
     }.start()
   }
 

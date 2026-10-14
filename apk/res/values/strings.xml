@@ -373,6 +373,7 @@
     <string name="collect_test_done">%1$s 首问: %2$s · %3$dms · %4$s</string>
     <string name="collect_save">保存采集配置</string>
     <string name="collect_done">采集配置已保存并生效</string>
+    <string name="collect_need_gateway">采集配置已保存;网关未启用,采集未启动</string>
     <string name="collect_running">数据采集: %1$d 个业务启用</string>
     <string name="news_scoring">评分中…</string>
     <string name="news_prompt">对下述财经快讯做交易驱动力分诊,只输出 JSON,不要任何其他文字:{\"drive\":0-1驱动力,\"conf\":0-1方向置信,\"urg\":0-1紧迫性,\"senti\":0-1情绪(0偏空-1偏多),\"dir\":\"BUY或SELL或NONE\",\"reason\":\"20字内理由\"}\n快讯:</string>

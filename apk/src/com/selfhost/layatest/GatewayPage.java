@@ -33,6 +33,28 @@ class GatewayPage {
     try { int v = Integer.parseInt(s.trim()); return (v > 0 && v < 65536) ? v : def; } catch (Exception e) { return def; }
   }
 
+  /** 采集样本:按行拆分,去空行(启停/保存共用) */
+  private static org.json.JSONArray samplesOf(EditText et) {
+    org.json.JSONArray arr = new org.json.JSONArray();
+    for (String ln : et.getText().toString().split("\n")) {
+      String s = ln.trim();
+      if (!s.isEmpty()) arr.put(s);
+    }
+    return arr;
+  }
+
+  /** 采集间隔落盘(≥15s;非法则保留原值) */
+  private static void putInterval(JSONObject all, EditText et) {
+    try { all.put("intervalSec", Math.max(15, Integer.parseInt(et.getText().toString().trim()))); }
+    catch (Exception ignore) {}
+  }
+
+  /** 采集卡片启停按钮态(on=启用中→显示"停用"灰按钮) */
+  private void setCollectToggle(Button tog, boolean on) {
+    tog.setText(m.getString(on ? R.string.collect_disable : R.string.collect_enable));
+    tog.setBackground(Ui.pill(on ? 0xFF8894A6 : m.PRIMARY, Ui.dp(m,10)));
+  }
+
   void build() {
     // 三个子页面板,左栏 tab 切换
     LinearLayout pMail = new LinearLayout(m);
@@ -212,30 +234,25 @@ class GatewayPage {
       title.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
       head.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
       Button tog = new Button(m);
-      tog.setText(on ? m.getString(R.string.collect_disable) : m.getString(R.string.collect_enable));
       tog.setAllCaps(false); tog.setTextSize(10);
       tog.setMinHeight(0); tog.setMinimumHeight(0); tog.setMinimumWidth(0);
       tog.setPadding(Ui.dp(m,8), Ui.dp(m,3), Ui.dp(m,8), Ui.dp(m,3));
       tog.setTextColor(Color.WHITE);
-      tog.setBackground(Ui.pill(on ? 0xFF8894A6 : m.PRIMARY, Ui.dp(m,10)));
+      setCollectToggle(tog, on);
       tog.setOnClickListener(v -> {
         try {
           JSONObject c2 = com.laya.Gateway.cfg(m.getApplicationContext());
           JSONObject all = c2.optJSONObject("collect"); if (all == null) all = new JSONObject();
           JSONObject cc2 = all.optJSONObject(task); if (cc2 == null) cc2 = new JSONObject();
-          cc2.put("enabled", !cc2.optBoolean("enabled", false));
-          // 样本一并落盘:未点保存就切开关也不丢编辑
-          java.util.ArrayList<String> ls = new java.util.ArrayList<>();
-          for (String ln : sampleEts.get(task).getText().toString().split("\n")) {
-            if (!ln.trim().isEmpty()) ls.add(ln.trim());
-          }
-          cc2.put("samples", new org.json.JSONArray(ls));
-          all.put(task, cc2); c2.put("collect", all);
+          boolean nowOn = !cc2.optBoolean("enabled", false);
+          cc2.put("enabled", nowOn);
+          // 样本、间隔一并落盘:未点保存就切开关也不丢编辑
+          cc2.put("samples", samplesOf(sampleEts.get(task)));
+          all.put(task, cc2);
+          putInterval(all, gwCollectInterval);
+          c2.put("collect", all);
           com.laya.Gateway.saveCfg(m.getApplicationContext(), c2);
-          // 局部刷新:原地翻转按钮态,不重建面板
-          boolean nowOn = cc2.optBoolean("enabled", false);
-          tog.setText(nowOn ? m.getString(R.string.collect_disable) : m.getString(R.string.collect_enable));
-          tog.setBackground(Ui.pill(nowOn ? 0xFF8894A6 : m.PRIMARY, Ui.dp(m,10)));
+          setCollectToggle(tog, nowOn); // 局部刷新:原地翻转按钮态,不重建面板
           gwStatus.setText(m.getString(R.string.gateway_bar, com.laya.Gateway.status(m)));
         } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
       });
@@ -249,11 +266,10 @@ class GatewayPage {
         try {
           JSONObject c2 = com.laya.Gateway.cfg(m.getApplicationContext());
           JSONObject all = c2.optJSONObject("collect");
-          if (all != null) { all.remove(task); c2.put("collect", all); }
+          if (all != null) { all.remove(task); putInterval(all, gwCollectInterval); c2.put("collect", all); }
           com.laya.Gateway.saveCfg(m.getApplicationContext(), c2);
           // 局部刷新:卡片复位为未配置态(启用按钮 + 预填默认样本),不重建面板
-          tog.setText(m.getString(R.string.collect_enable));
-          tog.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,10)));
+          setCollectToggle(tog, false);
           String def = DEF_SAMPLE.get(task);
           sampleEts.get(task).setText(def != null ? def : "");
           gwStatus.setText(m.getString(R.string.gateway_bar, com.laya.Gateway.status(m)));
@@ -307,18 +323,17 @@ class GatewayPage {
         JSONObject all = cfg.optJSONObject("collect"); if (all == null) all = new JSONObject();
         for (kotlin.Pair<String, String> t : tasks) {
           JSONObject cc = all.optJSONObject(t.getFirst()); if (cc == null) cc = new JSONObject();
-          java.util.ArrayList<String> ls = new java.util.ArrayList<>();
-          for (String ln : sampleEts.get(t.getFirst()).getText().toString().split("\n")) {
-            if (!ln.trim().isEmpty()) ls.add(ln.trim());
-          }
-          cc.put("samples", new org.json.JSONArray(ls));
+          cc.put("samples", samplesOf(sampleEts.get(t.getFirst())));
           all.put(t.getFirst(), cc);
         }
-        try { all.put("intervalSec", Math.max(15, Integer.parseInt(gwCollectInterval.getText().toString().trim()))); } catch (Exception ignore) {}
+        putInterval(all, gwCollectInterval);
+
         cfg.put("collect", all);
         com.laya.Gateway.saveCfg(m.getApplicationContext(), cfg);
         com.laya.Gateway.restartCollect(m.getApplicationContext());
-        gwStatus.setText(m.getString(R.string.collect_done));
+        // 采集随网关启停:网关未启用时只落盘不轮询,如实提示,避免误以为已在采集
+        gwStatus.setText(m.getString(cfg.optBoolean(com.laya.Cfg.ENABLED)
+            ? R.string.collect_done : R.string.collect_need_gateway));
       } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
     });
 
@@ -362,13 +377,17 @@ class GatewayPage {
           JSONObject c2 = com.laya.Gateway.cfg(m.getApplicationContext());
           JSONObject n2 = c2.optJSONObject(com.laya.Cfg.NEWS); if (n2 == null) n2 = new JSONObject();
           JSONObject s2 = n2.optJSONObject(ch[0]); if (s2 == null) s2 = new JSONObject();
-          s2.put(com.laya.Cfg.ENABLED, !on);
-          n2.put(com.laya.Cfg.SINA, n2.optJSONObject(com.laya.Cfg.SINA) != null ? n2.optJSONObject(com.laya.Cfg.SINA) : s2); // 保结构
-          n2.put(ch[0].toUpperCase(), s2); // 双写兼容
-          if ("sina".equals(ch[0])) n2.put(com.laya.Cfg.SINA, s2); else n2.put(com.laya.Cfg.WSC, s2);
+          // 每业务独立数据源:按 ch[0] 精确写 sina/wsc,不互相污染(旧代码会把 wsc 写进 sina 键)
+          boolean nowOn = !s2.optBoolean(com.laya.Cfg.ENABLED, true);
+          s2.put(com.laya.Cfg.ENABLED, nowOn);
+          n2.put(ch[0], s2);
           c2.put(com.laya.Cfg.NEWS, n2);
           com.laya.Gateway.saveCfg(m.getApplicationContext(), c2);
-          m.setTab(2); // 刷新面板
+          // 局部刷新:原地翻转按钮与该行文案,不整页重建(拉取循环每轮实时读 cfg,无需重建)
+          String kind = !s2.optString(com.laya.Cfg.URL).isEmpty() ? "自定义源" : "默认源";
+          ct.setText("· " + ch[1] + (nowOn ? " ✅启用" : " ⛔停用") + " · " + kind + " · " + m.newsPage.feedCount(ch[1]) + " 条");
+          tog.setText(nowOn ? "停止" : "启用");
+          tog.setBackground(Ui.pill(nowOn ? 0xFF8894A6 : m.PRIMARY, Ui.dp(m,10)));
         } catch (Exception e) { ct.setText("操作失败: " + e.getMessage()); }
       });
       crow.addView(tog);

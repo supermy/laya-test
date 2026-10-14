@@ -29,7 +29,8 @@ import java.util.Locale
  *   而不是细化锁粒度。
  * - 为什么不做多业务常驻:每业务模型包 ~650MB,N 业务常驻即 650MB×N,端侧内存不可行;
  *   单槽切换的冷加载(百 ms 级)是可接受的折中。
- * - [llmFollowUp] 必须保持异步(决策等级"高"时触发):**严禁**在持锁状态下同步调 LLM/网络,
+ * - [llmFollowUp] LLM 升级通道已下线(v1.4.50 默认 followLlm=false);若将来复用必须保持异步
+ *   (决策等级"高"时触发):**严禁**在持锁状态下同步调 LLM/网络,
  *   否则外呼耗时会被串行锁放大成全局停顿。
  * - 禁止重入:[decide] 持锁期间不得再进入本对象任何 @Synchronized 方法(会死锁,self-monitor 不可重入场景除外)。
  *
@@ -360,12 +361,13 @@ object DecisionCore {
 
   class Result(@JvmField val answers: JSONObject, @JvmField val latencyMs: Long)
 
-  /** 三问全跑。串行契约见类头 KDoc:四个来源(UI/API/邮件/MQTT)的调用在此排队,同业务热路径、换业务冷切换。 */
+  /** 三问全跑。串行契约见类头 KDoc:四个来源(UI/API/邮件/MQTT)的调用在此排队,同业务热路径、换业务冷切换。
+   *  LLM 升级通道已下线(v1.4.50):默认 followLlm=false,决策链以本地模型输出收尾。 */
   @Synchronized
   @JvmStatic
-  fun decide(ctx: Context, task: String, text: String): Result = decide(ctx, task, text, true)
+  fun decide(ctx: Context, task: String, text: String): Result = decide(ctx, task, text, false)
 
-  /** followLlm=false:跳过重要+紧急的 LLM 升级(批量评分场景,如快讯页本地模型评分) */
+  /** followLlm=true:决策后按等级"高"异步拉 LLM 升级(保留通道,当前默认关闭) */
   @Synchronized
   @JvmStatic
   fun decide(ctx: Context, task: String, text: String, followLlm: Boolean): Result {
