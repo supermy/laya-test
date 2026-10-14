@@ -18,6 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import * as gw from "./gateways.mjs";
+import { replyAppendix } from "./reply-templates.mjs";
 
 const HERE = os.homedir() + "/laya-test/service";
 const PORT = parseInt(process.env.PORT || "8789", 10);
@@ -467,7 +468,7 @@ const server = http.createServer(async (req, res) => {
       const latencyMs = Math.round(performance.now() - t0);
       const entry = { ts: Date.now(), task: id, state: text.slice(0, 200), answers: r.answers, latencyMs };
       appendLog(entry);
-      return json(res, 200, { task: id, answers: r.answers, usage: r.usage, latencyMs });
+      return json(res, 200, { task: id, answers: r.answers, usage: r.usage, latencyMs, reply: replyAppendix(id, r.answers, text) });
     }
     if (req.method === "GET" && url.pathname.startsWith("/report/")) {
       const [, , kind] = url.pathname.split("/");
@@ -561,7 +562,7 @@ server.listen(PORT, "127.0.0.1", () => {
     const r = await client.systemOne({ [t.stateKey]: text }, questionsOf(t));
     const latencyMs = Math.round(performance.now() - t0);
     appendLog({ ts: Date.now(), task, state: text.slice(0, 200), answers: r.answers, latencyMs, via: "gateway" });
-    return { answers: r.answers, latencyMs };
+    return { answers: r.answers, latencyMs, reply: replyAppendix(task, r.answers, text) };
   });
   gw.startEmailGateway().catch((e) => console.log("[laya-svc] 邮件网关启动失败:", e.message));
   gw.startMqGateway().catch((e) => console.log("[laya-svc] MQTT 网关启动失败:", e.message));

@@ -3,22 +3,24 @@
 // 从 tickets.csv 抽真实客服工单发布到 laya/cs/req,收集 laya/cs/resp 决策结果,
 // 与 CSV ground truth(queue 分诊 / priority 紧急度)对照汇总。
 //
-// 用法: node service/test-cs-mqtt.mjs [--n 20] [--lang en] [--port 18830] [--seed N] [--stub] [--api URL]
+// 用法: node service/test-cs-mqtt.mjs [--n 20] [--lang en] [--port 18830] [--seed N] [--stub] [--api URL] [--locale zh]
 //   --n      抽样工单数(默认 20)
 //   --lang   语言过滤 en|de|any(默认 en)
 //   --stub   不调真实模型,用确定性假决策(仅测链路)
 //   --api    决策后端 URL:默认 http://127.0.0.1:8789(Termux service /task/:id);
 //            传 APK 决策 API(如 http://127.0.0.1:8790)则走 POST /decide {"task","text"}
+//   --locale 回复模板语言 zh|en(默认 zh)
 //   真实决策需要后端已启动(service/server.mjs 或 layatest app 网关页)
 //
 // MQTT 消息格式:
 //   发布 laya/cs/req  {"id","subject","body"} 或 {"id","text"}(task 可选,默认 ticket)
-//   订阅 laya/cs/resp {"id","task","answers","latencyMs"}
+//   订阅 laya/cs/resp {"id","task","answers","latencyMs","reply"}
 import { Aedes } from "aedes";
 import net from "node:net";
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { replyAppendix } from "./reply-templates.mjs";
 
 const require = createRequire(import.meta.url);
 const mqtt = require("mqtt");
@@ -38,6 +40,7 @@ const STUB = args.includes("--stub");
 const TASK = opt("task", "ticket");
 const API = opt("api", "http://127.0.0.1:8789").replace(/\/$/, "");
 const IS_APK = /:8790/.test(API) || args.includes("--apk");
+const LOCALE = opt("locale", "zh");
 const URL_ = `mqtt://127.0.0.1:${PORT}`;
 
 const log = (...a) => console.log("[cs-test]", ...a);
@@ -94,16 +97,16 @@ async function realDecide(task, text) {
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 120)}`);
     const j = await r.json();
-    return { answers: j.answers, latencyMs: j.latencyMs };
+    return { answers: j.answers, latencyMs: j.latencyMs, reply: j.reply ?? replyAppendix(task, j.answers, text, LOCALE) };
   }
-  // Termux service(8789):POST /task/:id {"text"} → {answers,latencyMs}
+  // Termux service(8789):POST /task/:id {"text"} → {answers,latencyMs,reply}
   const r = await fetch(`${API}/task/${task}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
   });
   if (!r.ok) throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 120)}`);
   const j = await r.json();
-  return { answers: j.answers, latencyMs: j.latencyMs };
+  return { answers: j.answers, latencyMs: j.latencyMs, reply: j.reply ?? replyAppendix(task, j.answers, text, LOCALE) };
 }
 function stubDecide(task, text) {
   let h = 0; for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) & 0xffff;
@@ -117,6 +120,11 @@ function stubDecide(task, text) {
       q2: { type: "noul", noul: score >= 4 ? 0.7 : 0.2 },
     },
     latencyMs: 1,
+    reply: replyAppendix(task, {
+      q0: { choice },
+      q1: { score },
+      q2: { noul: score >= 4 ? 0.7 : 0.2 },
+    }, text, LOCALE),
   };
 }
 
@@ -207,6 +215,8 @@ async function main() {
   console.log(`紧急度平均偏差: ${results.length ? (sErr / results.length).toFixed(2) : "-"} (1-5 分 vs priority 映射)`);
   console.log(`转人工 vs high 优先级一致率: ${ntotal ? (nhit / ntotal * 100).toFixed(1) + "%" : "n/a"}`);
   console.log(`平均延迟: ${avg(lat)} ms(含真实模型时为端到端)`);
+  console.log("\n===== 回复模板 =====");
+  for (const r of results) console.log(`\n[${r.id}]${r.reply || "(无)"}`);
 }
 
 try {

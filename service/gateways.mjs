@@ -147,7 +147,7 @@ export async function startMqGateway() {
     const text = String(msg.text ?? [msg.subject, msg.body].filter((x) => x != null && x !== "").join("\n"));
     const task = String(msg.task ?? csTask);
     const r = await decide(task, text);
-    mqClient.publish(outTopic, JSON.stringify({ id: msg.id, task, answers: r.answers, latencyMs: r.latencyMs }));
+    mqClient.publish(outTopic, JSON.stringify({ id: msg.id, task, answers: r.answers, latencyMs: r.latencyMs, ...(r.reply != null ? { reply: r.reply } : {}) }));
     log(`MQ 决策完成 ${task} → ${outTopic}`);
   };
   mqClient.on("message", async (topic, payload) => {
