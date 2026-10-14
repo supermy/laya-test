@@ -103,4 +103,139 @@ object ReplyTemplates {
       "感谢您的反馈,由我为您跟进处理。",
       "Thanks for your feedback; I will follow up with you personally.")
   }
+
+  // ---- ugc 内容审核(q0 审核判定 / q1 违规严重度1-5 / q2 人工复核) ----
+
+  private fun ugcOpenSeg(locale: String, verdict: String): String = when (verdict) {
+    "正常" -> seg(locale,
+      "该内容已通过机器审核,未发现违规风险,可正常展示。",
+      "The content has passed automated review; no violations detected and it can be published.")
+    "广告导流" -> seg(locale,
+      "该内容涉嫌广告导流,已按社区规则限流并挂起展示。",
+      "The content is suspected of ad diversion and has been throttled and held per community rules.")
+    else -> seg(locale, // 辱骂攻击/色情低俗/诈骗引流 + 未知判定
+      "该内容涉嫌「$verdict」违规,已自动拦截下架。",
+      "The content is suspected of violating rules (\"$verdict\") and has been automatically removed.")
+  }
+
+  fun ugcReply(locale: String, verdict: String, severity: Int, escalate: Boolean): String {
+    val sb = StringBuilder(seg(locale, "您好,该内容已完成机器审核。", "Hello, the content has completed automated review.")).append('\n')
+    sb.append(ugcOpenSeg(locale, verdict)).append('\n')
+    if (escalate) {
+      sb.append(seg(locale,
+        "该内容需要人工复核,已转交审核专员处理,请留意复核结论。",
+        "This content requires human review and has been escalated to a specialist; please await the review conclusion.")).append('\n')
+    } else if (verdict != "正常") {
+      sb.append(if (severity >= 3) seg(locale,
+        "违规严重度为 $severity/5,已同步留存证据并纳入风控名单。",
+        "Violation severity is $severity/5; evidence has been preserved and added to the risk list.")
+      else seg(locale,
+        "违规严重度为 $severity/5,将在 24 小时内自动完成复核归档。",
+        "Violation severity is $severity/5; automated re-check will be archived within 24 hours.")).append('\n')
+    }
+    sb.append(seg(locale,
+      "(本结果由智能内容审核助手自动生成)",
+      "(This result was generated automatically by the content moderation assistant.)"))
+    return sb.toString()
+  }
+
+  fun ugcScript(locale: String, verdict: String, severity: Int, userText: String): String {
+    val sb = StringBuilder(seg(locale, "【人工复核 · 建议稿】", "[Human review · draft]")).append('\n')
+    sb.append(seg(locale, "违规严重度: ", "Violation severity: ")).append(severity).append("/5\n")
+    sb.append(seg(locale, "审核判定: ", "Moderation verdict: ")).append(verdict).append('\n')
+    sb.append(seg(locale, "内容原文:", "Content:")).append(' ').append(userText).append('\n')
+    sb.append(seg(locale, "复核建议: 请核对判定与严重度是否准确,并补充处置依据。",
+      "Review tips: verify the verdict and severity, and document the action taken."))
+    return sb.toString()
+  }
+
+  // ---- agent 工作流路由(q0 路由 / q1 复杂度1-5 / q2 任务拆解) ----
+
+  fun agentReply(locale: String, route: String, complexity: Int, escalate: Boolean): String {
+    val sb = StringBuilder(seg(locale, "您好,您的请求已完成智能路由。", "Hello, your request has been routed by the intelligent dispatcher.")).append('\n')
+    if (escalate) {
+      sb.append(seg(locale,
+        "该任务涉及多实体或多约束,已转交人工坐席拆解处理,请留意后续进展。",
+        "The task involves multiple entities or constraints and has been escalated to a human agent for decomposition.")).append('\n')
+    } else {
+      sb.append(seg(locale, "将交由「$route」工作流处理。", "It will be handled by the \"$route\" workflow.")).append('\n')
+      val c = complexity.coerceIn(1, 5)
+      val name = listOf("", "一句话", "简单", "中等", "复杂", "极复杂")[c]
+      sb.append(seg(locale, "任务复杂度为 $c/5($name),工作流将按步骤执行。",
+        "Task complexity is $c/5; the workflow will execute step by step.")).append('\n')
+    }
+    sb.append(seg(locale,
+      "(本路由结果由智能 Agent 调度助手自动生成)",
+      "(This routing result was generated automatically by the agent dispatcher.)"))
+    return sb.toString()
+  }
+
+  fun agentScript(locale: String, route: String, complexity: Int, userText: String): String {
+    val sb = StringBuilder(seg(locale, "【任务拆解 · 建议稿】", "[Task decomposition · draft]")).append('\n')
+    sb.append(seg(locale, "任务复杂度: ", "Task complexity: ")).append(complexity).append("/5\n")
+    sb.append(seg(locale, "原始路由: ", "Initial routing: ")).append(route).append('\n')
+    sb.append(seg(locale, "任务原文:", "Task message:")).append(' ').append(userText).append('\n')
+    sb.append(seg(locale, "拆解建议: 先识别实体与约束,再拆分步骤并逐条确认执行顺序。",
+      "Tips: identify entities and constraints first, then split into steps and confirm the order."))
+    return sb.toString()
+  }
+
+  // ---- risk 风控前置(q0 风险信号强度1-5 / q1 主要风险类型 / q2 人工复核) ----
+
+  fun riskReply(locale: String, strength: Int, riskType: String, escalate: Boolean): String {
+    val sb = StringBuilder(seg(locale, "您好,该请求已完成风控前置研判。", "Hello, this request has completed pre-screening risk control.")).append('\n')
+    sb.append(seg(locale, "风险信号强度 $strength/5,主要风险类型:「$riskType」。",
+      "Risk signal strength is $strength/5; main risk type: \"$riskType\".")).append('\n')
+    sb.append(when {
+      escalate || strength >= 4 -> seg(locale,
+        "已触发强风控策略,本次请求将被拦截并转人工复核。",
+        "Strong risk-control policy triggered; the request is blocked pending human review.")
+      strength == 3 -> seg(locale,
+        "已触发加强验证流程,请配合完成二次核验。",
+        "Enhanced verification triggered; please complete the secondary check.")
+      else -> seg(locale, "未发现显著风险,按常规流程放行。",
+        "No significant risk detected; proceeding with the standard flow.")
+    }).append('\n')
+    sb.append(seg(locale,
+      "(本结果由智能风控前置助手自动生成)",
+      "(This result was generated automatically by the risk-control assistant.)"))
+    return sb.toString()
+  }
+
+  fun riskScript(locale: String, strength: Int, riskType: String, userText: String): String {
+    val sb = StringBuilder(seg(locale, "【风控复核 · 建议稿】", "[Risk review · draft]")).append('\n')
+    sb.append(seg(locale, "风险信号强度: ", "Risk signal strength: ")).append(strength).append("/5\n")
+    sb.append(seg(locale, "主要风险类型: ", "Main risk type: ")).append(riskType).append('\n')
+    sb.append(seg(locale, "请求原文:", "Request message:")).append(' ').append(userText).append('\n')
+    sb.append(seg(locale, "复核建议: 核实风险类型与强度,确认拦截/放行决策并留痕。",
+      "Tips: verify risk type and strength, confirm the block/allow decision and keep an audit trail."))
+    return sb.toString()
+  }
+
+  // ---- 通用兜底(news/stock/未知业务:取首个 choice/score/noul) ----
+
+  fun genericReply(locale: String, task: String, conclusion: String?, escalate: Boolean): String {
+    val sb = StringBuilder(seg(locale, "您好,「$task」智能研判已完成。", "Hello, the \"$task\" decision has been completed.")).append('\n')
+    sb.append(if (conclusion == null) seg(locale,
+      "模型未产出有效结论,建议人工跟进。",
+      "The model produced no valid conclusion; manual follow-up is suggested.")
+    else seg(locale, "研判结论:$conclusion。", "Conclusion: $conclusion.")).append('\n')
+    sb.append(if (escalate) seg(locale,
+      "该结果需要人工确认,已转交专人跟进处理。",
+      "This result requires human confirmation and has been escalated for follow-up.")
+    else seg(locale, "结论已按策略自动执行。", "The conclusion has been applied automatically per policy.")).append('\n')
+    sb.append(seg(locale,
+      "(本结果由智能决策助手自动生成)",
+      "(This result was generated automatically by the decision assistant.)"))
+    return sb.toString()
+  }
+
+  fun genericScript(locale: String, task: String, conclusion: String?, userText: String): String {
+    val sb = StringBuilder(seg(locale, "【人工跟进 · 建议稿】", "[Manual follow-up · draft]")).append('\n')
+    if (conclusion != null) sb.append(seg(locale, "研判结论: ", "Conclusion: ")).append(conclusion).append('\n')
+    sb.append(seg(locale, "原始输入:", "Original input:")).append(' ').append(userText).append('\n')
+    sb.append(seg(locale, "跟进建议: 核对模型结论与实际业务状态,处理完成后记录结论与依据。",
+      "Tips: check the model conclusion against the actual state, then record the outcome and rationale."))
+    return sb.toString()
+  }
 }

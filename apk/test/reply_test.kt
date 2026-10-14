@@ -59,7 +59,32 @@ fun main() {
   ck(byNoul.contains("【人工回复】"), "noul>=0.5 → human")
   val auto = com.laya.DecisionCore.replyAppendix(null, "ticket", answers(2, 0.1), "T3")
   ck(auto.contains("【自动回复】") && !auto.contains("人工话术"), "low urgency+noul → auto only")
-  ck(com.laya.DecisionCore.replyAppendix(null, "news", answers(5, 0.9), "T4") == "", "non-ticket → empty")
+  // 全业务模板:非客服业务走通用兜底(noul≥0.5 → 人工跟进,否则自动回复)
+  val gNews = com.laya.DecisionCore.replyAppendix(null, "news", answers(5, 0.9), "T4")
+  ck(gNews.contains("【人工跟进】") && gNews.contains("「账单计费」"), "non-ticket escalate → generic human")
+  val gNewsAuto = com.laya.DecisionCore.replyAppendix(null, "news", answers(2, 0.1), "T5")
+  ck(gNewsAuto.contains("【自动回复】") && gNewsAuto.contains("研判结论"), "non-ticket low → generic auto")
+  // ugc/agent/risk 业务专属模板(risk 问序与 ugc 相反:q0=强度 score,q1=类型 choice)
+  fun qa(choice: String, score: Int, noul: Double) = org.json.JSONObject(
+    "{\"q0\":{\"type\":\"choice\",\"choice\":\"$choice\"}," +
+    "\"q1\":{\"type\":\"score\",\"score\":$score}," +
+    "\"q2\":{\"type\":\"noul\",\"noul\":$noul}}")
+  fun qr(strength: Int, choice: String, noul: Double) = org.json.JSONObject(
+    "{\"q0\":{\"type\":\"score\",\"score\":$strength}," +
+    "\"q1\":{\"type\":\"choice\",\"choice\":\"$choice\"}," +
+    "\"q2\":{\"type\":\"noul\",\"noul\":$noul}}")
+  val ugcAuto = com.laya.DecisionCore.replyAppendix(null, "ugc", qa("广告导流", 3, 0.1), "T6")
+  ck(ugcAuto.contains("【自动回复】") && ugcAuto.contains("广告导流"), "ugc auto → verdict")
+  val ugcHi = com.laya.DecisionCore.replyAppendix(null, "ugc", qa("色情低俗", 4, 0.1), "T7")
+  ck(ugcHi.contains("【人工复核】"), "ugc severity>=4 → human")
+  val agAuto = com.laya.DecisionCore.replyAppendix(null, "agent", qa("工具调用", 2, 0.1), "T8")
+  ck(agAuto.contains("【自动回复】") && agAuto.contains("工具调用"), "agent auto → route")
+  val agHi = com.laya.DecisionCore.replyAppendix(null, "agent", qa("转人工", 5, 0.1), "T9")
+  ck(agHi.contains("【人工跟进】"), "agent route=转人工 → human")
+  val rkAuto = com.laya.DecisionCore.replyAppendix(null, "risk", qr(2, "欺诈风险", 0.1), "T10")
+  ck(rkAuto.contains("【自动回复】") && rkAuto.contains("欺诈风险"), "risk auto → type")
+  val rkHi = com.laya.DecisionCore.replyAppendix(null, "risk", qr(5, "欺诈风险", 0.1), "T11")
+  ck(rkHi.contains("【人工复核】"), "risk strength>=4 → human")
 
   println("REPLY_COVER PASS=$pass FAIL=$fail")
   if (fail > 0) kotlin.system.exitProcess(1)

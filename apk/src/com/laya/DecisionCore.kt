@@ -641,7 +641,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
     return sb.toString()
   }
 
-  // ---- 自动回复模板 / 人工话术(ticket/multi 专用,其他业务回退 fmt 摘要) ----
+  // ---- 自动回复模板 / 人工话术(全业务:ticket/multi 客服三问,ugc/agent/risk 业务专属,其余通用兜底) ----
 
   private fun tplLocale(ctx: Context?): String =
     if (ctx?.resources?.configuration?.locale?.language == "en") "en" else "zh"
@@ -656,27 +656,100 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
     return dept to (urgency to escalate)
   }
 
+  /** 任一问 noul≥0.5(需人工信号) */
+  private fun anyEscalate(answers: JSONObject): Boolean {
+    for (k in answers.keys()) {
+      val n = answers.optJSONObject(k)?.optDouble("noul", 0.0) ?: 0.0
+      if (n >= 0.5) return true
+    }
+    return false
+  }
+
+  private fun qScore(answers: JSONObject, qid: String, def: Int): Int =
+    (answers.optJSONObject(qid)?.optDouble("score", def.toDouble()) ?: def.toDouble()).toInt().coerceIn(1, 5)
+
+  /** 通用兜底结论(确定性优先级:choice > score > noul):「v」/ v/5分 / 需人工(p);无 → null */
+  private fun genericConclusion(answers: JSONObject): String? {
+    for (pass in listOf("choice", "score", "noul")) {
+      for (k in answers.keys()) {
+        val a = answers.optJSONObject(k) ?: continue
+        if (pass == "choice" && a.has("choice")) return "「${a.optString("choice")}」"
+        if (pass == "score" && a.has("score")) return "${a.optDouble("score", 0.0).toInt().coerceIn(1, 5)}/5分"
+        if (pass == "noul" && a.has("noul")) return if (a.optDouble("noul", 0.0) >= 0.5) "需人工(${a.optDouble("noul", 0.0)})" else "无信号(${a.optDouble("noul", 0.0)})"
+      }
+    }
+    return null
+  }
+
+  /** 自动回复正文(邮件/MQTT 回执用);ticket/multi 数据不全时返回 null,调用方回退 fmt */
+  private fun replyBody(ctx: Context?, task: String, answers: JSONObject): String? {
+    val loc = tplLocale(ctx)
+    return when (task) {
+      "ticket", "multi" -> ticketParts(task, answers)?.let { p ->
+        ReplyTemplates.autoReply(loc, p.first, p.second.first, p.second.second)
+      }
+      "ugc" -> ReplyTemplates.ugcReply(loc,
+        answers.optJSONObject("q0")?.optString("choice") ?: "正常", qScore(answers, "q1", 1), anyEscalate(answers))
+      "agent" -> ReplyTemplates.agentReply(loc,
+        answers.optJSONObject("q0")?.optString("choice") ?: "直接回答", qScore(answers, "q1", 1), anyEscalate(answers))
+      "risk" -> ReplyTemplates.riskReply(loc,
+        qScore(answers, "q0", 1), answers.optJSONObject("q1")?.optString("choice") ?: "无风险信号", anyEscalate(answers))
+      else -> ReplyTemplates.genericReply(loc, task, genericConclusion(answers), anyEscalate(answers))
+    }
+  }
+
+  /** 人工话术/复核建议稿(含复述原文);ticket/multi 数据不全时返回 null */
+  private fun scriptBody(ctx: Context?, task: String, answers: JSONObject, text: String): String? {
+    val loc = tplLocale(ctx)
+    return when (task) {
+      "ticket", "multi" -> ticketParts(task, answers)?.let { p ->
+        ReplyTemplates.humanScript(loc, p.first, p.second.first, text)
+      }
+      "ugc" -> ReplyTemplates.ugcScript(loc,
+        answers.optJSONObject("q0")?.optString("choice") ?: "正常", qScore(answers, "q1", 1), text)
+      "agent" -> ReplyTemplates.agentScript(loc,
+        answers.optJSONObject("q0")?.optString("choice") ?: "直接回答", qScore(answers, "q1", 1), text)
+      "risk" -> ReplyTemplates.riskScript(loc,
+        qScore(answers, "q0", 1), answers.optJSONObject("q1")?.optString("choice") ?: "无风险信号", text)
+      else -> ReplyTemplates.genericScript(loc, task, genericConclusion(answers), text)
+    }
+  }
+
   /** 自动回复正文(邮件/MQTT 回执用) */
   @JvmStatic
-  fun autoReply(ctx: Context?, task: String, answers: JSONObject): String {
-    val p = ticketParts(task, answers) ?: return fmt(ctx, task, answers)
-    return ReplyTemplates.autoReply(tplLocale(ctx), p.first, p.second.first, p.second.second)
-  }
+  fun autoReply(ctx: Context?, task: String, answers: JSONObject): String =
+    replyBody(ctx, task, answers) ?: fmt(ctx, task, answers)
 
   /** 人工坐席话术建议稿(含复述客户原文) */
   @JvmStatic
-  fun humanScript(ctx: Context?, task: String, answers: JSONObject, text: String): String {
-    val p = ticketParts(task, answers) ?: return fmt(ctx, task, answers)
-    return ReplyTemplates.humanScript(tplLocale(ctx), p.first, p.second.first, text)
+  fun humanScript(ctx: Context?, task: String, answers: JSONObject, text: String): String =
+    scriptBody(ctx, task, answers, text) ?: fmt(ctx, task, answers)
+
+  /** 该业务该答案是否走人工(升级)通道 */
+  private fun isEscalated(task: String, answers: JSONObject): Boolean? {
+    return when (task) {
+      "ticket", "multi" -> ticketParts(task, answers)?.second?.second
+      "ugc" -> anyEscalate(answers) || qScore(answers, "q1", 1) >= 4
+      "agent" -> anyEscalate(answers) || answers.optJSONObject("q0")?.optString("choice") == "转人工"
+      "risk" -> anyEscalate(answers) || qScore(answers, "q0", 1) >= 4
+      else -> anyEscalate(answers)
+    }
   }
 
-  /** 决策输出附带的回复模板段(须转人工→人工话术;否则→自动回复正文);非客服业务返回空串。
-   *  SystemPage 测试输出与 DecisionPage 结果气泡共用,二选一不并列 */
+  /** 决策输出附带的回复模板段(升级→人工话术/复核稿;否则→自动回复正文)。
+   *  全业务覆盖:SystemPage 测试输出、DecisionPage 结果气泡与历史回显共用 */
   @JvmStatic
   fun replyAppendix(ctx: Context?, task: String, answers: JSONObject, text: String): String {
-    val p = ticketParts(task, answers) ?: return ""
-    return if (p.second.second) "\n----\n【人工回复】\n" + ReplyTemplates.humanScript(tplLocale(ctx), p.first, p.second.first, text)
-    else "\n----\n【自动回复】\n" + ReplyTemplates.autoReply(tplLocale(ctx), p.first, p.second.first, p.second.second)
+    val esc = isEscalated(task, answers) ?: return ""
+    val header = if (esc) when (task) {
+      "ugc", "risk" -> "【人工复核】"
+      "agent" -> "【人工跟进】"
+      "ticket", "multi" -> "【人工回复】"
+      else -> "【人工跟进】"
+    } else "【自动回复】"
+    val body = if (esc) scriptBody(ctx, task, answers, text) else replyBody(ctx, task, answers)
+    if (body == null) return ""
+    return "\n----\n$header\n" + body
   }
 
   // ---- 报表(日报 0 / 月报 1 / 年报 2 / 详单 3) ----
