@@ -9,9 +9,9 @@ import android.view.View;
 
 /**
  * 系统页示意图(零依赖 Canvas 自绘)。文字全部来自 strings 资源(随语言切换),颜色经 Ui 主题(随深浅色切换)。
- * mode 0 = 架构图(分层决策:云端微调 + LLM 升级通道);
+ * mode 0 = 架构图(云端微调 + 回复模板层,LLM 升级通道 v1.4.50 起预留默认关闭);
  * mode 1/2 = 数据流泳道(横带 = 参与方,一次决策请求自上而下;两 mode 同布局);
- * mode 3 = 业务流程图(决策分流 → 本端处理/交付 LLM → 日志 → 微调闭环)。
+ * mode 3 = 业务流程图(决策分流 → 本端处理/回复模板 → 日志 → 微调闭环)。
  */
 public class DiagramView extends View {
   private final int mode;
@@ -137,7 +137,7 @@ public class DiagramView extends View {
     c.drawText(label, lx, ly, t);
   }
 
-  /** 架构图:云端(微调 + LLM 升级)→ 渠道 → 接入 → 决策核心(分流)→ 推理 → 模型/日志 */
+  /** 架构图:云端(微调)→ 渠道 → 接入 → 决策核心(分流)→ 推理 → 模型/回复模板 */
   private void drawArch(Canvas c) {
     box(c, 10, 10, 162, 74, R.string.diag_arch_tune_t, R.string.diag_arch_tune, th(0xFFEAF1FF, 0xFF1C2534));
     box(c, 188, 10, 162, 74, R.string.diag_arch_llm_t, R.string.diag_arch_llm, th(0xFFFFF3E0, 0xFF3A2E1C));
@@ -199,7 +199,7 @@ public class DiagramView extends View {
   }
 
   /** 数据流泳道(fig5 同构):横带 = 参与方,自上而下画一次决策请求的端到端路径。
-   *  蓝箭头 = 主流程;绿 = 张量数据(hidden/logits);橙 = 决策后升级 LLM(39.1%)。 */
+   *  蓝箭头 = 主流程;绿 = 张量数据(hidden/logits);橙 = 决策后套回复模板(全业务)。 */
   private void drawSwim(Canvas c, boolean vertical) {
     String[] lanes = sl(R.string.diag_sw_lanes);
     int[] bandBg = {th(0xFFF3F6FB, 0xFF232A35), th(0xFFF0F7F2, 0xFF22332C), th(0xFFF7F4FC, 0xFF2B2738), th(0xFFFCF6EC, 0xFF38301F), th(0xFFFBF0F4, 0xFF38252D)};

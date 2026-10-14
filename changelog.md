@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-14 — v1.4.50:决策链去掉 LLM 流程 + 全业务网关采集
+
+- **决策链收尾**:DecisionCore.decide 默认 followLlm=false——决策后不再异步拉 LLM 升级,以本地模型输出 + 回复模板收尾;通道代码与网关页 LLM 设置保留,随时可复启
+- multi/phone 基础包恢复(ModelScope myjev 直拉,设备 7 业务全:multi/ticket/ugc/agent/risk/news/news2);risk/agent 同日恢复,NPU 234-239ms
+- 全业务网关自动采集:`service/collect-biz.mjs` 7 业务 × 样本经 MQTT cs 主题自动采集决策(21/21),--clear 清旧决策日志(app 侧 1061 条 + Termux 侧)
+- `service/compare-biz.mjs` 资讯 vs 客服决策对比(延迟/判定分布/模板结构)
+- 网关回执带模板:APK MQTT 回执与 /decide 响应加 reply 字段;Node 邮件回执 formatDecision 附 reply
+- 决策页 loadHistory 历史回显附回复模板(修"刷新丢模板")
+- 全业务回复模板:ugc/agent/risk 专属(自动回复+人工复核稿)+ news 等通用兜底;Node reply-templates.mjs 与 ReplyTemplates.kt 双端同构;JVM 1157 断言
+- 真机:分诊 80%(tickets.csv seed42)· 单条 NPU 218-245ms · ugc/agent/risk/news/multi 全引擎验证
+
 ## 2026-10-12 — v1.4.38:下载按钮收敛为 NPU/GPU(★ 标本机推荐变体)
 
 - 下载按钮组:NPU★ / GPU(移除 CPU 与 全量 项;变体包在 myjev 不存在则不显示)

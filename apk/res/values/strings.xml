@@ -215,17 +215,17 @@
     <string name="dl_fail">%1$s 下载失败: %2$s</string>
     <string name="diag_arch_tune_t">云端微调(5060 GPU)</string>
     <string name="diag_arch_tune">RLCD→evaluate→export\nint8 / LiteRT 下发</string>
-    <string name="diag_arch_llm_t">云端 LLM(决策后处理)</string>
-    <string formatted="false" name="diag_arch_llm">接手重要+紧急 39.1%\n进一步推理 · 生成回复\ntoken 支出 ↓~60%</string>
+    <string name="diag_arch_llm_t">回复模板层(全业务)</string>
+    <string formatted="false" name="diag_arch_llm">replyAppendix 统一出口\n自动回复正文 / 人工复核稿\nticket·ugc·agent·risk·news…</string>
     <string name="diag_a_push">模型下发</string>
-    <string name="diag_a_escalate">决策后升级</string>
+    <string name="diag_a_escalate">决策后套模板</string>
     <string name="diag_arch_channel_t">渠道层</string>
-    <string name="diag_arch_channel">决策UI · MQTT客户端 · 邮件指令</string>
+    <string name="diag_arch_channel">决策UI · 决策API(8790) · MQTT客户端 · 邮件指令</string>
     <string name="diag_a_intent">Intent / MQTT / SMTP-IMAP</string>
     <string name="diag_arch_gw_t">接入层 GatewayService(前台服务)</string>
-    <string name="diag_arch_gw">IMAP轮询→解析→SMTP回复 · 日报\n订阅 laya/req/+ → 发布 laya/resp</string>
+    <string name="diag_arch_gw">IMAP轮询→SMTP回复(带模板正文) · 日报\n订阅 laya/req/+ 与 laya/cs/req → 发布 resp</string>
     <string name="diag_arch_core_t">决策核心 DecisionCore(分流)</string>
-    <string name="diag_arch_core">单引擎 · 三问编排 · 决策日志 JSONL\n常规问题 → 决策后本端自动处理 60.9%\n重要+紧急 → 决策后交 LLM 进一步处理</string>
+    <string name="diag_arch_core">单引擎 · 三问编排 · 决策日志 JSONL\n全业务回复模板(自动回复/人工复核稿)\nLLM 升级通道已下线(v1.4.50 预留)</string>
     <string name="diag_arch_infer_t">推理层 引擎链自动降级(SoC 探测)</string>
     <string name="diag_arch_infer">NPU:MTK 天玑9500 SoC 探测 → dispatch runner(MDLA)\nNPU split:主图 54-59ms/问 + scorer 头 C 实现 &lt;1ms\nGPU 兜底:runner 独立进程 → JNI C API(OpenCL)~150ms\nCPU 兜底:ORT int8;引擎链 NPU→GPU→CPU 逐级</string>
     <string name="diag_arch_model_t">模型三件套</string>
@@ -234,22 +234,22 @@
     <string name="diag_arch_out">UI · SMTP · MQTT resp\nJSONL → 报表</string>
     <string name="diag_a_load">加载</string>
     <string name="diag_a_log">写日志</string>
-    <string formatted="false" name="diag_arch_foot">决策模型全量筛查;LLM 只算 39.1% → 总算力 ↓57%</string>
+    <string formatted="false" name="diag_arch_foot">决策即判别 · 回复模板全业务覆盖 · LLM 通道预留默认关闭</string>
     <string name="diag_flow_input_t">业务输入</string>
     <string name="diag_flow_input">工单/短信/UGC/风控</string>
     <string name="diag_flow_laya_t">Laya 决策(三问逐次前向)</string>
     <string name="diag_flow_laya">NPU ~0.08s/问 · GPU ~0.15s/问\n微调后 choice acc 67.4%</string>
     <string name="diag_flow_local_t">本端自动处理 60.9%</string>
     <string name="diag_flow_local">决策后:常规 → 模板回复\n智能路由 · 判别即拦截\n~0.2s · &lt;1J/单</string>
-    <string name="diag_flow_llm_t">LLM 进一步处理 39.1%</string>
-    <string name="diag_flow_llm">决策后:重要+紧急升级\n云端 API / 端侧大模型兜底\n复杂推理 · 生成回复\n~22 TFLOP · ~700J/单</string>
+    <string name="diag_flow_llm_t">回复模板层(全业务)</string>
+    <string name="diag_flow_llm">决策后:replyAppendix 统一出口\n自动回复正文 / 人工复核稿\n邮件/MQTT 回执带模板\n升级通道预留 · 默认关闭</string>
     <string name="diag_flow_result_t">处理结果 + 决策日志</string>
     <string name="diag_flow_result">数据回流:质量标注→训练语料</string>
     <string name="diag_flow_pipe_t">新业务上线流水线(finetune/ + litert-conv)</string>
     <string name="diag_flow_pipe">prepare→RLCD→evaluate→split_negfix\nGPU wfp16 / NPU dispatch+scorer 双格式</string>
     <string name="diag_flow_newbiz">新业务上线</string>
-    <string formatted="false" name="diag_flow_foot">算力账:全 LLM 22 TFLOP/单 → 分层 9.5,↓57%(升级率 39.1%)</string>
-    <string name="diag_sw_lanes">① 用户 / 业务系统\n② APK 端侧 · DecisionCore\n③ runner 独立进程\n④ 加速器(NPU · GPU · CPU)\n⑤ 云端 LLM(决策后处理)</string>
+    <string formatted="false" name="diag_flow_foot">决策即判别(&lt;1J/单) · 回复模板全业务覆盖 · 升级通道预留默认关闭</string>
+    <string name="diag_sw_lanes">① 用户 / 业务系统\n② APK 端侧 · DecisionCore\n③ runner 独立进程\n④ 加速器(NPU · GPU · CPU)\n⑤ 回复模板 / 渠道回执</string>
     <string name="diag_sw_input_t">业务输入</string>
     <string name="diag_sw_input">工单/短信/UGC/风控</string>
     <string name="diag_sw_tok_t">tokenize</string>
@@ -257,20 +257,20 @@
     <string name="diag_sw_chain_t">引擎链选择</string>
     <string name="diag_sw_chain">NPU→GPU→CPU 自动选</string>
     <string name="diag_sw_cal_t">温度校准·解码·分流</string>
-    <string formatted="false" name="diag_sw_cal">60.9% 本端自动处理\n39.1% 决策后升级 LLM</string>
+    <string formatted="false" name="diag_sw_cal">全业务回复模板覆盖\n(升级通道预留 · 默认关闭)</string>
     <string name="diag_sw_main_t">主图前向</string>
     <string name="diag_sw_main">dispatch 54-59ms/问</string>
     <string name="diag_sw_scorer_t">scorer 头</string>
     <string name="diag_sw_scorer">C 实现 &lt;1ms</string>
     <string name="diag_sw_acc_t">加速器</string>
     <string name="diag_sw_acc">MDLA / OpenCL / ORT int8</string>
-    <string name="diag_sw_llm_t">云端 LLM</string>
-    <string name="diag_sw_llm">重要+紧急 · 生成回复 · token ↓~60%</string>
+    <string name="diag_sw_llm_t">回复模板层</string>
+    <string name="diag_sw_llm">replyAppendix 统一出口 · 自动回复/人工复核稿</string>
     <string name="diag_a_dispatch">下发推理</string>
     <string name="diag_sw_hidden">hidden states</string>
     <string name="diag_sw_logits">logits</string>
-    <string name="diag_sw_escalate">39.1% 升级</string>
-    <string formatted="false" name="diag_sw_foot">NPU ~0.23s/3问 · 常规 60.9% 本端处理 · 重要+紧急 39.1% 升级 LLM</string>
+    <string name="diag_sw_escalate">决策后套模板</string>
+    <string formatted="false" name="diag_sw_foot">NPU ~0.23s/3问 · 回复模板全业务覆盖 · LLM 通道预留默认关闭</string>
     <string name="biz_news">财经资讯评分</string>
     <string name="biz_multi">多语言工单分流(基础)</string>
     <!-- DecisionCore:引擎/硬件 -->

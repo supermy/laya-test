@@ -51,7 +51,7 @@ APK 内:引擎链按 SoC 自动选 NPU → GPU → CPU 逐级兜底
 
 ![分层决策架构](figs/fig2_arch.png)
 
-**分层决策(算力经济性)**:决策模型全量筛查,常规问题决策后本端自动处理;重要+紧急(升级率取 tickets.csv 28587 单真实 high 占比 **39.1%**)在**决策完成后**交付 LLM 进一步处理(复杂推理 · 生成回复,不参与决策阶段)。每单算力:全 LLM ~22 TFLOP(8B,1400 tok)vs 分层 0.8 + 39.1%×22 ≈ 9.5 TFLOP,**总算力 ↓57%**(升级率压到 20% 可 ↓77%);端侧能耗 <1J vs ~700J/单,云端 token 费随升级率同比例 ↓~60%。
+**决策即判别 + 回复模板**:决策模型全量筛查,决策后经 `replyAppendix` 统一出口套**全业务回复模板**(自动回复正文 / 人工复核稿,ticket·multi·ugc·agent·risk 全覆盖,news 等走通用兜底),经邮件回执 / MQTT resp / 决策气泡直达消费方。云端 LLM 升级通道(重要+紧急 → 复杂推理)自 **v1.4.50 起预留默认关闭**(算力账:分层设计下升级率 39.1% 时总算力 ↓57%,通道保留随时可复启)。数据闭环:决策日志 JSONL → 报表/详单 → 质量标注 → 训练语料。
 
 ![业务流程图](figs/fig4_flow.png)
 
@@ -84,7 +84,7 @@ flowchart TD
     D1 --> E[部署 laya-litert-biz/phone/]
     D2 --> E
     E --> F[APK 引擎链<br/>NPU → GPU → CPU 逐级兜底]
-    F --> G[三问决策<br/>choice / score / noul<br/>低置信度 → 升级 LLM]
+    F --> G[三问决策<br/>choice / score / noul<br/>回复模板全业务覆盖]
 ```
 
 要点:微调只产出 torch ckpt(encoder+head+scorer 权重),是 GPU/NPU 两条线的共同源头;NPU 必须走 `split_negfix.py`(掩码常量焊死在成品图里改不了)+ PC 端 AOT 编译,产物为 dispatch 主图 + scorer bin;运行期由 APK 引擎链按 SoC 探测自动选择,业务代码无感知。
@@ -101,8 +101,15 @@ LAYA_MODEL=en laya serve  # 切英文 checkpoint
 LAYA_MODEL=sms laya serve # 垃圾短信判别,另有 POST /sms {"text":"..."}
 
 # 多业务服务(端口 8789,自动发现 /sdcard/models/laya-*-int8)
-node service/server.mjs   # GET /tasks,POST /task/:id,GET /report/daily
+node service/server.mjs   # GET /tasks,POST /task/:id(含 reply 模板),GET /report/daily
                           # GET /report/page — 详单页:业务×决策等级×日期,点击下钻明细
+                          # 邮件/MQTT 网关:MQTT 订阅 laya/req/+ 与 laya/cs/req(客服实时)→ 决策 → 发布 resp(带 reply)
+
+# 全业务网关自动采集决策测试(本地 broker + cs 主题,--clear 清旧日志)
+node service/collect-biz.mjs --clear
+
+# 资讯 vs 客服 决策对比(延迟/判定分布/模板结构)
+node service/compare-biz.mjs --n 12
 
 # 单次推理
 echo '{"state":{"subject":"...","body":"..."},"questions":{...}}' | laya infer
@@ -151,7 +158,7 @@ node sms-e2e-test.mjs           # SMS 判别管路测试(multi 模型+覆盖问�
 | `runner.c` / `runner` | C 常驻推理守护进程(ORT C API) |
 | `laya-native.mjs` | Node 客户端:tokenize → socket → 后处理,`LayaNative.loadWithDaemon()` / `smsInfer()` |
 | `cli.mjs` → `~/bin/laya` | CLI:`infer` / `serve` / `status` / `stop` |
-| `service/` | 多业务决策服务:自适配注册表 + 决策日志报表 + 邮件/MQTT 网关(端口 8789;`GET /report/page` 详单页:业务×决策等级×日期,可下钻) |
+| `service/` | 多业务决策服务:自适配注册表 + 决策日志报表 + 邮件/MQTT 网关(端口 8789;cs 实时主题 `laya/cs/req→resp`,回执带回复模板;`GET /report/page` 详单页)+ 采集/对比工具(`collect-biz.mjs` 全业务网关采集、`compare-biz.mjs` 资讯vs客服对比、`test-cs-mqtt.mjs` 客服链路测试、`reply-templates.mjs` 回复模板) |
 | `finetune/` | 微调管线:数据准备/RLCD 训练/评估/导出 + 任务定义 + parity 报告 |
 | `apk/` | Android APK(智能决策业务台):LiteRT NPU/GPU 内置推理(MTK SoC 自动选 NPU,引擎链 NPU→GPU→CPU)+ 动态业务 + 网关 + 微信风 UI;决策页业务 tab 英文单词整词旋转 90°、标题栏 ☰ 显隐左栏(与报表页一致,显隐跨重建保持);UI 中英双语(res/values + values-en,跟随系统语言);系统页四个子标签(系统/架构图/流程图/数据流,`DiagramView` 零依赖自绘);报表页含「下钻详单」:业务×决策等级×日期矩阵,点数字下钻明细;网关页含 LLM 设置×3(升级通道可选,OpenAI 兼容) |
 | `figs.py` / `figs/` | 公众号/README 配图生成脚本与产物(性能对比 / 分层架构 / 延迟台阶 / 业务流程 / 决策泳道图) |
@@ -189,10 +196,11 @@ node sms-e2e-test.mjs           # SMS 判别管路测试(multi 模型+覆盖问�
 应用网关启用后,APK 在 8790 端口提供本地/局域网 HTTP 决策接口(网关页可启停):
 
 ```
-GET  http://<手机IP>:8790/health        # 状态 / 业务清单 / 当前引擎
+GET  http://<手机IP>:8790/health        # 状态 / 业务清单(7 业务) / 当前引擎
 POST http://<手机IP>:8790/decide        # body: {"task":"ticket","text":"..."}
 # 响应: {"ok":true,"task":"ticket","level":"高","engine":"NPU(MTK MDLA,独立进程)",
-#        "latencyMs":251,"answers":{...},"result":"【客服工单分流】..."}
+#        "latencyMs":251,"answers":{...},"result":"【客服工单分流】...",
+#        "reply":"\n----\n【自动回复】\n您好,感谢来信。…"}   # 全业务回复模板(replyAppendix)
 ```
 
 可选鉴权:配置 `api.key` 后,请求需携带 header `X-Laya-Key: <key>` 或 `?key=<key>`。
