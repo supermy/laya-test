@@ -145,9 +145,9 @@
     <string name="cancel">取消</string>
     <string name="delete_btn">删除</string>
     <string name="sys_tail">\n网关状态见顶部状态栏</string>
-    <string name="flow_hint_data">数据流泳道:一次决策请求的端到端路径 — 业务输入 → 引擎链(NPU→GPU→CPU)→ 主图+scorer → 分流(60.9%% 本端 / 39.1%% 升级 LLM)</string>
-    <string name="flow_hint_arch">分层决策架构:云端微调闭环 + LLM 升级通道(与 README fig2 同构)</string>
-    <string name="flow_hint_proc">业务流程:决策完成 → 本端自动处理 / LLM 进一步处理(重要+紧急)→ 日志回流 → 微调闭环(与 README fig4 同构)</string>
+    <string name="flow_hint_data">数据流泳道:一次决策请求的端到端路径 — 业务输入 → 引擎链(NPU→GPU→CPU)→ 主图+scorer → 回复模板(全业务覆盖)</string>
+    <string name="flow_hint_arch">端侧决策架构:云端微调闭环 + 回复模板层(LLM 升级通道预留默认关闭;与 README fig2 同构)</string>
+    <string name="flow_hint_proc">业务流程:决策完成 → 本端自动处理 / 回复模板层(全业务)→ 日志回流 → 微调闭环(与 README fig4 同构)</string>
     <string name="sub_sys">模型</string>
     <string name="sub_arch">架构图</string>
     <string name="sub_flow">流程图</string>

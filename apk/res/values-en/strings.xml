@@ -145,9 +145,9 @@
     <string name="cancel">Cancel</string>
     <string name="delete_btn">Delete</string>
     <string name="sys_tail">\nGateway status in the top bar</string>
-    <string name="flow_hint_data">Data-flow lane: end-to-end path of one decision — input → engine chain (NPU→GPU→CPU) → main graph+scorer → split (60.9%% local / 39.1%% escalate to LLM)</string>
-    <string name="flow_hint_arch">Layered decision architecture: cloud fine-tune loop + LLM escalation (same as README fig2)</string>
-    <string name="flow_hint_proc">Business flow: decision → local auto handling / LLM further handling (important+urgent) → logs feed back → fine-tune loop (same as README fig4)</string>
+    <string name="flow_hint_data">Data-flow lane: end-to-end path of one decision — input → engine chain (NPU→GPU→CPU) → main graph+scorer → reply templates (all businesses)</string>
+    <string name="flow_hint_arch">On-device decision architecture: cloud fine-tune loop + reply template layer (LLM escalation reserved, off by default; same as README fig2)</string>
+    <string name="flow_hint_proc">Business flow: decision → local auto handling / reply template layer (all biz) → logs feed back → fine-tune loop (same as README fig4)</string>
     <string name="sub_sys">Models</string>
     <string name="sub_arch">Arch</string>
     <string name="sub_flow">Flow</string>
