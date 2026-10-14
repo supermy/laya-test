@@ -37,7 +37,7 @@ img.save("/sdcard/Pictures/fig1_perf.png")
 # ---------- 图2:架构(分层决策:小模型全量筛查 + LLM 升级通道 + 微调闭环) ----------
 img = Image.new("RGB", (W, 1120), BG)
 d = ImageDraw.Draw(img)
-d.text((60, 40), "端侧分层决策架构:决策模型全量筛查,LLM 只接重要紧急", font=F(38), fill=INK)
+d.text((60, 40), "端侧决策架构:决策即判别,回复模板收尾", font=F(38), fill=INK)
 
 def box(xy, title, lines, border, fill=SOFT):
     d.rounded_rectangle(xy, 14, fill=fill, outline=border, width=3)
