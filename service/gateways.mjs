@@ -4,6 +4,7 @@
 // 配置: service/config/email.json / service/config/mq.json
 // 邮件流程:轮询收件箱 → 主题或正文匹配 "laya <业务id> <文本>" → 决策 → SMTP 回复结果
 // MQ 流程:订阅 sub 主题 {"id","task","text"} → 决策 → 发布 pub {"id","task","answers","latencyMs"}
+// 客服实时接口:订阅 csSub(默认 laya/cs/req){"id","text"|"subject","body"} → 决策(默认 ticket 业务)→ 发布 csPub(默认 laya/cs/resp)
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -135,14 +136,29 @@ export async function startMqGateway() {
   mqClient = mqtt.connect(cfg.mqtt?.url, { username: cfg.mqtt?.username, password: cfg.mqtt?.password, clientId: cfg.mqtt?.clientId || "laya-svc-" + Date.now() });
   const sub = cfg.topics?.sub ?? "laya/req/+";
   const pub = cfg.topics?.pub ?? "laya/resp";
-  mqClient.on("connect", () => { log(`MQTT 已连接 ${cfg.mqtt?.url},订阅 ${sub}`); mqClient.subscribe(sub); });
+  // 客服实时数据接口:专用主题,文本可为 "text" 或 {subject,body},业务默认 ticket(客服工单分流)
+  const csSub = cfg.topics?.csSub ?? "laya/cs/req";
+  const csPub = cfg.topics?.csPub ?? "laya/cs/resp";
+  const csTask = cfg.topics?.csTask ?? "ticket";
+  const subs = [sub, csSub].filter((s, i, a) => a.indexOf(s) === i).join(",");
+  mqClient.on("connect", () => { log(`MQTT 已连接 ${cfg.mqtt?.url},订阅 ${subs}`); mqClient.subscribe(sub); mqClient.subscribe(csSub); });
+  const handle = async (msg, outTopic) => {
+    // 客服消息兼容 {"subject","body"} 结构:拼成 text
+    const text = String(msg.text ?? [msg.subject, msg.body].filter((x) => x != null && x !== "").join("\n"));
+    const task = String(msg.task ?? csTask);
+    const r = await decide(task, text);
+    mqClient.publish(outTopic, JSON.stringify({ id: msg.id, task, answers: r.answers, latencyMs: r.latencyMs }));
+    log(`MQ 决策完成 ${task} → ${outTopic}`);
+  };
   mqClient.on("message", async (topic, payload) => {
     try {
       const msg = JSON.parse(payload.toString("utf8"));
-      const r = await decide(msg.task, String(msg.text ?? ""));
       const outTopic = cfg.topics?.perTaskPub ? `${pub}/${msg.task}` : pub;
-      mqClient.publish(outTopic, JSON.stringify({ id: msg.id, task: msg.task, answers: r.answers, latencyMs: r.latencyMs }));
-      log(`MQ 决策完成 ${msg.task} → ${outTopic}`);
+      if (topic === csSub || topic.startsWith(csSub + "/")) {
+        await handle(msg, topic.startsWith(csPub) ? topic.replace(/^laya\/cs\/req/, csPub) : csPub);
+      } else {
+        await handle(msg, outTopic);
+      }
     } catch (e) { log("MQ 消息处理失败:", e.message); }
   });
   mqClient.on("error", (e) => log("MQTT 错误:", e.message));

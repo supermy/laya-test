@@ -519,7 +519,7 @@ const server = http.createServer(async (req, res) => {
       const mask = (o) => o && { ...o, imap: o.imap && { ...o.imap, pass: o.imap.pass ? "***" : "" }, smtp: o.smtp && { ...o.smtp, pass: o.smtp.pass ? "***" : "" } };
       return json(res, 200, {
         email: { configured: !!em, enabled: !!em?.enabled, host: em?.imap?.host, user: em?.imap?.user, reportTo: em?.report?.to, pollIntervalSec: em?.poll?.intervalSec },
-        mq: { configured: !!mq, enabled: !!mq?.enabled, url: mq?.mqtt?.url, sub: mq?.topics?.sub, pub: mq?.topics?.pub },
+        mq: { configured: !!mq, enabled: !!mq?.enabled, url: mq?.mqtt?.url, sub: mq?.topics?.sub, pub: mq?.topics?.pub, csSub: mq?.topics?.csSub ?? "laya/cs/req", csPub: mq?.topics?.csPub ?? "laya/cs/resp", csTask: mq?.topics?.csTask ?? "ticket" },
       });
     }
     if (req.method === "POST" && url.pathname === "/admin/email-config") {

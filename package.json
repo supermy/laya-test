@@ -10,6 +10,7 @@
   "type": "commonjs",
   "dependencies": {
     "@receptron/laya": "^0.1.2",
+    "aedes": "^1.2.0",
     "imapflow": "^2.2.1",
     "mqtt": "^5.16.0",
     "nodemailer": "^10.0.13",
