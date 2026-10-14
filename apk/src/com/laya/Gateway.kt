@@ -319,6 +319,7 @@ object Gateway {
                 val resp = JSONObject()
                 resp.put("task", task); resp.put("text", text)
                 resp.put("answers", r.answers); resp.put("latencyMs", r.latencyMs)
+                resp.put("reply", DecisionCore.replyAppendix(ctx, task, r.answers, text))
                 if (client.isConnected) client.publish(pub, MqttMessage(resp.toString().toByteArray()))
               }
             } catch (t: Throwable) { Log.w(TAG, "mqtt req: ${t.message}") }

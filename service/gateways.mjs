@@ -109,6 +109,7 @@ function formatDecision(task, text, r) {
     else if (a.type === "noul") L.push(`• 判定: ${a.noul >= 0.5 ? "是" : "否"}(${Number(a.noul).toFixed(2)})`);
   }
   L.push("", `耗时 ${r.latencyMs}ms`);
+  if (r.reply) L.push(r.reply); // 自动回复正文/人工话术(客服业务),与 APK 邮件回执口径一致
   return L.join("\n");
 }
 

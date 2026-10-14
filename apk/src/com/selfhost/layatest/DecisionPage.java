@@ -325,7 +325,10 @@ class DecisionPage {
       bubble(h.optString("state"), true);
       String when = df.format(new java.util.Date(h.optLong("ts")));
       org.json.JSONObject dec = h.optJSONObject("decoded");
-      TextView bv = bot(fmtAnswers(task, dec, (int) h.optLong("latencyMs")) + "\n· " + when);
+      // 历史回显与手动测试(sendDecision)同口径:附带回复模板(客服业务自动回复/人工话术)
+      TextView bv = bot(fmtAnswers(task, dec, (int) h.optLong("latencyMs"))
+          + com.laya.DecisionCore.replyAppendix(m, task, dec, h.optString("state"))
+          + "\n· " + when);
       if (dec != null && bv != null) {
         final org.json.JSONObject decF = dec;
         final String stateF = h.optString("state");

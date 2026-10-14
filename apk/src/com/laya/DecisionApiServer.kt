@@ -66,6 +66,7 @@ class DecisionApiServer private constructor(private val ctx: Context, port: Int)
               .put("engine", DecisionCore.currentEngine(ctx))
               .put("latencyMs", r.latencyMs)
               .put("answers", r.answers)
+              .put("reply", DecisionCore.replyAppendix(ctx, task, r.answers, text))
               .put("result", DecisionCore.fmt(ctx, task, r.answers)))
           }
         }
