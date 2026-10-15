@@ -283,7 +283,9 @@ class GatewayPage {
       sampleEt.setText(sb.toString());
       sampleEt.setTextSize(11);
       sampleEt.setMinLines(2);
-      sampleEt.setBackground(Ui.pill(Ui.c(m, 0xFFFFFFFF, 0xFF1E232B), Ui.dp(m,8)));
+      // 主题强制 Light,暗色下默认字色近黑;必须显式配色,否则编辑框黑底黑字"看不见"(同 Ui.field 口径)
+      sampleEt.setTextColor(Ui.c(m, 0xFF22262E, 0xFFE2E6EC)); sampleEt.setHintTextColor(Ui.c(m, 0xFF9AA3AD, 0xFF66707E));
+      sampleEt.setBackground(Ui.pill(Ui.c(m, 0xFFFFFFFF, 0xFF2A3040), Ui.dp(m,8)));
       sampleEt.setPadding(Ui.dp(m,8), Ui.dp(m,6), Ui.dp(m,8), Ui.dp(m,6));
       card.addView(sampleEt);
       sampleEts.put(task, sampleEt);
