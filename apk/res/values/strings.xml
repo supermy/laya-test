@@ -367,6 +367,8 @@
     <string name="collect_enable">启用</string>
     <string name="collect_disable">停用</string>
     <string name="collect_delete">删除配置</string>
+    <string name="collect_edit">编辑配置</string>
+    <string name="collect_collapse">收起</string>
     <string name="collect_samples_hint">采集样本(每行一条,轮询使用)</string>
     <string name="collect_test_btn">测试首条样本</string>
     <string name="collect_no_sample">请先填写样本(每行一条)</string>

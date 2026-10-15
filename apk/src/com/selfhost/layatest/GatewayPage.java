@@ -233,6 +233,33 @@ class GatewayPage {
       title.setTextSize(12); title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
       title.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
       head.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+      // 样本编辑框(默认收起,编辑按钮翻转显隐)
+      final EditText sampleEt = new EditText(m);
+      sampleEt.setHint(m.getString(R.string.collect_samples_hint));
+      sampleEt.setText(sb.toString());
+      sampleEt.setTextSize(11);
+      sampleEt.setMinLines(2);
+      // 主题强制 Light,暗色下默认字色近黑;必须显式配色,否则编辑框黑底黑字"看不见"(同 Ui.field 口径)
+      sampleEt.setTextColor(Ui.c(m, 0xFF22262E, 0xFFE2E6EC)); sampleEt.setHintTextColor(Ui.c(m, 0xFF9AA3AD, 0xFF66707E));
+      sampleEt.setBackground(Ui.pill(Ui.c(m, 0xFFFFFFFF, 0xFF2A3040), Ui.dp(m,8)));
+      sampleEt.setPadding(Ui.dp(m,8), Ui.dp(m,6), Ui.dp(m,8), Ui.dp(m,6));
+      sampleEt.setVisibility(View.GONE);
+
+      // 编辑配置按钮:展开/收起该卡样本编辑区(与删除配置对称)
+      Button edit = new Button(m);
+      edit.setText(m.getString(R.string.collect_edit)); edit.setAllCaps(false); edit.setTextSize(10);
+      edit.setMinHeight(0); edit.setMinimumHeight(0); edit.setMinimumWidth(0);
+      edit.setPadding(Ui.dp(m,8), Ui.dp(m,3), Ui.dp(m,8), Ui.dp(m,3));
+      edit.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+      edit.setBackground(Ui.pill(Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,10)));
+      edit.setOnClickListener(v -> {
+        boolean show = sampleEt.getVisibility() != View.VISIBLE;
+        sampleEt.setVisibility(show ? View.VISIBLE : View.GONE);
+        edit.setText(m.getString(show ? R.string.collect_collapse : R.string.collect_edit));
+      });
+      head.addView(edit);
+
       Button tog = new Button(m);
       tog.setAllCaps(false); tog.setTextSize(10);
       tog.setMinHeight(0); tog.setMinimumHeight(0); tog.setMinimumWidth(0);
@@ -278,15 +305,6 @@ class GatewayPage {
       head.addView(del);
       card.addView(head);
 
-      final EditText sampleEt = new EditText(m);
-      sampleEt.setHint(m.getString(R.string.collect_samples_hint));
-      sampleEt.setText(sb.toString());
-      sampleEt.setTextSize(11);
-      sampleEt.setMinLines(2);
-      // 主题强制 Light,暗色下默认字色近黑;必须显式配色,否则编辑框黑底黑字"看不见"(同 Ui.field 口径)
-      sampleEt.setTextColor(Ui.c(m, 0xFF22262E, 0xFFE2E6EC)); sampleEt.setHintTextColor(Ui.c(m, 0xFF9AA3AD, 0xFF66707E));
-      sampleEt.setBackground(Ui.pill(Ui.c(m, 0xFFFFFFFF, 0xFF2A3040), Ui.dp(m,8)));
-      sampleEt.setPadding(Ui.dp(m,8), Ui.dp(m,6), Ui.dp(m,8), Ui.dp(m,6));
       card.addView(sampleEt);
       sampleEts.put(task, sampleEt);
 
