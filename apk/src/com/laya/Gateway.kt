@@ -83,14 +83,15 @@ object Gateway {
   // ---- 全业务数据采集(网关自动采集:按模型包启停,样本轮询送决策,写决策日志) ----
   // 采集方式按业务的现有数据源决定:无实时源的业务(工单/UGC/Agent/风控/多语言)用本调度器轮询样本;
   // 有实时源的业务(资讯)由 NewsPage/NewsAutoService 直接拉流,采集开关走 cfg.news.<source>.enabled,不在此轮询。
+  // 配置自 2026-10-16 起存 SQLite(Db.collect_configs;原 prefs cfg.collect 已一次性迁入),intervalSec≥15。
   private val collectHandler = android.os.Handler(android.os.Looper.getMainLooper())
   @Volatile private var collectRunning = false
   @Volatile private var collectBusy = false
   private val collectIdx = HashMap<String, Int>()
 
-  /** cfg.collect = {"intervalSec":60, "<task>":{"enabled":true,"samples":["..."]}} */
-  private fun collectEnabledCount(c: JSONObject): Int {
-    val cc = c.optJSONObject("collect") ?: return 0
+  /** 启用的采集业务数(从 Db 读) */
+  private fun collectEnabledCount(ctx: Context): Int {
+    val cc = Db.collectAll(ctx)
     var n = 0
     for (k in cc.keys()) if (k != "intervalSec" && cc.optJSONObject(k)?.optBoolean("enabled") == true) n++
     return n
@@ -120,7 +121,7 @@ object Gateway {
 
   private fun scheduleNext(ctx: Context) {
     if (!collectRunning) return
-    val intervalSec = (cfg(ctx).optJSONObject("collect")?.optLong("intervalSec", 60) ?: 60).coerceAtLeast(15)
+    val intervalSec = Db.collectIntervalSec(ctx).let { if (it >= 15) it else 60 }
     collectHandler.postDelayed({
       // 上一轮线程未收尾则跳过本轮,避免 decide 慢于 interval 时线程堆积在串行锁上
       if (collectBusy) Log.i(TAG, "collect skip: previous round still running")
@@ -131,14 +132,13 @@ object Gateway {
 
   /** 一轮采集:每个启用业务取一条样本(轮询)→ decide(写决策日志,回复模板随决策产出) */
   @JvmStatic fun runCollectOnce(ctx: Context) {
-    val c = cfg(ctx)
-    if (collectEnabledCount(c) == 0) return
-    val cc = c.optJSONObject("collect") ?: return
+    val cc = Db.collectAll(ctx)
+    if (collectEnabledCount(ctx) == 0) return
     val app = ctx.applicationContext
     collectBusy = true
     Thread {
       try {
-        // 清理已删除业务的轮询游标(cfg 中不再存在的键)
+        // 清理已删除业务的轮询游标(采集配置中不再存在的键)
         collectIdx.keys.retainAll(cc.keys().asSequence().filter { it != "intervalSec" }.toHashSet())
         for (k in cc.keys()) {
           if (k == "intervalSec") continue
@@ -174,7 +174,7 @@ object Gateway {
     if (c.optJSONObject(Cfg.MQTT)?.optBoolean(Cfg.ENABLED) == true) parts.add(ctx.getString(com.selfhost.layatest.R.string.mqtt_connected, c.optJSONObject(Cfg.MQTT)?.optString(Cfg.URL)))
     if (UploadServer.running()) parts.add(ctx.getString(com.selfhost.layatest.R.string.upload_running, UploadServer.url()))
     if (DecisionApiServer.running()) parts.add(ctx.getString(com.selfhost.layatest.R.string.api_running, DecisionApiServer.url()))
-    val nCollect = collectEnabledCount(c)
+    val nCollect = collectEnabledCount(ctx)
     if (nCollect > 0) parts.add(ctx.getString(com.selfhost.layatest.R.string.collect_running, nCollect))
     return if (parts.isEmpty()) ctx.getString(com.selfhost.layatest.R.string.gw_enabled_no_ch) else parts.joinToString(";")
   }

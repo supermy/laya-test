@@ -3,7 +3,7 @@
 // 本地 aedes broker + MQTT 网关(cs 主题)in-process,7 业务样本逐条发布 laya/cs/req {"id","task","text"},
 // 收集 laya/cs/resp 决策,汇总每业务延迟/判定/模板结构。决策后端走 --api(默认 APK 8790 /decide)。
 // 用法: node service/collect-biz.mjs [--api http://127.0.0.1:8790] [--port 18830] [--per 3] [--clear]
-//   --clear  采集前清空 Termux 决策日志(service/logs/decisions-*.jsonl)
+//   --clear  采集前清空 Termux 决策日志(SQLite laya.db decisions 表)
 import { Aedes } from "aedes";
 import net from "node:net";
 import fs from "node:fs";
@@ -77,14 +77,13 @@ async function decide(task, text) {
   return { answers: j.answers, latencyMs: j.latencyMs, reply: j.reply };
 }
 
-// ---- 清旧数据(Termux 决策日志) ----
+// ---- 清旧数据(Termux 决策日志,SQLite) ----
 if (CLEAR) {
-  const dir = path.join(HERE, "logs");
-  let n = 0;
-  for (const f of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {
-    if (f.startsWith("decisions-")) { fs.rmSync(path.join(dir, f)); n++; }
-  }
-  log(`已清空 Termux 决策日志(${n} 个文件)`);
+  const { openDb } = await import("./db.mjs");
+  const db = openDb();
+  const n = Number(db.prepare("DELETE FROM decisions").run().changes);
+  db.close();
+  log(`已清空 Termux 决策日志(DB decisions ${n} 行)`);
 }
 
 // ---- 主流程(broker + 网关 + 发布/收集) ----

@@ -399,13 +399,7 @@ object DecisionCore {
   @JvmStatic
   fun appendLog(ctx: Context, task: String, text: String, decoded: JSONObject, ms: Long) {
     try {
-      val o = JSONObject()
-      o.put("ts", System.currentTimeMillis())
-      o.put("task", task)
-      o.put("state", if (text.length > 200) text.substring(0, 200) else text)
-      o.put("decoded", decoded)
-      o.put("latencyMs", ms)
-      java.io.FileOutputStream(logFile(ctx), true).use { it.write((o.toString() + "\n").toByteArray()) }
+      Db.insertDecision(ctx, task, text, decoded, ms) // SQLite 统一存储(旧 JSONL 已停写)
     } catch (_: Exception) {}
   }
 
@@ -416,20 +410,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
 
   /** 最近一条 LLM 升级结果(业务维度,type=llm 行;无则 null) */
   @JvmStatic
-  fun lastLlm(ctx: Context, task: String): JSONObject? {
-    var out: JSONObject? = null
-    try {
-      val f = logFile(ctx)
-      if (f.isFile) for (line in java.nio.file.Files.readAllBytes(f.toPath()).toString(Charsets.UTF_8).split("\n").asReversed()) {
-        if (line.isBlank()) continue
-        try {
-          val o = JSONObject(line)
-          if (o.optString("type") == "llm" && o.optString("task") == task) { out = o; break }
-        } catch (_: Exception) {}
-      }
-    } catch (_: Throwable) {}
-    return out
-  }
+  fun lastLlm(ctx: Context, task: String): JSONObject? = Db.lastLlm(ctx, task)
 
   /**
    * 决策后 LLM 升级通道:等级"高"(重要+紧急)且配置了 LLM 槽位时,
@@ -492,10 +473,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
           err = (t.message ?: t.toString()).take(200)
         }
         try {
-          val o = JSONObject().put("ts", System.currentTimeMillis()).put("type", "llm").put("task", task)
-            .put("latencyMs", System.currentTimeMillis() - t0)
-          if (err != null) o.put("error", err) else o.put("llm", out)
-          java.io.FileOutputStream(logFile(ctx), true).use { it.write((o.toString() + "\n").toByteArray()) }
+          Db.insertLlmRow(ctx, task, System.currentTimeMillis() - t0, if (err != null) null else out, err)
         } catch (_: Exception) {}
         try { llmListener?.onLlmDone(task, out.optString("content"), err) } catch (_: Throwable) {}
         if (err == null) notifyUser(ctx, "LLM 深度分析 · $task", out.optString("content"))
@@ -514,14 +492,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
   /** 详单分页:返回 {text, page(1基), pages} */
   @JvmStatic
   fun detail(ctx: Context, page: Int, pageSize: Int = 20): JSONObject {
-    val f = logFile(ctx)
-    val all = ArrayList<JSONObject>()
-    if (f.isFile) {
-      for (line in java.nio.file.Files.readAllBytes(f.toPath()).toString(Charsets.UTF_8).split("\n")) {
-        if (line.isBlank()) continue
-        try { all.add(JSONObject(line)) } catch (_: Exception) {}
-      }
-    }
+    val all = Db.queryAll(ctx) // SQLite(决策+llm 行,旧 JSONL 等价形状)
     val all2 = all.filter { it.optString("type") != "llm" }
     val pages = Math.max(1, Math.ceil(all2.size / pageSize.toDouble()).toInt())
     val p = page.coerceIn(0, pages - 1)
@@ -579,14 +550,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
   /** 报表表格数据:kind 0日报 1月报 2年报 → {total, rows:[{period,count,avgLatency,top,dist}]} */
   @JvmStatic
   fun reportTable(ctx: Context, kind: Int): JSONObject {
-    val f = logFile(ctx)
-    val all = ArrayList<JSONObject>()
-    if (f.isFile) {
-      for (line in java.nio.file.Files.readAllBytes(f.toPath()).toString(Charsets.UTF_8).split("\n")) {
-        if (line.isBlank()) continue
-        try { all.add(JSONObject(line)) } catch (_: Exception) {}
-      }
-    }
+    val all = Db.queryAll(ctx) // SQLite(决策+llm 行)
     val df = when (kind) { 2 -> SimpleDateFormat("yyyy", Locale.US); 1 -> SimpleDateFormat("yyyy-MM", Locale.US); else -> SimpleDateFormat("yyyy-MM-dd", Locale.US) }
     val buckets = LinkedHashMap<String, MutableList<JSONObject>>()
     for (e in all) {
@@ -757,14 +721,7 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
   // ---- 报表(日报 0 / 月报 1 / 年报 2 / 详单 3) ----
   @JvmStatic
   fun report(ctx: Context, kind: Int): String {
-    val f = logFile(ctx)
-    val all = ArrayList<JSONObject>()
-    if (f.isFile()) {
-      for (line in java.nio.file.Files.readAllBytes(f.toPath()).toString(Charsets.UTF_8).split("\n")) {
-        if (line.isBlank()) continue
-        try { all.add(JSONObject(line)) } catch (_: Exception) {}
-      }
-    }
+    val all = Db.queryAll(ctx) // SQLite(决策+llm 行)
     val names = arrayOf(ctx.getString(com.selfhost.layatest.R.string.kind_daily), ctx.getString(com.selfhost.layatest.R.string.kind_monthly), ctx.getString(com.selfhost.layatest.R.string.kind_yearly), ctx.getString(com.selfhost.layatest.R.string.kind_detail))
     val df = when (kind) { 2 -> SimpleDateFormat("yyyy", Locale.US); 1 -> SimpleDateFormat("yyyy-MM", Locale.US); else -> SimpleDateFormat("yyyy-MM-dd", Locale.US) }
     val buckets = LinkedHashMap<String, MutableList<JSONObject>>()
@@ -832,9 +789,10 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
       while (it2.hasNext()) {
         val a = dec.optJSONObject(it2.next()) ?: continue
         if (a.optString("type") == "noul") {
+          // 2026-10-16 统一为 Node 口径:noul>=0.5 为"命中"(需人工),等级高(旧 Kotlin 口径相反,与 drillList:需人工 不符)
           val p = a.optDouble("noul")
-          return JSONObject().put("level", if (p >= 0.5) "低" else "高")
-            .put("basis", String.format(Locale.US, "noul=%.2f", p) + if (p >= 0.5) "(无信号)" else "(命中)")
+          return JSONObject().put("level", if (p >= 0.5) "高" else "低")
+            .put("basis", String.format(Locale.US, "noul=%.2f", p) + if (p >= 0.5) "(命中)" else "(无信号)")
         }
       }
       val it3 = dec.keys()
@@ -849,26 +807,11 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
     return JSONObject().put("level", "未知").put("basis", "")
   }
 
-  private fun readLogEntries(ctx: Context): List<JSONObject> = readLogEntries(ctx, null)
+  /** task 非空时由 SQL 预过滤;行已含 decoded 键(旧 JSONL entry 等价形状) */
+  private fun readLogEntries(ctx: Context, task: String?): List<JSONObject> =
+    Db.queryDecisions(ctx, task)
 
-  /** task 非空时行级预过滤(字符串 contains 跳过非目标业务的 JSON 解析,~9× 提速;解析后精确兜底) */
-  private fun readLogEntries(ctx: Context, task: String?): List<JSONObject> {
-    val out = ArrayList<JSONObject>()
-    val f = logFile(ctx)
-    if (!f.isFile) return out
-    val needle = if (task != null) "\"task\":\"$task\"" else null
-    for (line in java.nio.file.Files.readAllBytes(f.toPath()).toString(Charsets.UTF_8).split("\n")) {
-      if (line.isBlank()) continue
-      if (needle != null && !line.contains(needle)) continue
-      try {
-        val o = JSONObject(line)
-        if (o.optString("type") == "llm") continue
-        if (task != null && o.optString("task") != task) continue
-        out.add(o)
-      } catch (_: Exception) {}
-    }
-    return out
-  }
+  private fun readLogEntries(ctx: Context): List<JSONObject> = readLogEntries(ctx, null)
 
   /** 聚合行:date × task × level → {count, avgLatency};rangeDays ≤0 表示全部 */
   @JvmStatic

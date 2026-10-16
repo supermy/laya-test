@@ -18,7 +18,9 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import * as gw from "./gateways.mjs";
-import { replyAppendix } from "./reply-templates.mjs";
+import { replyAppendix, setTemplateLookup, templateSpecs } from "./reply-templates.mjs";
+import { openDb, insertDecision, upsertTasks, queryDecisions, levelOfUnified as levelOf,
+         listTemplates, upsertTemplate, deleteTemplate, getCollect, setCollect, listInbound } from "./db.mjs";
 
 const HERE = os.homedir() + "/laya-test/service";
 const PORT = parseInt(process.env.PORT || "8789", 10);
@@ -67,7 +69,11 @@ function scanModels() {
   }
   return found;
 }
+// ---------- 统一存储(SQLite;JSONL 已停写,存量迁移用 migrate-jsonl.mjs) ----------
+const db = openDb();
+
 let TASKS = scanModels();
+upsertTasks(db, TASKS); // 注册表落库(内存 TASKS 仍为引擎路由权威)
 
 // ---------- 模型客户端(懒加载,常驻) ----------
 const clients = new Map(); // id -> LayaNative
@@ -106,28 +112,18 @@ function questionsOf(t) {
   );
 }
 
-// ---------- 决策日志(JSONL,按月分文件) ----------
-function logFile(d = new Date()) {
-  const ym = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0");
-  return path.join(LOG_DIR, `decisions-${ym}.jsonl`);
+// ---------- 决策日志(SQLite,见 db.mjs/schema.sql;存量迁移用 migrate-jsonl.mjs) ----------
+// 旧 readLogs 等价物:本地日期闭开区间 [s, e) 的决策行(Date 对象入参)
+const readEntries = (s, e, opts = {}) => queryDecisions(db, { fromDate: localDate(s.getTime()), toDate: localDate(e.getTime()), ...opts });
+
+// ---------- 模板覆盖(templates 表 → reply-templates 查找层) ----------
+const tplCache = new Map(); // "task|locale|kind|key" -> body
+function loadTplCache() {
+  tplCache.clear();
+  for (const r of db.prepare("SELECT task,locale,kind,key,body FROM templates").all()) tplCache.set(`${r.task}|${r.locale}|${r.kind}|${r.key}`, r.body);
 }
-function appendLog(entry) {
-  fs.appendFileSync(logFile(), JSON.stringify(entry) + "\n");
-}
-function readLogs(rangeFilter) {
-  const out = [];
-  const files = fs.readdirSync(LOG_DIR).filter((f) => f.startsWith("decisions-")).sort();
-  for (const f of files) {
-    for (const line of fs.readFileSync(path.join(LOG_DIR, f), "utf8").split("\n")) {
-      if (!line.trim()) continue;
-      try {
-        const e = JSON.parse(line);
-        if (!rangeFilter || rangeFilter(new Date(e.ts))) out.push(e);
-      } catch {}
-    }
-  }
-  return out;
-}
+loadTplCache();
+setTemplateLookup((task, locale, kind, key) => tplCache.get(`${task}|${locale}|${kind}|${key}`) ?? null);
 
 // ---------- 报表聚合 ----------
 function pct(n, total) { return total ? ((n / total) * 100).toFixed(1) + "%" : "0%"; }
@@ -198,7 +194,7 @@ function rangeFor(period, dateStr) {
 
 function reportFor(period, dateStr) {
   const [s, e] = rangeFor(period, dateStr);
-  const entries = readLogs((d) => d >= s && d < e);
+  const entries = readEntries(s, e);
   const titles = { daily: "日报", monthly: "月报", yearly: "年报" };
   const ds = s.toISOString().slice(0, 10);
   return aggMarkdown(`${ds} ${titles[period]}`, entries);
@@ -206,31 +202,11 @@ function reportFor(period, dateStr) {
 
 function detailFor(period, dateStr) {
   const [s, e] = rangeFor(period, dateStr);
-  return detailCsv(readLogs((d) => d >= s && d < e));
+  return detailCsv(readEntries(s, e));
 }
 
 // ---------- 决策后任务等级 + 下钻详单 ----------
-// 等级取法:有 score 问(urgency/风险信号)→ 归一化分映射 高/中/低;
-// 无 score 有 noul → 命中=高/无信号=低;纯 choice → 判定标签本身。
-function levelOf(e) {
-  const ans = e.answers || {};
-  for (const a of Object.values(ans)) {
-    if (a.type !== "score") continue;
-    const max = a.legend ? Object.keys(a.legend).length - 1 : 4;
-    const n = max > 0 ? (a.score ?? 0) / max : 0;
-    const lab = a.legend?.[String(Math.round(a.score ?? 0))];
-    const lv = n >= 0.66 ? "高" : n >= 0.33 ? "中" : "低";
-    return { level: lv, basis: `score=${(a.score ?? 0).toFixed(2)}${lab ? `(${lab})` : ""}` };
-  }
-  for (const a of Object.values(ans)) {
-    // noul 口径与下钻/网关/聚合一致:noul>=0.5 为"命中"(需人工),等级高
-    if (a.type === "noul") return { level: a.noul >= 0.5 ? "高" : "低", basis: `noul=${(a.noul ?? 0).toFixed(2)}${a.noul >= 0.5 ? "(命中)" : "(无信号)"}` };
-  }
-  for (const a of Object.values(ans)) {
-    if (a.type === "choice") return { level: String(a.choice), basis: `choice=${a.choice}(conf=${(a.confidence ?? 0).toFixed(2)})` };
-  }
-  return { level: "未知", basis: "" };
-}
+// 等级口径 levelOf 统一实现见 db.mjs(levelOfUnified):score 归一化 / noul>=0.5 命中=高 / choice 标签。
 
 const localDate = (ts) => {
   const d = new Date(ts);
@@ -246,9 +222,9 @@ function queryRows(from, to, task, level) {
   const e = new Date(to + "T00:00:00"); e.setDate(e.getDate() + 1);
   const agg = new Map(); // date|task|level -> {count,latSum}
   let total = 0;
-  for (const raw of readLogs((d) => d >= s && d < e)) {
+  for (const raw of readEntries(s, e)) {
     if (task && raw.task !== task) continue;
-    const { level: lv } = levelOf(raw);
+    const { level: lv } = levelOf(raw.answers);
     if (level && lv !== level) continue;
     const k = `${localDate(raw.ts)}|${raw.task}|${lv}`;
     if (!agg.has(k)) agg.set(k, { count: 0, latSum: 0 });
@@ -272,9 +248,9 @@ function drillEntries(date, task, level, limit = 200) {
     e = new Date(); e.setHours(24, 0, 0, 0);
   }
   const out = [];
-  for (const raw of readLogs((d) => d >= s && d < e).reverse()) {
+  for (const raw of readEntries(s, e, { orderDesc: true })) {
     if (task && raw.task !== task) continue;
-    const { level: lv, basis } = levelOf(raw);
+    const { level: lv, basis } = levelOf(raw.answers);
     if (level && lv !== level) continue;
     const parts = [];
     for (const a of Object.values(raw.answers || {})) {
@@ -288,8 +264,59 @@ function drillEntries(date, task, level, limit = 200) {
   return { date: date || null, task: task || null, level: level || null, count: out.length, entries: out };
 }
 
-const REPORT_PAGE = `<!doctype html>
-<html lang="zh"><head><meta charset="utf-8">
+// ---- 样本/评测数据导入(eval_samples) ----
+function parseCsvLine(line) {
+  const out = []; let cur = "", inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQ) {
+      if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
+      else cur += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ",") { out.push(cur); cur = ""; }
+      else cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+/** body: {file:"tickets.csv"}(service 目录下,仅文件名) 或 {samples:[{text,expectTask?,expectLabel?,meta?}]} */
+function importEvalSamples(b) {
+  let rows;
+  if (Array.isArray(b.samples)) {
+    rows = b.samples.map((s, i) => ({ extId: String(s.extId ?? i), text: String(s.text ?? ""), expectTask: s.expectTask ?? "", expectLabel: s.expectLabel ?? "", meta: s.meta ?? {} }));
+  } else if (b.file) {
+    const name = path.basename(String(b.file));
+    if (name !== b.file) throw new Error("file 只接受文件名");
+    // 允许 service/ 与仓库根两处
+    const cand = [path.join(HERE, name), path.join(HERE, "..", name)].find((p) => fs.existsSync(p));
+    if (!cand) throw new Error(`文件不存在: ${name}(service/ 或仓库根)`);
+    const lines = fs.readFileSync(cand, "utf8").split("\n").filter((l) => l.trim());
+    const header = parseCsvLine(lines[0]).map((h) => h.trim());
+    rows = lines.slice(1).map((line, i) => {
+      const c = parseCsvLine(line);
+      const col = (k) => header.includes(k) ? (c[header.indexOf(k)] ?? "") : "";
+      const meta = {};
+      header.forEach((h, j) => { if (!["subject", "body", "answer", "type", "queue"].includes(h)) meta[h] = c[j] ?? ""; });
+      const text = [col("subject"), col("body")].filter(Boolean).join("\n");
+      return { extId: String(i + 1), text, expectTask: col("queue") || col("type"), expectLabel: col("answer"), meta };
+    });
+  } else throw new Error("需要 file 或 samples");
+  const ins = db.prepare(
+    `INSERT OR IGNORE INTO eval_samples(source,ext_id,text,expect_task,expect_label,meta,created_at) VALUES(?,?,?,?,?,?,?)`
+  );
+  let imported = 0;
+  const src = b.source || "tickets";
+  for (const r of rows) {
+    if (!r.text) continue;
+    imported += ins.run(src, r.extId, r.text, r.expectTask || "", r.expectLabel || "", JSON.stringify(r.meta ?? {}), Date.now()).changes;
+  }
+  return { source: src, total: rows.length, imported, skipped: rows.length - imported };
+}
+
+const REPORT_PAGE = `<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>决策详单 · 分业务分等级</title>
 <style>
@@ -466,8 +493,8 @@ const server = http.createServer(async (req, res) => {
       const t0 = performance.now();
       const r = await client.systemOne({ [t.stateKey]: text }, questionsOf(t));
       const latencyMs = Math.round(performance.now() - t0);
-      const entry = { ts: Date.now(), task: id, state: text.slice(0, 200), answers: r.answers, latencyMs };
-      appendLog(entry);
+      const entry = { ts: Date.now(), task: id, state: text.slice(0, 200), answers: r.answers, latencyMs, via: "api" };
+      insertDecision(db, entry);
       return json(res, 200, { task: id, answers: r.answers, usage: r.usage, latencyMs, reply: replyAppendix(id, r.answers, text) });
     }
     if (req.method === "GET" && url.pathname.startsWith("/report/")) {
@@ -511,7 +538,41 @@ const server = http.createServer(async (req, res) => {
       }
       for (const id of [...loadPromises.keys()]) if (!next[id]) loadPromises.delete(id);
       TASKS = next;
+      upsertTasks(db, TASKS);
       return json(res, 200, { reloaded: true, tasks: Object.keys(TASKS), evicted });
+    }
+    // ---- 数据管理(模板/采集配置/入站留痕/样本导入) ----
+    if (url.pathname === "/templates") {
+      if (req.method === "GET") {
+        if (url.searchParams.get("specs")) return json(res, 200, { specs: templateSpecs() });
+        return json(res, 200, { templates: listTemplates(db, { task: url.searchParams.get("task") || undefined, locale: url.searchParams.get("locale") || undefined }) });
+      }
+      if (req.method === "PUT") {
+        const b = JSON.parse((await readBody(req)) || "{}");
+        upsertTemplate(db, b);
+        loadTplCache();
+        return json(res, 200, { saved: true });
+      }
+      if (req.method === "DELETE") {
+        const n = deleteTemplate(db, parseInt(url.searchParams.get("id"), 10));
+        loadTplCache();
+        return json(res, 200, { deleted: n });
+      }
+    }
+    if (req.method === "GET" && url.pathname === "/collect") return json(res, 200, getCollect(db));
+    if (req.method === "PUT" && url.pathname === "/collect") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      if (b.intervalSec != null && b.intervalSec < 15) return json(res, 400, { error: "intervalSec ≥ 15" });
+      setCollect(db, b);
+      return json(res, 200, { saved: true, ...getCollect(db) });
+    }
+    if (req.method === "GET" && url.pathname === "/inbound") {
+      const p = url.searchParams;
+      return json(res, 200, { inbound: listInbound(db, { from: p.get("from"), to: p.get("to"), channel: p.get("channel"), status: p.get("status"), limit: parseInt(p.get("limit") || "100", 10) }) });
+    }
+    if (req.method === "POST" && url.pathname === "/eval/import") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      return json(res, 200, importEvalSamples(b));
     }
     // ---- 网关管理(APK 网关页) ----
     if (req.method === "GET" && url.pathname === "/admin/gateways") {
@@ -561,8 +622,8 @@ server.listen(PORT, "127.0.0.1", () => {
     const t0 = performance.now();
     const r = await client.systemOne({ [t.stateKey]: text }, questionsOf(t));
     const latencyMs = Math.round(performance.now() - t0);
-    appendLog({ ts: Date.now(), task, state: text.slice(0, 200), answers: r.answers, latencyMs, via: "gateway" });
-    return { answers: r.answers, latencyMs, reply: replyAppendix(task, r.answers, text) };
+    const decisionId = Number(insertDecision(db, { ts: Date.now(), task, state: text.slice(0, 200), answers: r.answers, latencyMs, via: "gateway" }));
+    return { answers: r.answers, latencyMs, reply: replyAppendix(task, r.answers, text), decisionId };
   });
   gw.startEmailGateway().catch((e) => console.log("[laya-svc] 邮件网关启动失败:", e.message));
   gw.startMqGateway().catch((e) => console.log("[laya-svc] MQTT 网关启动失败:", e.message));

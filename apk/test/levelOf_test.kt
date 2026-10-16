@@ -36,10 +36,10 @@ fun main() {
   chk("score 1.32 → n=0.33 边界 → 中", L(entry("q1" to scoreQ(1.32))) == "中")
   chk("score 1.31 → n=0.3275 → 低", L(entry("q1" to scoreQ(1.31))) == "低")
 
-  // noul 翻转:≥0.5 无信号=低,<0.5 命中=高(v1.3.0 前曾与 drillEntries 口径相反)
-  chk("noul 0.90 无信号 → 低", L(entry("q2" to noulQ(0.9))) == "低")
-  chk("noul 0.50 边界 → 低", L(entry("q2" to noulQ(0.5))) == "低")
-  chk("noul 0.20 命中 → 高", L(entry("q2" to noulQ(0.2))) == "高")
+  // noul 翻转(2026-10-16 统一为 Node 口径):≥0.5 命中=高,<0.5 无信号=低(旧 Kotlin 口径与 Node 相反,已修正)
+  chk("noul 0.90 命中 → 高", L(entry("q2" to noulQ(0.9))) == "高")
+  chk("noul 0.50 边界 → 高", L(entry("q2" to noulQ(0.5))) == "高")
+  chk("noul 0.20 无信号 → 低", L(entry("q2" to noulQ(0.2))) == "低")
 
   // choice 直通:level = 选项值
   chk("choice 直通(账单计费)", L(entry("q0" to choiceQ("账单计费"))) == "账单计费")

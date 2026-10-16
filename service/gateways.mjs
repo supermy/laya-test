@@ -5,9 +5,11 @@
 // 邮件流程:轮询收件箱 → 主题或正文匹配 "laya <业务id> <文本>" → 决策 → SMTP 回复结果
 // MQ 流程:订阅 sub 主题 {"id","task","text"} → 决策 → 发布 pub {"id","task","answers","latencyMs"}
 // 客服实时接口:订阅 csSub(默认 laya/cs/req){"id","text"|"subject","body"} → 决策(默认 ticket 业务)→ 发布 csPub(默认 laya/cs/resp)
+// 入站留痕:邮件/MQTT 命中指令的消息写 inbound 表(pending→done/failed),决策 id 回填;凭据配置仍存 config/*.json 文件
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { openDb, insertInbound, linkInbound } from "./db.mjs";
 
 const HERE = os.homedir() + "/laya-test/service";
 const CFG_DIR = path.join(HERE, "config");
@@ -37,6 +39,10 @@ let decide = null;
 export function setDecideFn(fn) { decide = fn; }
 
 const log = (...a) => console.log("[gateway]", ...a);
+
+// 独立 SQLite 连接(WAL 支持多连接;server 同进程持有另一连接)
+let _db = null;
+const db = () => (_db ??= openDb());
 
 // ---------------- 邮件网关 ----------------
 let emailTimer = null;
@@ -69,12 +75,16 @@ async function emailPollOnce(cfg) {
       const body = msg.source.toString("utf8");
       const cmd = parseCommand(subject) || parseCommand(body);
       if (!cmd) { await client.messageFlagsAdd(msg.uid, ["\\Seen"], { uid: true }); continue; }
-      let replyText;
+      let replyText, decisionId = null;
+      const inboundId = insertInbound(db(), { channel: "email", sender: msg.envelope?.from?.[0]?.address ?? "", subject, text: cmd.text.slice(0, 2000), task: cmd.task });
       try {
         const r = await decide(cmd.task, cmd.text);
         replyText = formatDecision(cmd.task, cmd.text, r);
+        decisionId = r.decisionId ?? null;
+        linkInbound(db(), inboundId, { decisionId, status: "done" });
       } catch (e) {
         replyText = `决策失败: ${e.message}`;
+        linkInbound(db(), inboundId, { status: "failed", error: String(e.message || e) });
       }
       await sendMail(cfg.smtp, msg.envelope?.from?.[0]?.address, `Re: ${subject} | Laya 决策结果`, replyText);
       await client.messageFlagsAdd(msg.uid, ["\\Seen"], { uid: true });
@@ -143,22 +153,32 @@ export async function startMqGateway() {
   const csTask = cfg.topics?.csTask ?? "ticket";
   const subs = [sub, csSub].filter((s, i, a) => a.indexOf(s) === i).join(",");
   mqClient.on("connect", () => { log(`MQTT 已连接 ${cfg.mqtt?.url},订阅 ${subs}`); mqClient.subscribe(sub); mqClient.subscribe(csSub); });
-  const handle = async (msg, outTopic) => {
+  const handle = async (msg, outTopic, channelMeta = {}) => {
     // 客服消息兼容 {"subject","body"} 结构:拼成 text
     const text = String(msg.text ?? [msg.subject, msg.body].filter((x) => x != null && x !== "").join("\n"));
     const task = String(msg.task ?? csTask);
-    const r = await decide(task, text);
-    mqClient.publish(outTopic, JSON.stringify({ id: msg.id, task, answers: r.answers, latencyMs: r.latencyMs, ...(r.reply != null ? { reply: r.reply } : {}) }));
-    log(`MQ 决策完成 ${task} → ${outTopic}`);
+    const inboundId = insertInbound(db(), {
+      channel: "mqtt", sender: channelMeta.sender ?? "", subject: msg.subject ?? "",
+      topic: channelMeta.topic ?? "", text: text.slice(0, 2000), task,
+    });
+    try {
+      const r = await decide(task, text);
+      mqClient.publish(outTopic, JSON.stringify({ id: msg.id, task, answers: r.answers, latencyMs: r.latencyMs, ...(r.reply != null ? { reply: r.reply } : {}) }));
+      linkInbound(db(), inboundId, { decisionId: r.decisionId ?? null, status: "done" });
+      log(`MQ 决策完成 ${task} → ${outTopic}`);
+    } catch (e) {
+      linkInbound(db(), inboundId, { status: "failed", error: String(e.message || e) });
+      throw e;
+    }
   };
   mqClient.on("message", async (topic, payload) => {
     try {
       const msg = JSON.parse(payload.toString("utf8"));
       const outTopic = cfg.topics?.perTaskPub ? `${pub}/${msg.task}` : pub;
       if (topic === csSub || topic.startsWith(csSub + "/")) {
-        await handle(msg, topic.startsWith(csPub) ? topic.replace(/^laya\/cs\/req/, csPub) : csPub);
+        await handle(msg, topic.startsWith(csPub) ? topic.replace(/^laya\/cs\/req/, csPub) : csPub, { topic, sender: msg.clientId ?? "" });
       } else {
-        await handle(msg, outTopic);
+        await handle(msg, outTopic, { topic, sender: msg.clientId ?? "" });
       }
     } catch (e) { log("MQ 消息处理失败:", e.message); }
   });

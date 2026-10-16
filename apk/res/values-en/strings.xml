@@ -376,6 +376,15 @@
     <string name="collect_save">Save collection config</string>
     <string name="collect_done">Collection config saved and applied</string>
     <string name="collect_need_gateway">Collection config saved; gateway is off, collection not started</string>
+<string name="gw_tpl">Templates</string>
+    <string name="tpl_hint">Reply template overrides: DB override first, builtin default as fallback. Pick task &amp; locale, choose segment kind (key hint in brackets), fill key &amp; body, save; delete row = restore default.</string>
+    <string name="tpl_key">Key (e.g. dept/urgency; empty if none)</string>
+    <string name="tpl_body">Override body (supports {placeholders} like {dept}, {severity})</string>
+    <string name="tpl_save">Save override</string>
+    <string name="tpl_restore">Delete</string>
+    <string name="tpl_none">No overrides (builtin defaults in use)</string>
+    <string name="tpl_saved">Template override saved, effective immediately</string>
+    <string name="tpl_generic">Generic fallback (stored per task)</string>
     <string name="collect_running">Data collection: %1$d businesses</string>
     <string name="news_scoring">Scoring…</string>
     <string name="news_prompt">Triage this financial headline for trading drive. Output JSON only: {\"drive\":0-1,\"conf\":0-1 direction confidence,\"urg\":0-1 urgency,\"senti\":0-1 sentiment (0 bearish-1 bullish),\"reason\":\"reason ≤20 chars\"}\nHeadline:</string>

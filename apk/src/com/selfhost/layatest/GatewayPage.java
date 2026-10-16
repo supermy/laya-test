@@ -8,6 +8,8 @@ import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
 import android.view.View;
 import android.graphics.Color;
 import android.view.Gravity;
@@ -15,10 +17,11 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import com.laya.Cfg;
 import org.json.JSONObject;
 
-/** ③ 网关页(从 MainActivity 拆出):资讯/邮件/MQTT/采集 四面板 + 决策 API 开关 + 底栏(LLM 面板已删除,v1.4.50 决策链下线升级通道) */
+/** ③ 网关页(从 MainActivity 拆出):资讯/邮件/MQTT/采集/模板 五面板 + 决策 API 开关 + 底栏(LLM 面板已删除,v1.4.50 决策链下线升级通道) */
 class GatewayPage {
   private final MainActivity m;
   private TextView gwStatus;
@@ -26,6 +29,20 @@ class GatewayPage {
   private EditText gwImapPort, gwSmtpPort; private CheckBox gwSsl;
   private EditText gwMqUrl, gwMqSub, gwMqPub;
   private EditText gwNewsSina, gwNewsWsc, gwNewsInterval;
+
+  /** 回复模板段落 kind 清单(显示带键提示;保存时截 '(' 前);与 service/reply-templates.mjs templateSpecs 对应 */
+  private static final String[] TPL_KINDS = {
+    "auto_header()", "auto_open(部门)", "auto_tone(1-5)", "auto_escalate()", "auto_footer()",
+    "script_header()", "human_open(部门)", "human_confirm()", "human_escalate_note()",
+    "ugc_header()", "ugc_open(正常/广告/其他)", "ugc_escalate()", "ugc_sev(high/low)", "ugc_footer()",
+    "ugc_script_header()", "ugc_script_tips()",
+    "agent_header()", "agent_escalate()", "agent_route(工作流)", "agent_complex()", "agent_footer()",
+    "agent_script_header()", "agent_script_tips()",
+    "risk_header()", "risk_strength()", "risk_action(strong/mid/normal)", "risk_footer()",
+    "risk_script_header()", "risk_script_tips()",
+    "generic_header()", "generic_none()", "generic_conclusion()", "generic_escalate()", "generic_auto()",
+    "generic_footer()", "generic_script_header()", "generic_script_tips()"
+  };
 
   GatewayPage(MainActivity m) { this.m = m; }
 
@@ -43,9 +60,9 @@ class GatewayPage {
     return arr;
   }
 
-  /** 采集间隔落盘(≥15s;非法则保留原值) */
-  private static void putInterval(JSONObject all, EditText et) {
-    try { all.put("intervalSec", Math.max(15, Integer.parseInt(et.getText().toString().trim()))); }
+  /** 采集间隔落盘(SQLite meta;≥15s;非法则保留原值) */
+  private static void putCollectInterval(EditText et) {
+    try { com.laya.Db.collectSetInterval(null, Long.parseLong(et.getText().toString().trim())); }
     catch (Exception ignore) {}
   }
 
@@ -196,7 +213,7 @@ class GatewayPage {
     pCollect.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
     l = pCollect;
     l.addView(Ui.hint(m,m.getString(R.string.collect_hint)));
-    org.json.JSONObject collectCfg = com.laya.Gateway.cfg(m).optJSONObject("collect");
+    org.json.JSONObject collectCfg = com.laya.Db.collectAll(m); // SQLite(原 prefs cfg.collect 已迁入)
     EditText gwCollectInterval = Ui.fieldU(m,l, m.getString(R.string.collect_interval_hint),
         String.valueOf(collectCfg != null ? collectCfg.optLong("intervalSec", 60) : 60));
     java.util.List<kotlin.Pair<String, String>> tasks = com.laya.DecisionCore.scanTasks(m);
@@ -268,17 +285,11 @@ class GatewayPage {
       setCollectToggle(tog, on);
       tog.setOnClickListener(v -> {
         try {
-          JSONObject c2 = com.laya.Gateway.cfg(m.getApplicationContext());
-          JSONObject all = c2.optJSONObject("collect"); if (all == null) all = new JSONObject();
-          JSONObject cc2 = all.optJSONObject(task); if (cc2 == null) cc2 = new JSONObject();
-          boolean nowOn = !cc2.optBoolean("enabled", false);
-          cc2.put("enabled", nowOn);
+          org.json.JSONObject cur = com.laya.Db.collectAll(m.getApplicationContext()).optJSONObject(task);
+          boolean nowOn = !(cur != null && cur.optBoolean("enabled", false));
           // 样本、间隔一并落盘:未点保存就切开关也不丢编辑
-          cc2.put("samples", samplesOf(sampleEts.get(task)));
-          all.put(task, cc2);
-          putInterval(all, gwCollectInterval);
-          c2.put("collect", all);
-          com.laya.Gateway.saveCfg(m.getApplicationContext(), c2);
+          com.laya.Db.collectSetTask(m.getApplicationContext(), task, nowOn, samplesOf(sampleEts.get(task)));
+          try { com.laya.Db.collectSetInterval(m.getApplicationContext(), Long.parseLong(gwCollectInterval.getText().toString().trim())); } catch (Exception ignore) {}
           setCollectToggle(tog, nowOn); // 局部刷新:原地翻转按钮态,不重建面板
           gwStatus.setText(m.getString(R.string.gateway_bar, com.laya.Gateway.status(m)));
         } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
@@ -291,10 +302,7 @@ class GatewayPage {
       del.setTextColor(Color.WHITE); del.setBackground(Ui.pill(0xFFD64545, Ui.dp(m,10)));
       del.setOnClickListener(v -> {
         try {
-          JSONObject c2 = com.laya.Gateway.cfg(m.getApplicationContext());
-          JSONObject all = c2.optJSONObject("collect");
-          if (all != null) { all.remove(task); putInterval(all, gwCollectInterval); c2.put("collect", all); }
-          com.laya.Gateway.saveCfg(m.getApplicationContext(), c2);
+          com.laya.Db.collectRemove(m.getApplicationContext(), task);
           // 局部刷新:卡片复位为未配置态(启用按钮 + 预填默认样本),不重建面板
           setCollectToggle(tog, false);
           String def = DEF_SAMPLE.get(task);
@@ -339,21 +347,132 @@ class GatewayPage {
     Button collectSave = Ui.button(m,l, m.getString(R.string.collect_save));
     collectSave.setOnClickListener(v -> {
       try {
-        JSONObject cfg = com.laya.Gateway.cfg(m.getApplicationContext());
-        JSONObject all = cfg.optJSONObject("collect"); if (all == null) all = new JSONObject();
+        org.json.JSONObject cur = com.laya.Db.collectAll(m.getApplicationContext());
         for (kotlin.Pair<String, String> t : tasks) {
-          JSONObject cc = all.optJSONObject(t.getFirst()); if (cc == null) cc = new JSONObject();
-          cc.put("samples", samplesOf(sampleEts.get(t.getFirst())));
-          all.put(t.getFirst(), cc);
+          org.json.JSONObject cc = cur.optJSONObject(t.getFirst());
+          com.laya.Db.collectSetTask(m.getApplicationContext(), t.getFirst(), cc != null && cc.optBoolean("enabled", false), samplesOf(sampleEts.get(t.getFirst())));
         }
-        putInterval(all, gwCollectInterval);
-
-        cfg.put("collect", all);
-        com.laya.Gateway.saveCfg(m.getApplicationContext(), cfg);
+        putCollectInterval(gwCollectInterval);
         com.laya.Gateway.restartCollect(m.getApplicationContext());
         // 采集随网关启停:网关未启用时只落盘不轮询,如实提示,避免误以为已在采集
-        gwStatus.setText(m.getString(cfg.optBoolean(com.laya.Cfg.ENABLED)
+        gwStatus.setText(m.getString(com.laya.Gateway.cfg(m.getApplicationContext()).optBoolean(com.laya.Cfg.ENABLED)
             ? R.string.collect_done : R.string.collect_need_gateway));
+      } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
+    });
+
+    // ---- 回复模板覆盖管理(templates 表;DB 覆盖优先,内置默认兜底,删行=恢复默认) ----
+    LinearLayout pTpl = new LinearLayout(m);
+    pTpl.setOrientation(LinearLayout.VERTICAL);
+    pTpl.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
+    l = pTpl;
+    l.addView(Ui.hint(m,m.getString(R.string.tpl_hint)));
+    // 业务与语言选择
+    LinearLayout tplRow1 = new LinearLayout(m);
+    tplRow1.setGravity(Gravity.CENTER_VERTICAL);
+    Spinner tplTask = new Spinner(m);
+    java.util.List<kotlin.Pair<String, String>> tplTasks = com.laya.DecisionCore.scanTasks(m);
+    java.util.List<String> tplTaskOpts = new ArrayList<>();
+    final java.util.List<String> tplTaskIds = new ArrayList<>();
+    for (kotlin.Pair<String, String> t : tplTasks) {
+      // multi 与 ticket 共用模板(ReplyTemplates 内部按 ticket 取段),存取一律归并 ticket
+      String eff = t.getFirst().equals("multi") ? "ticket" : t.getFirst();
+      if (!tplTaskIds.contains(eff)) { tplTaskIds.add(eff); tplTaskOpts.add(t.getSecond() + " (" + eff + ")"); }
+    }
+    tplTaskOpts.add(m.getString(R.string.tpl_generic));
+    tplTaskIds.add("*");
+    tplTask.setAdapter(new ArrayAdapter<>(m, android.R.layout.simple_spinner_dropdown_item, tplTaskOpts));
+    tplTask.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f));
+    tplRow1.addView(tplTask);
+    Spinner tplLocale = new Spinner(m);
+    tplLocale.setAdapter(new ArrayAdapter<>(m, android.R.layout.simple_spinner_dropdown_item, new String[]{"zh", "en"}));
+    tplLocale.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+    tplRow1.addView(tplLocale);
+    l.addView(tplRow1);
+    // 覆盖行列表(按所选业务×语言刷新)
+    LinearLayout tplList = new LinearLayout(m);
+    tplList.setOrientation(LinearLayout.VERTICAL);
+    l.addView(tplList);
+    final Runnable[] refreshTpl = new Runnable[1];
+    refreshTpl[0] = () -> {
+      tplList.removeAllViews();
+      String task = tplTaskIds.get(tplTask.getSelectedItemPosition());
+      String locale = (String) tplLocale.getSelectedItem();
+      org.json.JSONArray rows = com.laya.Db.templateList(m.getApplicationContext(), "*".equals(task) ? null : task, locale);
+      if (rows.length() == 0) {
+        TextView empty = new TextView(m);
+        empty.setText(m.getString(R.string.tpl_none));
+        empty.setTextSize(11); empty.setTextColor(Ui.c(m, 0xFF6E7382, 0xFF8A93A0));
+        empty.setPadding(Ui.dp(m,4), Ui.dp(m,4), Ui.dp(m,4), Ui.dp(m,4));
+        tplList.addView(empty);
+        return;
+      }
+      for (int i = 0; i < rows.length(); i++) {
+        org.json.JSONObject r = rows.optJSONObject(i);
+        if (r == null) continue;
+        LinearLayout row = new LinearLayout(m);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(Ui.dp(m,6), Ui.dp(m,3), Ui.dp(m,6), Ui.dp(m,3));
+        TextView tv = new TextView(m);
+        String body = r.optString("body").replace("\n", "⏎");
+        if (body.length() > 48) body = body.substring(0, 48) + "…";
+        tv.setText(r.optString("kind") + (r.optString("key").isEmpty() ? "" : "[" + r.optString("key") + "]") + ": " + body);
+        tv.setTextSize(11); tv.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+        row.addView(tv, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        Button del = new Button(m);
+        del.setText(m.getString(R.string.tpl_restore)); del.setAllCaps(false); del.setTextSize(10);
+        del.setMinHeight(0); del.setMinimumHeight(0); del.setMinimumWidth(0); del.setMinWidth(0);
+        del.setPadding(Ui.dp(m,8), Ui.dp(m,3), Ui.dp(m,8), Ui.dp(m,3));
+        del.setTextColor(Color.WHITE); del.setBackground(Ui.pill(0xFFD64545, Ui.dp(m,10)));
+        long rowid = r.optLong("id");
+        del.setOnClickListener(v -> {
+          com.laya.Db.templateDelete(m.getApplicationContext(), rowid);
+          refreshTpl[0].run();
+        });
+        row.addView(del);
+        tplList.addView(row);
+      }
+    };
+    tplTask.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+      @Override public void onItemSelected(android.widget.AdapterView<?> p, View v, int pos, long id) { if (refreshTpl[0] != null) refreshTpl[0].run(); }
+      @Override public void onNothingSelected(android.widget.AdapterView<?> p) {}
+    });
+    tplLocale.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+      @Override public void onItemSelected(android.widget.AdapterView<?> p, View v, int pos, long id) { if (refreshTpl[0] != null) refreshTpl[0].run(); }
+      @Override public void onNothingSelected(android.widget.AdapterView<?> p) {}
+    });
+    refreshTpl[0].run(); // 初始填充覆盖行列表
+    // 新增/编辑覆盖:kind 下拉 + 键 + 文案
+    LinearLayout tplRow2 = new LinearLayout(m);
+    tplRow2.setGravity(Gravity.CENTER_VERTICAL);
+    Spinner tplKind = new Spinner(m);
+    tplKind.setAdapter(new ArrayAdapter<>(m, android.R.layout.simple_spinner_dropdown_item, TPL_KINDS));
+    tplKind.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.6f));
+    tplRow2.addView(tplKind);
+    EditText tplKey = new EditText(m);
+    tplKey.setHint(m.getString(R.string.tpl_key)); tplKey.setTextSize(11); tplKey.setSingleLine(true);
+    tplKey.setTextColor(Ui.c(m, 0xFF22262E, 0xFFE2E6EC)); tplKey.setHintTextColor(Ui.c(m, 0xFF9AA3AD, 0xFF66707E));
+    tplKey.setBackground(Ui.pill(Ui.c(m, 0xFFFFFFFF, 0xFF2A3040), Ui.dp(m,8)));
+    tplKey.setPadding(Ui.dp(m,8), Ui.dp(m,6), Ui.dp(m,8), Ui.dp(m,6));
+    tplKey.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+    tplRow2.addView(tplKey);
+    l.addView(tplRow2);
+    EditText tplBody = new EditText(m);
+    tplBody.setHint(m.getString(R.string.tpl_body)); tplBody.setTextSize(11); tplBody.setMinLines(2);
+    tplBody.setTextColor(Ui.c(m, 0xFF22262E, 0xFFE2E6EC)); tplBody.setHintTextColor(Ui.c(m, 0xFF9AA3AD, 0xFF66707E));
+    tplBody.setBackground(Ui.pill(Ui.c(m, 0xFFFFFFFF, 0xFF2A3040), Ui.dp(m,8)));
+    tplBody.setPadding(Ui.dp(m,8), Ui.dp(m,6), Ui.dp(m,8), Ui.dp(m,6));
+    l.addView(tplBody);
+    Button tplSave = Ui.button(m,l, m.getString(R.string.tpl_save));
+    tplSave.setOnClickListener(v -> {
+      try {
+        String kind = TPL_KINDS[tplKind.getSelectedItemPosition()];
+        kind = kind.substring(0, kind.indexOf('('));
+        String task = tplTaskIds.get(tplTask.getSelectedItemPosition());
+        com.laya.Db.templateUpsert(m.getApplicationContext(), task, (String) tplLocale.getSelectedItem(), kind,
+            tplKey.getText().toString().trim(), tplBody.getText().toString());
+        tplBody.setText("");
+        gwStatus.setText(m.getString(R.string.tpl_saved));
+        refreshTpl[0].run();
       } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
     });
 
@@ -460,10 +579,10 @@ class GatewayPage {
       } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
     });
 
-    // ---- 左侧竖排 tab(与报表页同款):资讯/邮件/队列/采集 ----
-    LinearLayout[] panels = {pNews, pMail, pMq, pCollect}; // 资讯第一
-    final ScrollView[] scrolls = new ScrollView[4];
-    for (int i = 0; i < 4; i++) {
+    // ---- 左侧竖排 tab(与报表页同款):资讯/邮件/队列/采集/模板 ----
+    LinearLayout[] panels = {pNews, pMail, pMq, pCollect, pTpl}; // 资讯第一
+    final ScrollView[] scrolls = new ScrollView[5];
+    for (int i = 0; i < 5; i++) {
       ScrollView sv = new ScrollView(m);
       sv.addView(panels[i]);
       scrolls[i] = sv;
@@ -472,11 +591,11 @@ class GatewayPage {
     final FrameLayout gHolder = new FrameLayout(m);
     gHolder.addView(scrolls[0]);
     gHolder.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
-    String[] gkinds = {m.getString(R.string.gw_news), m.getString(R.string.gw_mail), m.getString(R.string.gw_mq), m.getString(R.string.gw_collect)};
-    final Button[] gchips = new Button[4];
+    String[] gkinds = {m.getString(R.string.gw_news), m.getString(R.string.gw_mail), m.getString(R.string.gw_mq), m.getString(R.string.gw_collect), m.getString(R.string.gw_tpl)};
+    final Button[] gchips = new Button[5];
     final LinearLayout grail = new LinearLayout(m);
     grail.setOrientation(LinearLayout.VERTICAL);
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
       final int k = i;
       Button c = new Button(m);
       c.setText(gkinds[i]); c.setAllCaps(false); c.setTextSize(12);

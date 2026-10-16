@@ -376,6 +376,15 @@
     <string name="collect_save">保存采集配置</string>
     <string name="collect_done">采集配置已保存并生效</string>
     <string name="collect_need_gateway">采集配置已保存;网关未启用,采集未启动</string>
+<string name="gw_tpl">模板</string>
+    <string name="tpl_hint">回复模板覆盖管理:DB 覆盖优先,内置默认兜底。选业务与语言,选段落 kind(括号内为键提示),填键与文案保存;删行=恢复默认。</string>
+    <string name="tpl_key">键(如部门/紧急度,无键留空)</string>
+    <string name="tpl_body">覆盖文案(支持 {占位符},如 {dept}、{severity})</string>
+    <string name="tpl_save">保存覆盖</string>
+    <string name="tpl_restore">删除</string>
+    <string name="tpl_none">暂无覆盖行(当前为内置默认文案)</string>
+    <string name="tpl_saved">模板覆盖已保存,立即生效</string>
+    <string name="tpl_generic">通用兜底(按实际业务存)</string>
     <string name="collect_running">数据采集: %1$d 个业务启用</string>
     <string name="news_scoring">评分中…</string>
     <string name="news_prompt">对下述财经快讯做交易驱动力分诊,只输出 JSON,不要任何其他文字:{\"drive\":0-1驱动力,\"conf\":0-1方向置信,\"urg\":0-1紧迫性,\"senti\":0-1情绪(0偏空-1偏多),\"dir\":\"BUY或SELL或NONE\",\"reason\":\"20字内理由\"}\n快讯:</string>

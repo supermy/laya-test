@@ -42,6 +42,7 @@ class DecisionApiServer private constructor(private val ctx: Context, port: Int)
     return try {
       when {
         uri == "/health" -> json(Response.Status.OK, health())
+        uri == "/stats" -> json(Response.Status.OK, Db.stats(ctx).put("ok", true))
         uri == "/decide" && session.method == Method.POST -> {
           val files = HashMap<String, String>()
           // NanoHTTPD 默认按 US-ASCII 解码 body → 中文全变 '?'(不可逆)。

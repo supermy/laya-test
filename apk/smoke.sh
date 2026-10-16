@@ -91,6 +91,28 @@ echo "== [4/5] 决策 API HTTP 验证 =="
 $A shell "am start -n com.selfhost.layatest/.MainActivity" >/dev/null 2>&1; sleep 3 # 前台解冻(后台冻结会挂起请求)
 chk "GET /health" bash -c "curl -s --max-time 8 http://127.0.0.1:8790/health | grep -q '\"ok\":true'"
 chk "POST /decide(level)" bash -c "curl -s --max-time 30 -X POST http://127.0.0.1:8790/decide -H 'Content-Type: application/json' -d '{\"task\":\"ticket\",\"text\":\"smoke test: cannot login\"}' | grep -q '\"level\"'"
+chk "GET /stats(SQLite 入库)" bash -c "curl -s --max-time 8 http://127.0.0.1:8790/stats | grep -q '\"db\":\"sqlite\"' && curl -s http://127.0.0.1:8790/stats | grep -qE '\"total\":[1-9]'"
+
+# 网关页采集/模板 tab 冒烟:点采集 tab chip,断言面板含「采集配置」类文案;点模板 chip,断言「模板」面板
+$A shell "input tap 640 2528; sleep 1.5; uiautomator dump /sdcard/smoke.xml" >/dev/null 2>&1
+GW_XML=$(dumpfile smoke_gw.xml)
+TXY=$(btnxy smoke_gw.xml "模板")
+if [ -n "$TXY" ]; then
+  $A shell "input tap $TXY; sleep 1.5; uiautomator dump /sdcard/smoke.xml" >/dev/null 2>&1
+  TPL_XML=$(dumpfile smoke_tpl.xml)
+  chk "模板面板(覆盖管理)" grep -q "模板覆盖管理\|Template overrides" "$TPL_XML"
+else
+  # 模板 chip 滚出可视区则滚动一屏再找(侧栏竖排在底部)
+  $A shell "input swipe 200 1800 200 900 400; sleep 1; uiautomator dump /sdcard/smoke.xml" >/dev/null 2>&1
+  TXY=$(btnxy smoke_gw.xml "模板")
+  if [ -n "$TXY" ]; then
+    $A shell "input tap $TXY; sleep 1.5; uiautomator dump /sdcard/smoke.xml" >/dev/null 2>&1
+    TPL_XML=$(dumpfile smoke_tpl.xml)
+    chk "模板面板(覆盖管理)" grep -q "模板覆盖管理\|Template overrides" "$TPL_XML"
+  else
+    echo "FAIL: 模板 tab chip 未找到"; FAIL=$((FAIL+1))
+  fi
+fi
 
 echo "== [5/5] 系统页断言 =="
 $A shell "input tap 1067 2528; sleep 1.5; uiautomator dump /sdcard/smoke.xml" >/dev/null 2>&1
