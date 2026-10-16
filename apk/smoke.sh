@@ -56,8 +56,15 @@ chk "标题栏外观菜单按钮" grep -qF 'text="⋮"' "$HOME_XML"
 
 echo "== [3/5] 网关页 + 决策 API 启动 =="
 $A shell "input tap 640 2528; sleep 1.5" >/dev/null 2>&1
-# 逐屏滚动找 API 按钮(最多 4 屏);"启动"则点,"停止"则已在运行
+# API 按钮在「队列」面板:切到队列 tab 再找;"启动"则点,"停止"则已在运行
+# (force-stop 会杀掉已运行的 API,每次 smoke 须重新点启动)
 API_TOUCHED=0
+for i in 1 2 3; do
+  GW_XML=$(dumpfile smoke_gw.xml)
+  QXY=$(btnxy smoke_gw.xml "队列")
+  if [ -n "$QXY" ]; then $A shell "input tap $QXY; sleep 1.5" >/dev/null 2>&1; break; fi
+  $A shell "input swipe 200 1800 200 900 400; sleep 1" >/dev/null 2>&1
+done
 for i in 1 2 3 4; do
   GW_XML=$(dumpfile smoke_gw.xml)
   XY=$(btnxy smoke_gw.xml "启动决策 API")

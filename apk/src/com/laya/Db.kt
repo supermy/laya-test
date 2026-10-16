@@ -141,10 +141,7 @@ object Db {
       if (files.isEmpty()) return
       val d = helper!!.writableDatabase
       for (f in files) {
-        val q = d.compileStatement("SELECT value FROM meta WHERE key=?")
-        q.bindString(1, "migrated:${f.name}")
-        val flag = q.simpleQueryForLong()
-        if (flag > 0) continue
+        if (metaLong(d, "migrated:${f.name}") > 0) continue
         var n = 0
         d.beginTransaction()
         try {
@@ -215,6 +212,13 @@ object Db {
 
   private val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
   private fun localDate(ts: Long): String = dateFmt.format(Date(ts))
+
+  /** 读 meta 整型值;键不存在返回 0(simpleQueryForLong 在无行时抛 SQLiteDoneException,勿用于可缺行查询) */
+  private fun metaLong(d: SQLiteDatabase, key: String): Long {
+    d.rawQuery("SELECT value FROM meta WHERE key=?", arrayOf(key)).use { c ->
+      return if (c.moveToFirst()) (c.getString(0)?.toLongOrNull() ?: 0L) else 0L
+    }
+  }
 
   // ---- 写入 ----
   /** 决策日志入库(原 JSONL appendLog 语义:state 截 200 字符),返回 decisions.id */
@@ -333,8 +337,7 @@ object Db {
   private fun migrateCollect(ctx: Context) {
     try {
       val d = helper!!.writableDatabase
-      val q = d.compileStatement("SELECT value FROM meta WHERE key=?"); q.bindString(1, "migrated_collect")
-      if (q.simpleQueryForLong() > 0) return
+      if (metaLong(d, "migrated_collect") > 0) return
       val collect = JSONObject(ctx.getSharedPreferences("gateway", Context.MODE_PRIVATE)
         .getString("cfg", "{}") ?: "{}").optJSONObject("collect") ?: return
       d.beginTransaction()
@@ -366,8 +369,7 @@ object Db {
         out.put(c.getString(0), JSONObject().put("enabled", c.getInt(1) == 1).put("samples", JSONArray(c.getString(2))))
       }
     }
-    val q = db(ctx).compileStatement("SELECT value FROM meta WHERE key='collect.intervalSec'").simpleQueryForLong()
-    return out.put("intervalSec", q)
+    return out.put("intervalSec", metaLong(db(ctx), "collect.intervalSec"))
   }
 
   @JvmStatic fun collectIntervalSec(ctx: Context? = null): Long = collectAll(ctx).optLong("intervalSec", 0)
