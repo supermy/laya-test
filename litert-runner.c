@@ -60,7 +60,9 @@ static size_t g_embed_bytes;
 static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // ---- split 模式:主图输出 hidden_states [1,256,768](scorer 移出图,跑 CPU)----
-static int g_split_mode = 0;   // 主图输出 rank=3(hidden)而非 token_logits
+static int g_split_mode = 0;
+static int g_dbg_scan = -1;   // LAYA_DEBUG_SCAN=1 enables nan/min/max scan (default off)
+static int g_perf_log = -1;    // LAYA_PERF_LOG=1 enables runner-perf line (default off)   // 主图输出 rank=3(hidden)而非 token_logits
 static int g_single_out = 0;   // 主图只有一个输出:pooled 取 hidden 第 0 行
 static float *g_sc_ln_w, *g_sc_ln_b, *g_sc_w1, *g_sc_b1, *g_sc_w2, *g_sc_b2;
 static int g_sc_hidden, g_sc_mid, g_sc_out;
@@ -252,31 +254,40 @@ static int handle_infer(int fd, unsigned char* buf, size_t payload, unsigned int
   if (g_split_mode) {
     // 主图输出 hidden_states [1,256,768]:取 marker 行,scorer 在 CPU 上算 logits
     static float hidden_rows[WINDOW * HIDDEN];
-    read_buf(g_out_logits, hidden_rows, sizeof(float) * L * HIDDEN);
+    const float* hid = NULL;
+    void* hpv = NULL;
+    // lock once and read only marker rows: avoids full-window L*HIDDEN memcpy
+    if (LiteRtLockTensorBuffer(g_out_logits, &hpv, kLiteRtTensorBufferLockModeRead) == kLiteRtStatusOk) {
+      hid = (const float*)hpv;
+      if (g_dbg_scan) {
+        int nin = 0; float mn = 1e30f, mx = -1e30f;
+        for (size_t i = 0; i < (size_t)L * HIDDEN; i++) {
+          if (isnan(hid[i]) || isinf(hid[i])) nin++;
+          else { if (hid[i] < mn) mn = hid[i]; if (hid[i] > mx) mx = hid[i]; }
+        }
+        fprintf(stderr, "hidden: n=%zu inf/nan=%d min=%.4f max=%.4f\n", (size_t)L * HIDDEN, nin, mn, mx);
+      }
+    } else {
+      read_buf(g_out_logits, hidden_rows, sizeof(float) * L * HIDDEN);
+      hid = hidden_rows;
+    }
     if (g_single_out) {
-      memcpy(pooled, hidden_rows, sizeof(float) * HIDDEN);  // pooled_cls = h[:,0]
+      memcpy(pooled, hid, sizeof(float) * HIDDEN);  // pooled_cls = h[:,0]
     } else {
       read_buf(g_out_pooled, pooled, sizeof(float) * HIDDEN);
-    }
-    {
-      int nin = 0; float mn = 1e30f, mx = -1e30f;
-      for (size_t i = 0; i < (size_t)L * HIDDEN; i++) {
-        if (isnan(hidden_rows[i]) || isinf(hidden_rows[i])) nin++;
-        else { if (hidden_rows[i] < mn) mn = hidden_rows[i]; if (hidden_rows[i] > mx) mx = hidden_rows[i]; }
-      }
-      fprintf(stderr, "hidden: n=%zu inf/nan=%d min=%.4f max=%.4f | pooled[0]=%.4f\n", (size_t)L * HIDDEN, nin, mn, mx, pooled[0]);
     }
     static float sc_out[8];
     for (unsigned int j = 0; j < K; j++)
       if (mmask[j] && markers[j] >= 0 && markers[j] < (int64_t)L) {
-        sc_row(hidden_rows + (size_t)markers[j] * HIDDEN, sc_out);
+        sc_row(hid + (size_t)markers[j] * HIDDEN, sc_out);
         raw[k++] = sc_out[0];
       }
+    if (hpv) LiteRtUnlockTensorBuffer(g_out_logits);
   } else {
     static float logits[WINDOW];
     read_buf(g_out_logits, logits, sizeof(float) * L);
     read_buf(g_out_pooled, pooled, sizeof(float) * HIDDEN);
-    fprintf(stderr, "old-mode pooled[0..2]=%.4f %.4f %.4f logits[0..2]=%.4f %.4f %.4f\n",
+    if (g_dbg_scan) fprintf(stderr, "old-mode pooled[0..2]=%.4f %.4f %.4f logits[0..2]=%.4f %.4f %.4f\n",
             pooled[0], pooled[1], pooled[2], logits[0], logits[1], logits[2]);
     // gather marker logits (only masked markers)
     for (unsigned int j = 0; j < K; j++)
@@ -309,7 +320,7 @@ static int handle_infer(int fd, unsigned char* buf, size_t payload, unsigned int
   static float act[8];
   read_buf(g_a_out, act, sizeof(float) * g_act_out_dim);
   double tr2 = now_ms_runner();
-  fprintf(stderr, "runner-perf: write=%.1f main=%.1f act=%.1f total=%.1f ms\n", tp1-tp0, tr1-tr0, tr2-tr1, tr2-tp0);
+  if (g_perf_log) fprintf(stderr, "runner-perf: write=%.1f main=%.1f act=%.1f total=%.1f ms\n", tp1-tp0, tr1-tr0, tr2-tr1, tr2-tp0);
 
   // response: logits[n*K] (unmasked markers left 0), act[n*act_dim]
   size_t rsp_len = HDR_RSP + (size_t)K * 4 + (size_t)g_act_out_dim * 4;
@@ -427,6 +438,8 @@ int main(int argc, char** argv) {
     }
   }
 
+  if (g_dbg_scan < 0) g_dbg_scan = getenv("LAYA_DEBUG_SCAN") ? 1 : 0;
+  if (g_perf_log < 0) g_perf_log = getenv("LAYA_PERF_LOG") ? 1 : 0;
   LiteRtOptions opts;
   CHECK(LiteRtCreateOptions(&opts));
   if (use_npu) {
