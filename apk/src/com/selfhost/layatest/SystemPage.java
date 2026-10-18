@@ -313,6 +313,10 @@ class SystemPage {
     SAMPLES.put("risk", "客户申请全额退款并威胁向监管投诉,账户近期出现多次异常登录");
     SAMPLES.put("news", "公司公告预计上半年净利润同比增长120%至150%,主因产品量价齐升");
     SAMPLES.put("multi", "My phone fell in water, the screen is broken and it will not turn on");
+    SAMPLES.put("cancer", "医生您好,我母亲今年58岁,体检发现CA125指标升高至85U/mL,腹部B超提示盆腔少量积液,请问需要进一步做哪些检查排除卵巢病变?");
+    SAMPLES.put("peritoneal", "患者腹腔镜术后三天出现腹胀加重、排气减少,引流液呈淡血性,今晨体温38.2℃,考虑腹腔感染不除外,拟加用头孢三代抗感染并复查腹水常规。");
+    SAMPLES.put("sec", "告警:检测到主机10.2.3.4在5分钟内对内网网段发起全端口SYN扫描,源进程为nmap,已触发IDS规则ET-SCAN-02,建议隔离排查。");
+    SAMPLES.put("traffic", "本月流量已使用38GB,套餐仅含30GB,已超出8GB并按0.29元/MB持续计费,今日已产生费用52元,预计月底前还将产生约300元额外支出。");
   }
   /** 卡片局部刷新:状态行 + 加载/卸载按钮文本(不重建列表) */
   private void updateBizState(String task) {
