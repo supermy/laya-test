@@ -305,18 +305,30 @@ class SystemPage {
   }
 
   /** 单个业务卡片(加载态/操作按钮/详情/导出/删除) */
-  private static final java.util.HashMap<String, String> SAMPLES = new java.util.HashMap<>();
+  private static final java.util.HashMap<String, String[][]> SAMPLES = new java.util.HashMap<>();
   static {
-    SAMPLES.put("ticket", "my account was charged twice, please refund");
-    SAMPLES.put("ugc", "加我微信领红包,点击链接轻松日赚五百,错过再等一年");
-    SAMPLES.put("agent", "帮我查一下最近一笔订单的物流状态,如果延迟了帮我申请退款");
-    SAMPLES.put("risk", "客户申请全额退款并威胁向监管投诉,账户近期出现多次异常登录");
-    SAMPLES.put("news", "公司公告预计上半年净利润同比增长120%至150%,主因产品量价齐升");
-    SAMPLES.put("multi", "My phone fell in water, the screen is broken and it will not turn on");
-    SAMPLES.put("cancer", "医生您好,我母亲今年58岁,体检发现CA125指标升高至85U/mL,腹部B超提示盆腔少量积液,请问需要进一步做哪些检查排除卵巢病变?");
-    SAMPLES.put("peritoneal", "患者腹腔镜术后三天出现腹胀加重、排气减少,引流液呈淡血性,今晨体温38.2℃,考虑腹腔感染不除外,拟加用头孢三代抗感染并复查腹水常规。");
-    SAMPLES.put("sec", "告警:检测到主机10.2.3.4在5分钟内对内网网段发起全端口SYN扫描,源进程为nmap,已触发IDS规则ET-SCAN-02,建议隔离排查。");
-    SAMPLES.put("traffic", "本月流量已使用38GB,套餐仅含30GB,已超出8GB并按0.29元/MB持续计费,今日已产生费用52元,预计月底前还将产生约300元额外支出。");
+    SAMPLES.put("ticket", new String[][]{
+        {"示例·自动回复", "How do I export reports to PDF? Where is the export option in the free plan?"},
+        {"示例·人工回复", "I was charged twice last week and both refund requests were ignored. This is urgent: refund my money immediately or I will file a formal complaint."}});
+    SAMPLES.put("ugc", new String[][]{{"示例·违规引流", "加我微信领红包,点击链接轻松日赚五百,错过再等一年"}});
+    SAMPLES.put("agent", new String[][]{{"示例·工单查询", "帮我查一下最近一笔订单的物流状态,如果延迟了帮我申请退款"}});
+    SAMPLES.put("risk", new String[][]{{"示例·风控", "客户申请全额退款并威胁向监管投诉,账户近期出现多次异常登录"}});
+    SAMPLES.put("news", new String[][]{{"示例·财经", "公司公告预计上半年净利润同比增长120%至150%,主因产品量价齐升"}});
+    SAMPLES.put("multi", new String[][]{{"示例·英文", "My phone fell in water, the screen is broken and it will not turn on"}});
+    SAMPLES.put("cancer", new String[][]{
+        {"示例·诊疗记录", "医生您好,我母亲今年58岁,体检发现CA125指标升高至85U/mL,腹部B超提示盆腔少量积液,请问需要进一步做哪些检查排除卵巢病变?"},
+        {"示例·伪科学", "碱性体质是百病之源,癌症是酸性体质惹的祸,只要每天喝苏打水碱化体质就能饿死癌细胞,根本不用化疗放疗。"},
+        {"示例·诈骗引流", "祖传老中医秘方,一个月消肿瘤,已帮助上万病友康复,点击链接加微信免费领取抗癌秘方"}});
+    SAMPLES.put("peritoneal", new String[][]{
+        {"示例·诊疗记录", "患者腹腔镜术后三天出现腹胀加重、排气减少,引流液呈淡血性,今晨体温38.2℃,考虑腹腔感染不除外,拟加用头孢三代抗感染并复查腹水常规。"},
+        {"示例·诈骗偏方", "祖传消水膏,不管是腹水还是肿瘤,贴一贴三天消水,不用住院不开刀,加微信即可购买,病友群免费指导用药"}});
+    SAMPLES.put("sec", new String[][]{
+        {"示例·侦察探测", "告警:检测到主机10.2.3.4在5分钟内对内网网段发起全端口SYN扫描,源进程为nmap,已触发IDS规则ET-SCAN-02,建议隔离排查。"},
+        {"示例·钓鱼欺诈", "【紧急】您的账号存在异常登录,请立即点击此链接重置密码,否则将于24小时后被停用。——IT管理员"},
+        {"示例·正常业务", "例行维护通知:本周六 02:00-04:00 对 VPN 网关进行固件升级,期间内网访问将短暂中断,请提前保存工作。"}});
+    SAMPLES.put("traffic", new String[][]{
+        {"示例·超量风险", "本月流量已使用38GB,套餐仅含30GB,已超出8GB并按0.29元/MB持续计费,今日已产生费用52元,预计月底前还将产生约300元额外支出。"},
+        {"示例·套餐咨询", "我每月流量大概 20G,主要用来看视频和导航,偶尔出差还要开热点,有什么流量多的套餐推荐吗?现在的套餐不够用了"}});
   }
   /** 卡片局部刷新:状态行 + 加载/卸载按钮文本(不重建列表) */
   private void updateBizState(String task) {
@@ -343,8 +355,8 @@ class SystemPage {
   }
 
   private static String sampleOf(String task) {
-    String s = SAMPLES.get(task);
-    return s != null ? s : "这是一条用于手动决策测试的示例数据";
+    String[][] ss = SAMPLES.get(task);
+    return ss != null ? ss[0][1] : "这是一条用于手动决策测试的示例数据";
   }
 
   /** 模型类型:包目录含 npu 主图 → NPU,wfp16 → GPU,两者 → NPU/GPU */
@@ -487,20 +499,16 @@ class SystemPage {
       testOut.setTextSize(10); testOut.setTypeface(Typeface.MONOSPACE);
       testOut.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
       testOut.setVisibility(View.GONE);
-      // 客服类业务:两个示例一键填入(自动回复路径 / 人工回复路径),输出按决策结果二选一。
-      // 示例用英文——ticket 语料为英文工单,中文输入下 urgency/escalate 判别偏保守
-      if (task.equals("ticket") || task.equals("multi")) {
+      // 示例一键填入:每业务多条,覆盖不同决策类别
+      String[][] smp = SAMPLES.get(task);
+      if (smp != null) {
         LinearLayout smpRow = new LinearLayout(m);
-        String[][] samples = {
-            {"示例·自动回复", "How do I export reports to PDF? Where is the export option in the free plan?"},
-            {"示例·人工回复", "I was charged twice last week and both refund requests were ignored. This is urgent: refund my money immediately or I will file a formal complaint."},
-        };
-        for (String[] s : samples) {
+        for (String[] ex : smp) {
           Button sb = new Button(m);
-          sb.setText(s[0]); sb.setAllCaps(false); sb.setTextSize(10);
+          sb.setText(ex[0]); sb.setAllCaps(false); sb.setTextSize(10);
           sb.setTextColor(Color.WHITE); sb.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,10)));
           sb.setPadding(Ui.dp(m,6), Ui.dp(m,5), Ui.dp(m,6), Ui.dp(m,5));
-          sb.setOnClickListener(v -> { testIn.setText(s[1]); testOut.setVisibility(View.GONE); });
+          sb.setOnClickListener(v -> { testIn.setText(ex[1]); testOut.setVisibility(View.GONE); });
           smpRow.addView(sb, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         }
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
