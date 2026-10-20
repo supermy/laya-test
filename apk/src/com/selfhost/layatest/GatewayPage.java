@@ -7,8 +7,8 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.ScrollView;
-import android.widget.TextView;
 import android.widget.Spinner;
+import android.widget.TextView;
 import android.widget.ArrayAdapter;
 import android.view.View;
 import android.graphics.Color;
@@ -21,14 +21,30 @@ import java.util.ArrayList;
 import com.laya.Cfg;
 import org.json.JSONObject;
 
-/** ③ 网关页(从 MainActivity 拆出):资讯/邮件/MQTT/采集/模板 五面板 + 决策 API 开关 + 底栏(LLM 面板已删除,v1.4.50 决策链下线升级通道) */
+/** ③ 网关页(从 MainActivity 拆出):资讯/邮件/MQTT/客服/采集/模板 六面板 + 决策 API 开关 + 底栏(LLM 面板已删除,v1.4.50 决策链下线升级通道) */
 class GatewayPage {
   private final MainActivity m;
   private TextView gwStatus;
   private EditText gwEmailHost, gwEmailUser, gwEmailPass, gwReportTo;
   private EditText gwImapPort, gwSmtpPort; private CheckBox gwSsl;
   private EditText gwMqUrl, gwMqSub, gwMqPub;
-  private EditText gwNewsSina, gwNewsWsc, gwNewsInterval;
+
+  /** 客服采集统计:WeakReference 持 TextView(Gateway 事件驱动刷新,activity 销毁自动解绑防泄漏) */
+  private static final java.lang.ref.WeakReference<TextView>[] CS_STATS = new java.lang.ref.WeakReference[1];
+  private static final Runnable CS_TICK = () -> {
+    TextView t = CS_STATS[0] != null ? (TextView) CS_STATS[0].get() : null;
+    if (t != null) t.setText(csStatsText(t.getContext()));
+  };
+  private static String csStatsText(android.content.Context c) {
+    StringBuilder s = new StringBuilder(c.getString(R.string.cs_stats, com.laya.Gateway.csProcessed, com.laya.Gateway.csEscalated));
+    try { // 持久入库统计(inbound 表;对齐资讯 tab 的"已处理 N 条"体验)
+      org.json.JSONObject is = com.laya.Db.inboundStats(c);
+      s.append("\n").append(c.getString(R.string.cs_db_stats, is.optLong("total"), is.optLong("today"), is.optLong("failed")));
+    } catch (Exception ignore) {}
+    String err = com.laya.Gateway.csLastError;
+    if (!err.isEmpty()) s.append("\n").append(c.getString(R.string.cs_last_err, err));
+    return s.toString();
+  }
 
   /** 回复模板段落 kind 清单(显示带键提示;保存时截 '(' 前);与 service/reply-templates.mjs templateSpecs 对应 */
   private static final String[] TPL_KINDS = {
@@ -70,6 +86,266 @@ class GatewayPage {
   private void setCollectToggle(Button tog, boolean on) {
     tog.setText(m.getString(on ? R.string.collect_disable : R.string.collect_enable));
     tog.setBackground(Ui.pill(on ? 0xFF8894A6 : m.PRIMARY, Ui.dp(m,10)));
+  }
+
+  /** 自定义资讯源链接落盘:cfg.news.custom(资讯 tab「保存资讯采集」保留该键) */
+  private void persistNewsLinks(org.json.JSONArray links) throws Exception {
+    JSONObject cfg = com.laya.Gateway.cfg(m.getApplicationContext());
+    JSONObject news = cfg.optJSONObject(com.laya.Cfg.NEWS); if (news == null) news = new JSONObject();
+    news.put("custom", links);
+    cfg.put(com.laya.Cfg.NEWS, news);
+    com.laya.Gateway.saveCfg(m.getApplicationContext(), cfg);
+  }
+
+  /** 内置资讯源整体落盘(newsCfg 就地变更后整存;含 sina/wsc/custom/interval) */
+  private void persistNews(org.json.JSONObject newsCfg) throws Exception {
+    JSONObject cfg = com.laya.Gateway.cfg(m.getApplicationContext());
+    cfg.put(com.laya.Cfg.NEWS, newsCfg);
+    com.laya.Gateway.saveCfg(m.getApplicationContext(), cfg);
+  }
+
+  /** URL 格式校验:http/https + 有主机名 */
+  private static boolean isHttpUrl(String u) {
+    try {
+      java.net.URL v = new java.net.URL(u);
+      return ("http".equals(v.getProtocol()) || "https".equals(v.getProtocol())) && v.getHost() != null && !v.getHost().isEmpty();
+    } catch (Exception e) { return false; }
+  }
+
+  /** 测试拉取的默认源 URL(与 NewsAutoService 保持一致) */
+  private static final String DEF_SINA_URL = "https://zhibo.sina.com.cn/api/zhibo/feed?page=1&page_size=20&zhibo_id=152";
+  private static final String DEF_WSC_URL = "https://api-one-wscn.awtmt.com/apiv1/content/lives?channel=global-channel&limit=20";
+
+  /** 单行:· [格式] url(⛔=停用)+ 编辑/启停/测试(/删除,仅自定义);target -2=内置sina -3=内置wsc >=0=custom 下标 */
+  private LinearLayout linkRow(org.json.JSONObject st, int target, org.json.JSONArray links,
+                               org.json.JSONObject newsCfg, Runnable render, LinearLayout editor,
+                               int[] editTarget, String[] fmt, Button fmtBtn, EditText urlEt) {
+    boolean builtin = target == -2 || target == -3;
+    String f = builtin ? (target == -2 ? "sina" : "wsc") : st.optString("fmt", "sina");
+    LinearLayout row = new LinearLayout(m);
+    row.setOrientation(LinearLayout.VERTICAL);
+    row.setPadding(0, Ui.dp(m,2), 0, Ui.dp(m,2));
+    boolean en = st.optBoolean(com.laya.Cfg.ENABLED, true);
+    TextView tv = new TextView(m);
+    tv.setTextSize(14);
+    tv.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
+    String urlShow = st.optString(com.laya.Cfg.URL);
+    if (builtin && urlShow.isEmpty()) urlShow = "(默认源)";
+    tv.setText("· [" + m.getString("sina".equals(f) ? R.string.news_link_fmt_sina : R.string.news_link_fmt_wsc) + "] "
+        + urlShow + (en ? "" : " ⛔"));
+    tv.setSingleLine(true); tv.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+    row.addView(tv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+    // 按钮行:宽度自适配(wrap_content + 紧凑 padding)
+    LinearLayout btns = new LinearLayout(m);
+    row.addView(btns);
+
+    Button eb = new Button(m);
+    eb.setText(m.getString(R.string.news_link_edit)); eb.setAllCaps(false); eb.setTextSize(13);
+    eb.setMinHeight(0); eb.setMinimumHeight(0); eb.setMinimumWidth(0); eb.setMinWidth(0);
+    eb.setPadding(Ui.dp(m,6), Ui.dp(m,3), Ui.dp(m,6), Ui.dp(m,3));
+    eb.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+    eb.setBackground(Ui.pill(Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,10)));
+    eb.setOnClickListener(v -> {
+      editTarget[0] = target; fmt[0] = f;
+      fmtBtn.setText(m.getString("sina".equals(f) ? R.string.news_link_fmt_sina : R.string.news_link_fmt_wsc));
+      fmtBtn.setVisibility(builtin ? View.GONE : View.VISIBLE); // 内置源格式固定
+      urlEt.setText(st.optString(com.laya.Cfg.URL));
+      editor.setVisibility(View.VISIBLE);
+    });
+    btns.addView(eb);
+
+    Button tog = new Button(m);
+    tog.setText(en ? "停用" : "启用"); tog.setAllCaps(false); tog.setTextSize(13);
+    tog.setMinHeight(0); tog.setMinimumHeight(0); tog.setMinimumWidth(0); tog.setMinWidth(0);
+    tog.setPadding(Ui.dp(m,6), Ui.dp(m,3), Ui.dp(m,6), Ui.dp(m,3));
+    tog.setTextColor(Color.WHITE);
+    tog.setBackground(Ui.pill(en ? 0xFF8894A6 : m.PRIMARY, Ui.dp(m,10)));
+    tog.setOnClickListener(v -> {
+      try {
+        boolean nowOn = !st.optBoolean(com.laya.Cfg.ENABLED, true);
+        st.put(com.laya.Cfg.ENABLED, nowOn);
+        if (builtin) persistNews(newsCfg); else persistNewsLinks(links);
+        render.run();
+        gwStatus.setText(m.getString(R.string.news_link_done));
+      } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
+    });
+    btns.addView(tog);
+
+    // 结果区(按钮下方):初始显示已处理条数(累计);测试后显示决策信息 + 回复模板
+    String srcName = "sina".equals(f) ? "新浪财经" : "华尔街见闻";
+    TextView info = new TextView(m);
+    info.setTextSize(13);
+    info.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
+    info.setText("已处理 " + com.laya.NewsAutoService.sourceCounts.getOrDefault(srcName, 0L) + " 条");
+    info.setPadding(0, Ui.dp(m,2), 0, Ui.dp(m,2));
+
+    Button tb = new Button(m);
+    tb.setText("测试"); tb.setAllCaps(false); tb.setTextSize(13);
+    tb.setMinHeight(0); tb.setMinimumHeight(0); tb.setMinimumWidth(0); tb.setMinWidth(0);
+    tb.setPadding(Ui.dp(m,6), Ui.dp(m,3), Ui.dp(m,6), Ui.dp(m,3));
+    tb.setTextColor(Color.WHITE); tb.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,10)));
+    tb.setOnClickListener(v -> {
+      String u = st.optString(com.laya.Cfg.URL);
+      if (builtin && u.isEmpty()) u = "sina".equals(f) ? DEF_SINA_URL : DEF_WSC_URL;
+      final String fu = u;
+      final String kp = f + "#" + Integer.toHexString(fu.hashCode());
+      gwStatus.setText("测试拉取中…");
+      info.setText("测试拉取中…");
+      new Thread(() -> {
+        String r;
+        try {
+          long t0 = android.os.SystemClock.elapsedRealtime();
+          int n = "wsc".equals(f) ? NewsFetcher.fetchWsc(fu, kp) : NewsFetcher.fetchSina(fu, kp);
+          StringBuilder sb = new StringBuilder("拉取: 新增 " + n + " 条 · " + (android.os.SystemClock.elapsedRealtime() - t0) + "ms");
+          if (n > 0) com.laya.NewsAutoService.sourceCounts.merge(srcName, (long) n, Long::sum);
+          // 从评分队列取本源最新一条 → 决策 + 模板(测试自行消费,不计入通知链)
+          String text = null;
+          for (JSONObject it : NewsFetcher.drainPending())
+            if (srcName.equals(it.optString("source"))) text = it.optString("text"); // 取末条=最新
+          if (text == null || text.isEmpty()) {
+            sb.append(" · 无数据");
+          } else {
+            try {
+              com.laya.DecisionCore.Result dr = com.laya.DecisionCore.decide(m.getApplicationContext(), "news", text);
+              sb.append("\n决策: ").append(com.laya.DecisionCore.fmt(m.getApplicationContext(), "news", dr.answers).replace("\n", " "))
+                .append(" · ").append(dr.latencyMs).append("ms");
+              sb.append("\n模板:").append(com.laya.DecisionCore.replyAppendix(m.getApplicationContext(), "news", dr.answers, text));
+            } catch (Exception e) { sb.append("\n决策失败: ").append(e.getMessage()); }
+          }
+          r = sb.toString();
+        } catch (Exception e) { r = "❌ 链接测试: " + e.getMessage(); }
+        final String fr = r;
+        m.runOnUiThread(() -> {
+          info.setText(fr + "\n已处理 " + com.laya.NewsAutoService.sourceCounts.getOrDefault(srcName, 0L) + " 条");
+          gwStatus.setText("测试完成");
+        });
+      }).start();
+    });
+    btns.addView(tb);
+    row.addView(info);
+
+    if (!builtin) {
+      Button db = new Button(m);
+      db.setText(m.getString(R.string.news_link_del)); db.setAllCaps(false); db.setTextSize(13);
+      db.setMinHeight(0); db.setMinimumHeight(0); db.setMinimumWidth(0); db.setMinWidth(0);
+      db.setPadding(Ui.dp(m,6), Ui.dp(m,3), Ui.dp(m,6), Ui.dp(m,3));
+      db.setTextColor(Color.WHITE); db.setBackground(Ui.pill(0xFFD64545, Ui.dp(m,10)));
+      db.setOnClickListener(v -> {
+        try {
+          links.remove(target); persistNewsLinks(links); render.run();
+          gwStatus.setText(m.getString(R.string.news_link_done));
+        } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
+      });
+      btns.addView(db);
+    }
+    return row;
+  }
+
+  /** 资讯 tab 源链接统一编辑列表:内置 新浪/华尔街见闻(编辑 URL/启停/测试)+ 自定义链接(全 CRUD);即时落盘,NewsAutoService 下轮 tick 自动生效 */
+  private void buildSourceLinks(LinearLayout l, org.json.JSONObject newsCfg0) {
+    final org.json.JSONObject newsCfg = newsCfg0 != null ? newsCfg0 : new org.json.JSONObject();
+    final org.json.JSONArray links = newsCfg.optJSONArray("custom") != null
+        ? newsCfg.optJSONArray("custom") : new org.json.JSONArray();
+    try { newsCfg.put("custom", links); } catch (Exception ignore) {} // custom 挂回同一份,整存一致
+    final LinearLayout linksBox = new LinearLayout(m);
+    linksBox.setOrientation(LinearLayout.VERTICAL);
+    l.addView(linksBox);
+
+    final int[] editTarget = {-1}; // -2=内置sina -3=内置wsc -1=新增 >=0=custom 下标
+    final String[] fmt = {"sina"};
+    final Runnable[] render = new Runnable[1];
+
+    // 内联编辑区(默认收起):格式切换(内置源隐藏)+ URL 输入 + 保存(位于编辑框右侧)
+    final LinearLayout editor = new LinearLayout(m);
+    editor.setOrientation(LinearLayout.VERTICAL);
+    editor.setVisibility(View.GONE);
+    final Button fmtBtn = new Button(m);
+    fmtBtn.setAllCaps(false); fmtBtn.setTextSize(13);
+    fmtBtn.setMinHeight(0); fmtBtn.setMinimumHeight(0); fmtBtn.setMinimumWidth(0); fmtBtn.setMinWidth(0);
+    fmtBtn.setPadding(Ui.dp(m,6), Ui.dp(m,3), Ui.dp(m,6), Ui.dp(m,3));
+    fmtBtn.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
+    fmtBtn.setBackground(Ui.pill(Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,10)));
+    fmtBtn.setOnClickListener(v -> {
+      fmt[0] = "sina".equals(fmt[0]) ? "wsc" : "sina";
+      fmtBtn.setText(m.getString("sina".equals(fmt[0]) ? R.string.news_link_fmt_sina : R.string.news_link_fmt_wsc));
+    });
+    final EditText urlEt = new EditText(m);
+    urlEt.setHint(m.getString(R.string.news_link_url_hint));
+    urlEt.setTextSize(14);
+    urlEt.setTextColor(Ui.c(m, 0xFF22262E, 0xFFE2E6EC)); urlEt.setHintTextColor(Ui.c(m, 0xFF9AA3AD, 0xFF66707E));
+    urlEt.setBackground(Ui.pill(Ui.c(m, 0xFFFFFFFF, 0xFF2A3040), Ui.dp(m,8)));
+    urlEt.setPadding(Ui.dp(m,8), Ui.dp(m,6), Ui.dp(m,8), Ui.dp(m,6));
+    urlEt.setSingleLine(true);
+    LinearLayout frow = new LinearLayout(m);
+    frow.setGravity(Gravity.CENTER_VERTICAL);
+    frow.addView(fmtBtn);
+    LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+    flp.leftMargin = Ui.dp(m,6); urlEt.setLayoutParams(flp);
+    frow.addView(urlEt);
+    editor.addView(frow);
+    Button saveBtn = new Button(m);
+    saveBtn.setText(m.getString(R.string.news_link_save)); saveBtn.setAllCaps(false); saveBtn.setTextSize(13);
+    saveBtn.setMinHeight(0); saveBtn.setMinimumHeight(0); saveBtn.setMinimumWidth(0); saveBtn.setMinWidth(0);
+    saveBtn.setPadding(Ui.dp(m,10), Ui.dp(m,5), Ui.dp(m,10), Ui.dp(m,5));
+    saveBtn.setTextColor(Color.WHITE); saveBtn.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,10)));
+    saveBtn.setOnClickListener(v -> {
+      String u = urlEt.getText().toString().trim();
+      if (!u.isEmpty() && !isHttpUrl(u)) { gwStatus.setText(m.getString(R.string.news_link_bad_url)); return; }
+      try {
+        if (editTarget[0] == -2 || editTarget[0] == -3) { // 内置源:写 sina/wsc.url(清空=恢复默认源)
+          String key = editTarget[0] == -2 ? com.laya.Cfg.SINA : com.laya.Cfg.WSC;
+          org.json.JSONObject s2 = newsCfg.optJSONObject(key); if (s2 == null) s2 = new org.json.JSONObject();
+          if (u.isEmpty()) s2.remove(com.laya.Cfg.URL); else s2.put(com.laya.Cfg.URL, u);
+          newsCfg.put(key, s2);
+          persistNews(newsCfg);
+        } else {
+          if (u.isEmpty()) { gwStatus.setText(m.getString(R.string.news_link_need_url)); return; }
+          JSONObject it = new JSONObject().put("fmt", fmt[0]).put("url", u);
+          if (editTarget[0] >= 0) links.put(editTarget[0], it); else links.put(it);
+          persistNewsLinks(links);
+        }
+        editor.setVisibility(View.GONE); editTarget[0] = -1;
+        render[0].run();
+        gwStatus.setText(m.getString(R.string.news_link_done));
+      } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
+    });
+    frow.addView(saveBtn); // 保存位于编辑框右侧
+    l.addView(editor);
+
+    render[0] = () -> {
+      linksBox.removeAllViews();
+      String[] keys = {"sina", "wsc"};
+      int[] targets = {-2, -3};
+      for (int b = 0; b < 2; b++) {
+        org.json.JSONObject st = newsCfg.optJSONObject(keys[b]);
+        if (st == null) { st = new org.json.JSONObject(); try { newsCfg.put(keys[b], st); } catch (Exception ignore) {} }
+        linksBox.addView(linkRow(st, targets[b], links, newsCfg, render[0], editor, editTarget, fmt, fmtBtn, urlEt));
+      }
+      if (links.length() == 0) {
+        TextView none = new TextView(m);
+        none.setText(m.getString(R.string.news_link_none));
+        none.setTextSize(11);
+        none.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
+        linksBox.addView(none);
+      }
+      for (int i = 0; i < links.length(); i++) {
+        org.json.JSONObject it = links.optJSONObject(i);
+        if (it == null) continue;
+        linksBox.addView(linkRow(it, i, links, newsCfg, render[0], editor, editTarget, fmt, fmtBtn, urlEt));
+      }
+    };
+    render[0].run();
+
+    Button addBtn = Ui.button(m,l, m.getString(R.string.news_link_add));
+    addBtn.setOnClickListener(v -> {
+      boolean show = editor.getVisibility() != View.VISIBLE;
+      editor.setVisibility(show ? View.VISIBLE : View.GONE);
+      if (show) {
+        editTarget[0] = -1; fmt[0] = "sina";
+        fmtBtn.setText(m.getString(R.string.news_link_fmt_sina)); fmtBtn.setVisibility(View.VISIBLE);
+        urlEt.setText("");
+      }
+    });
   }
 
   void build() {
@@ -190,7 +466,72 @@ class GatewayPage {
       }).start();
     });
 
-    // ---- 决策 API 服务(HTTP):POST /decide,随网关配置持久化 ----
+    // ---- 客服自动数据采集(独立 tab,参见资讯:csSub 收流 → 本地决策 → csPub 带回复发布;转人工通知;入站入库) ----
+    LinearLayout pCs = new LinearLayout(m);
+    pCs.setOrientation(LinearLayout.VERTICAL);
+    pCs.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
+    l = pCs;
+    l.addView(Ui.hint(m, m.getString(R.string.cs_hint)));
+    EditText gwCsSub = Ui.fieldU(m, l, m.getString(R.string.cs_sub_hint), "laya/cs/req");
+    EditText gwCsPub = Ui.fieldU(m, l, m.getString(R.string.cs_pub_hint), "laya/cs/resp");
+    EditText gwCsTask = Ui.fieldU(m, l, m.getString(R.string.cs_task_hint), "ticket");
+    final Button csTog = Ui.button(m, l, "");
+    Runnable csTogSync = () -> {
+      boolean on = com.laya.Gateway.cfg(m.getApplicationContext()).optJSONObject(Cfg.TOPICS) != null
+          && com.laya.Gateway.cfg(m.getApplicationContext()).optJSONObject(Cfg.TOPICS).optBoolean(Cfg.CS_ENABLED);
+      csTog.setText(m.getString(on ? R.string.cs_disable : R.string.cs_enable));
+    };
+    csTogSync.run();
+    csTog.setOnClickListener(v -> {
+      try {
+        JSONObject cfg = com.laya.Gateway.cfg(m.getApplicationContext());
+        JSONObject topics = cfg.optJSONObject(Cfg.TOPICS); if (topics == null) topics = new JSONObject();
+        topics.put(Cfg.CS_ENABLED, !topics.optBoolean(Cfg.CS_ENABLED));
+        cfg.put(Cfg.TOPICS, topics);
+        com.laya.Gateway.saveCfg(m.getApplicationContext(), cfg);
+        csTogSync.run();
+        gwStatus.setText(m.getString(R.string.news_link_done));
+      } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
+    });
+    Button csSaveBtn = Ui.button(m,l, m.getString(R.string.cs_save));
+    csSaveBtn.setOnClickListener(v -> {
+      try {
+        JSONObject cfg = com.laya.Gateway.cfg(m.getApplicationContext());
+        cfg.put(Cfg.MQTT, new JSONObject().put(Cfg.ENABLED, true).put(Cfg.URL, gwMqUrl.getText().toString()));
+        cfg.put(Cfg.TOPICS, (cfg.optJSONObject(Cfg.TOPICS) != null ? cfg.optJSONObject(Cfg.TOPICS) : new JSONObject())
+            .put(Cfg.CS_ENABLED, true)
+            .put(Cfg.CS_SUB, gwCsSub.getText().toString())
+            .put(Cfg.CS_PUB, gwCsPub.getText().toString())
+            .put(Cfg.CS_TASK, gwCsTask.getText().toString()));
+        gwStatus.setText(com.laya.Gateway.saveAndStart(m.getApplicationContext(), cfg));
+        com.laya.Gateway.restartMqtt(m.getApplicationContext()); // 重连使 csSub 订阅生效
+        csTogSync.run(); // 保存即启用,toggle 文案同步为「停用」
+      } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
+    });
+    TextView csStats = new TextView(m);
+    csStats.setTextSize(13);
+    csStats.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
+    csStats.setPadding(0, Ui.dp(m,2), 0, Ui.dp(m,2));
+    CS_STATS[0] = new java.lang.ref.WeakReference<>(csStats);
+    com.laya.Gateway.csUiTick = CS_TICK;
+    csStats.setText(csStatsText(m));
+    l.addView(csStats);
+    Button csTestBtn = Ui.button(m,l, m.getString(R.string.cs_test));
+    csTestBtn.setOnClickListener(v -> {
+      String url = gwMqUrl.getText().toString();
+      if (url.isEmpty()) { gwStatus.setText(m.getString(R.string.mqtt_fill_url)); return; }
+      String csub = gwCsSub.getText().toString(); if (csub.isEmpty()) csub = "laya/cs/req";
+      String cpub = gwCsPub.getText().toString(); if (cpub.isEmpty()) cpub = "laya/cs/resp";
+      final String fu = url, fsub = csub, fpub = cpub;
+      gwStatus.setText(m.getString(R.string.cs_testing));
+      new Thread(() -> {
+        String r = com.laya.Gateway.testCsRoundtrip(m, fu, fsub, fpub);
+        m.runOnUiThread(() -> gwStatus.setText(r));
+      }).start();
+    });
+
+    // ---- 决策 API 服务(HTTP):POST /decide,随网关配置持久化(留在队列 tab) ----
+    l = pMq;
     l.addView(Ui.hint(m,m.getString(R.string.api_hint)));
     final boolean apiOn = com.laya.DecisionApiServer.running();
     Button apiBtn = Ui.button(m,l, m.getString(apiOn ? R.string.api_stop : R.string.api_start));
@@ -266,7 +607,7 @@ class GatewayPage {
       // 编辑配置按钮:展开/收起该卡样本编辑区(与删除配置对称)
       Button edit = new Button(m);
       edit.setText(m.getString(R.string.collect_edit)); edit.setAllCaps(false); edit.setTextSize(10);
-      edit.setMinHeight(0); edit.setMinimumHeight(0); edit.setMinimumWidth(0);
+      edit.setMinHeight(0); edit.setMinimumHeight(0); edit.setMinimumWidth(0); edit.setMinWidth(0);
       edit.setPadding(Ui.dp(m,8), Ui.dp(m,3), Ui.dp(m,8), Ui.dp(m,3));
       edit.setTextColor(Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
       edit.setBackground(Ui.pill(Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,10)));
@@ -279,7 +620,7 @@ class GatewayPage {
 
       Button tog = new Button(m);
       tog.setAllCaps(false); tog.setTextSize(10);
-      tog.setMinHeight(0); tog.setMinimumHeight(0); tog.setMinimumWidth(0);
+      tog.setMinHeight(0); tog.setMinimumHeight(0); tog.setMinimumWidth(0); tog.setMinWidth(0);
       tog.setPadding(Ui.dp(m,8), Ui.dp(m,3), Ui.dp(m,8), Ui.dp(m,3));
       tog.setTextColor(Color.WHITE);
       setCollectToggle(tog, on);
@@ -297,7 +638,7 @@ class GatewayPage {
       head.addView(tog);
       Button del = new Button(m);
       del.setText(m.getString(R.string.collect_delete)); del.setAllCaps(false); del.setTextSize(10);
-      del.setMinHeight(0); del.setMinimumHeight(0); del.setMinimumWidth(0);
+      del.setMinHeight(0); del.setMinimumHeight(0); del.setMinimumWidth(0); del.setMinWidth(0);
       del.setPadding(Ui.dp(m,8), Ui.dp(m,3), Ui.dp(m,8), Ui.dp(m,3));
       del.setTextColor(Color.WHITE); del.setBackground(Ui.pill(0xFFD64545, Ui.dp(m,10)));
       del.setOnClickListener(v -> {
@@ -318,7 +659,7 @@ class GatewayPage {
 
       Button test = new Button(m);
       test.setText(m.getString(R.string.collect_test_btn)); test.setAllCaps(false); test.setTextSize(10);
-      test.setMinHeight(0); test.setMinimumHeight(0); test.setMinimumWidth(0);
+      test.setMinHeight(0); test.setMinimumHeight(0); test.setMinimumWidth(0); test.setMinWidth(0);
       test.setPadding(Ui.dp(m,8), Ui.dp(m,3), Ui.dp(m,8), Ui.dp(m,3));
       test.setTextColor(Color.WHITE); test.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,10)));
       test.setOnClickListener(v -> {
@@ -480,109 +821,15 @@ class GatewayPage {
     pNews.setOrientation(LinearLayout.VERTICAL);
     pNews.setPadding(Ui.dp(m,12), Ui.dp(m,8), Ui.dp(m,12), Ui.dp(m,8));
     l = pNews;
-    l.addView(Ui.hint(m,m.getString(R.string.news_cfg_hint)));
     org.json.JSONObject newsCfg = com.laya.Gateway.cfg(m).optJSONObject(com.laya.Cfg.NEWS);
-    org.json.JSONObject sinaCfg = newsCfg != null ? newsCfg.optJSONObject(com.laya.Cfg.SINA) : null;
-    org.json.JSONObject wscCfg = newsCfg != null ? newsCfg.optJSONObject(com.laya.Cfg.WSC) : null;
-    gwNewsSina = Ui.fieldU(m,l, m.getString(R.string.news_sina_hint),
-        sinaCfg != null ? sinaCfg.optString(com.laya.Cfg.URL) : "");
-    gwNewsWsc = Ui.fieldU(m,l, m.getString(R.string.news_wsc_hint),
-        wscCfg != null ? wscCfg.optString(com.laya.Cfg.URL) : "");
-    gwNewsInterval = Ui.fieldU(m,l, m.getString(R.string.news_interval_hint),
-        newsCfg != null && newsCfg.has(com.laya.Cfg.INTERVAL) ? String.valueOf(newsCfg.optLong(com.laya.Cfg.INTERVAL, 60)) : "60");
-    // ---- 自动数据采集→决策 链路测试(三条示例快讯,注入后走本地评分→决策日志) ----
-    // ---- 已配置采集渠道状态:启用/来源/快讯条数 ----
-    String[][] chans = {{"sina", "新浪财经"}, {"wsc", "华尔街见闻"}};
-    for (String[] ch : chans) {
-      org.json.JSONObject sc = newsCfg != null ? newsCfg.optJSONObject(ch[0]) : null;
-      boolean on = sc == null || sc.optBoolean(com.laya.Cfg.ENABLED, true);
-      String urlKind = sc != null && !sc.optString(com.laya.Cfg.URL).isEmpty() ? "自定义源" : "默认源";
-      LinearLayout crow = new LinearLayout(m);
-      crow.setGravity(android.view.Gravity.CENTER_VERTICAL);
-      crow.setPadding(0, Ui.dp(m,2), 0, Ui.dp(m,2));
-      TextView ct = new TextView(m);
-      ct.setTextSize(11);
-      ct.setTextColor(Ui.c(m, 0xFF444A55, 0xFFB8C0CC));
-      ct.setText("· " + ch[1] + (on ? " ✅启用" : " ⛔停用") + " · " + urlKind + " · " + m.newsPage.feedCount(ch[1]) + " 条");
-      crow.addView(ct, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-      Button tog = new Button(m);
-      tog.setText(on ? "停止" : "启用"); tog.setAllCaps(false); tog.setTextSize(10);
-      tog.setMinHeight(0); tog.setMinimumHeight(0); tog.setMinimumWidth(0);
-      tog.setPadding(Ui.dp(m,8), Ui.dp(m,3), Ui.dp(m,8), Ui.dp(m,3));
-      tog.setTextColor(Color.WHITE);
-      tog.setBackground(Ui.pill(on ? 0xFF8894A6 : m.PRIMARY, Ui.dp(m,10)));
-      tog.setOnClickListener(v -> {
-        try {
-          JSONObject c2 = com.laya.Gateway.cfg(m.getApplicationContext());
-          JSONObject n2 = c2.optJSONObject(com.laya.Cfg.NEWS); if (n2 == null) n2 = new JSONObject();
-          JSONObject s2 = n2.optJSONObject(ch[0]); if (s2 == null) s2 = new JSONObject();
-          // 每业务独立数据源:按 ch[0] 精确写 sina/wsc,不互相污染(旧代码会把 wsc 写进 sina 键)
-          boolean nowOn = !s2.optBoolean(com.laya.Cfg.ENABLED, true);
-          s2.put(com.laya.Cfg.ENABLED, nowOn);
-          n2.put(ch[0], s2);
-          c2.put(com.laya.Cfg.NEWS, n2);
-          com.laya.Gateway.saveCfg(m.getApplicationContext(), c2);
-          // 局部刷新:原地翻转按钮与该行文案,不整页重建(拉取循环每轮实时读 cfg,无需重建)
-          String kind = !s2.optString(com.laya.Cfg.URL).isEmpty() ? "自定义源" : "默认源";
-          ct.setText("· " + ch[1] + (nowOn ? " ✅启用" : " ⛔停用") + " · " + kind + " · " + m.newsPage.feedCount(ch[1]) + " 条");
-          tog.setText(nowOn ? "停止" : "启用");
-          tog.setBackground(Ui.pill(nowOn ? 0xFF8894A6 : m.PRIMARY, Ui.dp(m,10)));
-        } catch (Exception e) { ct.setText("操作失败: " + e.getMessage()); }
-      });
-      crow.addView(tog);
-      Button test = new Button(m);
-      test.setText("测试"); test.setAllCaps(false); test.setTextSize(10);
-      test.setMinHeight(0); test.setMinimumHeight(0); test.setMinimumWidth(0);
-      test.setPadding(Ui.dp(m,8), Ui.dp(m,3), Ui.dp(m,8), Ui.dp(m,3));
-      test.setTextColor(Color.WHITE); test.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,10)));
-      final String sample = "sina".equals(ch[0])
-          ? "央行宣布下调存款准备金率0.5个百分点,释放长期资金约1万亿元"
-          : "美联储宣布加息25个基点,并表示将继续缩表以抑制通胀";
-      test.setOnClickListener(v -> m.newsPage.injectTestFeed(sample, "测试-" + ch[1]));
-      crow.addView(test);
-      l.addView(crow);
-    }
-    l.addView(Ui.hint(m,m.getString(R.string.news_test_hint)));
-    LinearLayout testRow = new LinearLayout(m);
-    String[][] tests = {
-        {"利好", "公司公告预计上半年净利润同比增长120%至150%,主因产品量价齐升"},
-        {"利空", "公司收到证监会立案调查通知书,涉嫌信息披露违法违规"},
-        {"中性", "公司定于下月15日召开年度股东大会,审议年度报告等议案"},
-    };
-    for (String[] t : tests) {
-      final String tag = t[0], text = t[1];
-      Button tb = new Button(m);
-      tb.setText("测试·" + tag); tb.setAllCaps(false); tb.setTextSize(11);
-      tb.setMinHeight(0); tb.setMinimumHeight(0); tb.setMinimumWidth(0);
-      tb.setPadding(Ui.dp(m,6), Ui.dp(m,5), Ui.dp(m,6), Ui.dp(m,5));
-      tb.setTextColor(Color.WHITE); tb.setBackground(Ui.pill(m.PRIMARY, Ui.dp(m,10)));
-      tb.setOnClickListener(v -> m.newsPage.injectTestFeed(text, "模拟-" + tag));
-      testRow.addView(tb, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-    }
-    LinearLayout.LayoutParams trp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    trp.bottomMargin = Ui.dp(m,8);
-    l.addView(testRow, trp);
+    // ---- 资讯源链接列表:内置 新浪/华尔街见闻(编辑 URL/启停/测试)+ 自定义链接(全 CRUD);即时落盘 ----
+    l.addView(Ui.hint(m,m.getString(R.string.news_links_hint)));
+    buildSourceLinks(l, newsCfg);
 
-    Button newsSave = Ui.button(m,l, m.getString(R.string.news_cfg_save));
-    newsSave.setOnClickListener(v -> {
-      try {
-        JSONObject cfg = com.laya.Gateway.cfg(m.getApplicationContext());
-        JSONObject news = new JSONObject();
-        String su = gwNewsSina.getText().toString().trim();
-        String wu = gwNewsWsc.getText().toString().trim();
-        if (!su.isEmpty()) news.put(com.laya.Cfg.SINA, new JSONObject().put(com.laya.Cfg.URL, su).put(com.laya.Cfg.ENABLED, true));
-        if (!wu.isEmpty()) news.put(com.laya.Cfg.WSC, new JSONObject().put(com.laya.Cfg.URL, wu).put(com.laya.Cfg.ENABLED, true));
-        try { news.put(com.laya.Cfg.INTERVAL, Math.max(15, Integer.parseInt(gwNewsInterval.getText().toString().trim()))); } catch (Exception ignore) {}
-        cfg.put(com.laya.Cfg.NEWS, news);
-        com.laya.Gateway.saveCfg(m.getApplicationContext(), cfg);
-        gwStatus.setText(m.getString(R.string.news_cfg_done));
-      } catch (Exception e) { gwStatus.setText(m.getString(R.string.cfg_failed, e.getMessage())); }
-    });
-
-    // ---- 左侧竖排 tab(与报表页同款):资讯/邮件/队列/采集/模板 ----
-    LinearLayout[] panels = {pNews, pMail, pMq, pCollect, pTpl}; // 资讯第一
-    final ScrollView[] scrolls = new ScrollView[5];
-    for (int i = 0; i < 5; i++) {
+    // ---- 左侧竖排 tab(与报表页同款):资讯/邮件/队列/客服/采集/模板 ----
+    LinearLayout[] panels = {pNews, pMail, pMq, pCs, pCollect, pTpl}; // 资讯第一
+    final ScrollView[] scrolls = new ScrollView[6];
+    for (int i = 0; i < 6; i++) {
       ScrollView sv = new ScrollView(m);
       sv.addView(panels[i]);
       scrolls[i] = sv;
@@ -591,11 +838,11 @@ class GatewayPage {
     final FrameLayout gHolder = new FrameLayout(m);
     gHolder.addView(scrolls[0]);
     gHolder.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
-    String[] gkinds = {m.getString(R.string.gw_news), m.getString(R.string.gw_mail), m.getString(R.string.gw_mq), m.getString(R.string.gw_collect), m.getString(R.string.gw_tpl)};
-    final Button[] gchips = new Button[5];
+    String[] gkinds = {m.getString(R.string.gw_news), m.getString(R.string.gw_mail), m.getString(R.string.gw_mq), m.getString(R.string.gw_cs), m.getString(R.string.gw_collect), m.getString(R.string.gw_tpl)};
+    final Button[] gchips = new Button[6];
     final LinearLayout grail = new LinearLayout(m);
     grail.setOrientation(LinearLayout.VERTICAL);
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
       final int k = i;
       Button c = new Button(m);
       c.setText(gkinds[i]); c.setAllCaps(false); c.setTextSize(12);
@@ -604,7 +851,7 @@ class GatewayPage {
         gHolder.removeAllViews();
         gHolder.addView(scrolls[k]);
         m.scroller = scrolls[k];
-        for (int j = 0; j < 4; j++) {
+        for (int j = 0; j < gchips.length; j++) {
           gchips[j].setTextColor(j == k ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
           gchips[j].setBackground(Ui.pill(j == k ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,12)));
         }
@@ -640,7 +887,7 @@ class GatewayPage {
     gBottom.addView(gwStatus);
     m.body.addView(gBottom);
     // 初始漆全部 chip(选中高亮,其余 off 样式;默认 Button 样式在深色下露馅)
-    for (int j = 0; j < 4; j++) {
+    for (int j = 0; j < gchips.length; j++) {
       gchips[j].setTextColor(j == 0 ? Color.WHITE : Ui.c(m, 0xFF1A2B4C, 0xFFCFD8E6));
       gchips[j].setBackground(Ui.pill(j == 0 ? m.PRIMARY : Ui.c(m, 0xFFE7EAF2, 0xFF2A3040), Ui.dp(m,12)));
     }

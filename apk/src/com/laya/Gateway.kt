@@ -172,6 +172,9 @@ object Gateway {
     val parts = ArrayList<String>()
     if (c.optJSONObject(Cfg.EMAIL)?.optBoolean(Cfg.ENABLED) == true) parts.add(ctx.getString(com.selfhost.layatest.R.string.mail_running))
     if (c.optJSONObject(Cfg.MQTT)?.optBoolean(Cfg.ENABLED) == true) parts.add(ctx.getString(com.selfhost.layatest.R.string.mqtt_connected, c.optJSONObject(Cfg.MQTT)?.optString(Cfg.URL)))
+    val tp = c.optJSONObject(Cfg.TOPICS)
+    if (tp?.optBoolean(Cfg.CS_ENABLED) == true && mqttRunning)
+      parts.add(ctx.getString(com.selfhost.layatest.R.string.gw_cs_running, tp.optString(Cfg.CS_SUB).ifEmpty { "laya/cs/req" }))
     if (UploadServer.running()) parts.add(ctx.getString(com.selfhost.layatest.R.string.upload_running, UploadServer.url()))
     if (DecisionApiServer.running()) parts.add(ctx.getString(com.selfhost.layatest.R.string.api_running, DecisionApiServer.url()))
     val nCollect = collectEnabledCount(ctx)
@@ -333,7 +336,7 @@ object Gateway {
   @JvmStatic
   fun testMqtt(ctx: Context, mq: JSONObject, topics: JSONObject?): String {
     return try {
-      val url = mq.optString(Cfg.URL)
+      val url = normBrokerUrl(mq.optString(Cfg.URL))
       if (url.isEmpty()) return ctx.getString(com.selfhost.layatest.R.string.mqtt_fill_url)
       val sub = topics?.optString(Cfg.SUB)?.ifEmpty { "laya/req/+" } ?: "laya/req/+"
       val pub = topics?.optString(Cfg.PUB)?.ifEmpty { "laya/resp" } ?: "laya/resp"
@@ -367,22 +370,74 @@ object Gateway {
   }
 
   // ---- MQTT 网关 ----
+  // ---- 客服自动数据采集(MQTT csSub 收流 → ticket 等模型决策 → csPub 带回复发布;交互模式参见资讯) ----
+  // 契约与 Node gateways.mjs 一致:{id?, task?, text | subject+body} → 回复 {id?, task, text, answers, latencyMs, reply}
+  /** paho 仅认 tcp://ssl://,不认 mqtt://(Node 端接受);用户按 Node 习惯填 mqtt:// 时自动改写 */
+  private fun normBrokerUrl(u: String) = if (u.startsWith("mqtt://")) "tcp://" + u.substring(7) else u
+  @JvmField var csProcessed = 0L          // 已处理条数(计数含所有客服入站)
+  @JvmField var csEscalated = 0L          // 转人工/升级条数(强信号,触发系统通知)
+  @JvmField var csLastError = ""          // 最近一次处理失败原因(UI 展示)
+  private val csUiHandler = android.os.Handler(android.os.Looper.getMainLooper())
+  /** 客服 tab 统计 TextView 刷新回调(GatewayPage 注册;holder 由页面持有并在销毁时置空,防泄漏) */
+  @Volatile @JvmField var csUiTick: Runnable? = null
+  private fun tickCsUi() { csUiTick?.let { r -> try { csUiHandler.post(r) } catch (_: Throwable) {} } }
+
+  private const val CS_CHANNEL = "cs_alerts"
+
+  /** 客服强信号通知(独立高优频道;不复用 NewsAutoService.pushAlert 以保持 run_tests.sh 纯 Kotlin 可编译) */
+  private fun notifyCs(ctx: Context, text: String, choice: String, level: String, score: Double) {
+    try {
+      val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+      nm.createNotificationChannel(android.app.NotificationChannel(CS_CHANNEL, "客服采集强信号", android.app.NotificationManager.IMPORTANCE_HIGH))
+      val body = "[$level] $choice · 重要度 %.1f/5\n%s".format(score, text)
+      val n = android.app.Notification.Builder(ctx, CS_CHANNEL)
+        .setSmallIcon(android.R.drawable.stat_notify_chat)
+        .setContentTitle("客服强信号 · 客服采集")
+        .setContentText(if (body.length > 180) body.substring(0, 180) + "…" else body)
+        .setStyle(android.app.Notification.BigTextStyle().bigText(body))
+        .setAutoCancel(true)
+        .build()
+      nm.notify((System.currentTimeMillis() % 100000).toInt(), n)
+    } catch (t: Throwable) { Log.w(TAG, "cs notify: ${t.message}") }
+  }
+
+  /** 保存客服采集配置后重连 MQTT(csSub 订阅生效,无需重启整个网关) */
+  @JvmStatic
+  fun restartMqtt(ctx: Context) {
+    try { mqtt?.disconnect() } catch (_: Exception) {}
+    mqtt = null; mqttRunning = false
+    start(ctx)
+  }
+
   private fun startMqtt(ctx: Context, mq: JSONObject, topics: JSONObject?) {
     mqttRunning = true
+    // 客服自动采集参数(csEnabled 关闭时不订阅 csSub,行为与旧版完全一致)
+    val csEn = topics?.optBoolean(Cfg.CS_ENABLED) == true
+    val csSub = topics?.optString(Cfg.CS_SUB)?.ifEmpty { "laya/cs/req" } ?: "laya/cs/req"
+    val csPub = topics?.optString(Cfg.CS_PUB)?.ifEmpty { "laya/cs/resp" } ?: "laya/cs/resp"
+    val csTaskDft = topics?.optString(Cfg.CS_TASK)?.ifEmpty { "ticket" } ?: "ticket"
     Thread {
       try {
         val sub = topics?.optString(Cfg.SUB)?.ifEmpty { "laya/req/+" } ?: "laya/req/+"
         val pub = topics?.optString(Cfg.PUB)?.ifEmpty { "laya/resp" } ?: "laya/resp"
-        val client = MqttClient(mq.optString(Cfg.URL), "laya-apk-" + UUID.randomUUID().toString().take(8), MemoryPersistence())
+        val client = MqttClient(normBrokerUrl(mq.optString(Cfg.URL)), "laya-apk-" + UUID.randomUUID().toString().take(8), MemoryPersistence())
         client.setCallback(object : MqttCallbackExtended {
           override fun connectComplete(reconnect: Boolean, serverURI: String?) {
             Log.i(TAG, "mqtt connected $serverURI")
             client.subscribe(sub)
+            if (csEn) client.subscribe(csSub)
           }
           override fun connectionLost(cause: Throwable?) { Log.w(TAG, "mqtt lost: ${cause?.message}") }
           override fun messageArrived(topic: String?, message: MqttMessage?) {
             try {
-              if (message == null) return
+              if (message == null || topic == null) return
+              // 客服主题路由:csSub 及其子主题(laya/cs/req/x)走客服采集链路,decide 慢(串行锁)故独立线程
+              if (csEn && (topic == csSub || topic.startsWith(csSub + "/"))) {
+                Thread {
+                  handleCs(ctx.applicationContext, client, csSub, csPub, csTaskDft, topic, message.toString())
+                }.apply { isDaemon = true; name = "Gateway-CS"; start() }
+                return
+              }
               val req = JSONObject(message.toString())
               val task = req.optString("task")
               val text = req.optString("text")
@@ -401,11 +456,86 @@ object Gateway {
         val opts = MqttConnectOptions().apply { isCleanSession = true; connectionTimeout = 10; keepAliveInterval = 30 }
         client.connect(opts)
         mqtt = client
-        Log.i(TAG, "mqtt gateway up: sub=$sub pub=$pub")
+        Log.i(TAG, "mqtt gateway up: sub=$sub pub=$pub cs=${if (csEn) csSub else "off"}")
       } catch (t: Throwable) {
         Log.w(TAG, "mqtt start: ${t.message}")
         mqttRunning = false
       }
     }.apply { isDaemon = true; name = "Gateway-MQTT"; start() }
+  }
+
+  /** 客服采集端到端测试(资讯「测试」同款语义):独立短连 client 订阅 csPub → 发布样例工单到 csSub → 等待网关自身回复 */
+  @JvmStatic
+  fun testCsRoundtrip(ctx: Context, url: String, csSub: String, csPub: String): String {
+    var c: MqttClient? = null
+    return try {
+      c = MqttClient(normBrokerUrl(url), "laya-cstest-" + UUID.randomUUID().toString().take(6), MemoryPersistence())
+      val opts = MqttConnectOptions().apply { isCleanSession = true; connectionTimeout = 8; keepAliveInterval = 30 }
+      val got = java.util.concurrent.LinkedBlockingQueue<String>(1)
+      c.setCallback(object : MqttCallbackExtended {
+        override fun connectComplete(reconnected: Boolean, serverURI: String?) { c?.subscribe(csPub) }
+        override fun connectionLost(cause: Throwable?) {}
+        override fun messageArrived(topic: String?, message: MqttMessage?) { if (message != null) got.offer(message.toString()) }
+        override fun deliveryComplete(token: IMqttDeliveryToken?) {}
+      })
+      c.connect(opts)
+      val req = JSONObject()
+        .put("id", "cs-test-" + System.currentTimeMillis())
+        .put("subject", "订单重复扣款")
+        .put("body", "我在10月16日购买会员被重复扣款199元,订单号A20261016,多次联系客服无人处理,请尽快退款,否则我会向消协投诉。")
+      c.publish(csSub, MqttMessage(req.toString().toByteArray()))
+      val resp = got.poll(10, java.util.concurrent.TimeUnit.SECONDS) ?: return ctx.getString(com.selfhost.layatest.R.string.cs_test_none)
+      val o = JSONObject(resp)
+      val reply = o.optString("reply")
+      ctx.getString(com.selfhost.layatest.R.string.cs_test_ok, o.optLong("latencyMs", 0),
+          if (reply.length > 160) reply.substring(0, 160) + "…" else reply)
+    } catch (t: Throwable) {
+      ctx.getString(com.selfhost.layatest.R.string.err_mqtt, t.message ?: "")
+    } finally {
+      try { c?.disconnect() } catch (_: Exception) {}
+    }
+  }
+
+  /** 一条客服入站:登记 inbound → 决策(写决策日志) → 发布回复 → 升级则系统通知 */
+  private fun handleCs(ctx: Context, client: MqttClient?, csSub: String, csPub: String, csTaskDft: String, topic: String, payload: String) {
+    var inId = 0L
+    try {
+      val req = JSONObject(payload)
+      val task = req.optString("task").ifEmpty { csTaskDft }
+      val subject = req.optString("subject")
+      val body = req.optString("body")
+      val text = req.optString("text").ifEmpty { listOf(subject, body).filter { it.isNotEmpty() }.joinToString("\n") }
+      if (!DecisionCore.scanTasks().any { it.first == task } || text.isEmpty()) {
+        Log.i(TAG, "cs ignored: task=$task textLen=${text.length}")
+        return
+      }
+      inId = Db.insertInbound(ctx, "mqtt", topic, req.optString("sender"), subject, text, task)
+      val r = DecisionCore.decide(ctx, task, text)
+      val resp = JSONObject()
+      if (req.has("id")) resp.put("id", req.opt("id"))
+      resp.put("task", task); resp.put("text", text)
+      resp.put("answers", r.answers); resp.put("latencyMs", r.latencyMs)
+      resp.put("reply", DecisionCore.replyAppendix(ctx, task, r.answers, text))
+      // 子主题映射与 Node 一致:laya/cs/req/x → csPub/x
+      val respTopic = if (topic == csSub) csPub else csPub + "/" + topic.removePrefix(csSub + "/")
+      if (client?.isConnected == true) client.publish(respTopic, MqttMessage(resp.toString().toByteArray()))
+      Db.linkInbound(ctx, inId, 0, "done")
+      val esc = DecisionCore.isEscalated(task, r.answers) == true
+      csProcessed++
+      if (esc) {
+        csEscalated++
+        val q0 = r.answers.optJSONObject("q0")
+        val choice = q0?.optString("choice") ?: ""
+        val score = r.answers.optJSONObject("q1")?.optDouble("score", 1.0) ?: 1.0
+        val level = DecisionCore.levelOf(r.answers).optString("level")
+        notifyCs(ctx, text, choice, level, score)
+      }
+      tickCsUi()
+    } catch (t: Throwable) {
+      Log.w(TAG, "cs msg: ${t.message}")
+      if (inId > 0) Db.linkInbound(ctx, inId, 0, "failed")
+      csLastError = t.message ?: "cs error"
+      tickCsUi()
+    }
   }
 }

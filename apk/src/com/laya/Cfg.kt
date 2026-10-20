@@ -27,6 +27,11 @@ object Cfg {
   const val URL = "url"
   const val SUB = "sub"
   const val PUB = "pub"
+  // 客服自动采集子键(topics 下,与 Node gateways.mjs cfg.topics.* 同名同构)
+  const val CS_ENABLED = "csEnabled"
+  const val CS_SUB = "csSub"
+  const val CS_PUB = "csPub"
+  const val CS_TASK = "csTask"
   const val PORT = "port"
   const val KEY = "key"
   const val TO = "to"

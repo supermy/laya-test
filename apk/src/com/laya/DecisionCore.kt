@@ -691,8 +691,9 @@ fun interface LlmListener { fun onLlmDone(task: String, content: String, error: 
   fun humanScript(ctx: Context?, task: String, answers: JSONObject, text: String): String =
     scriptBody(ctx, task, answers, text) ?: fmt(ctx, task, answers)
 
-  /** 该业务该答案是否走人工(升级)通道 */
-  private fun isEscalated(task: String, answers: JSONObject): Boolean? {
+  /** 该业务该答案是否走人工(升级)通道;null=未知。客服采集(Gateway.handleCs)判定强信号用 */
+  @JvmStatic
+  fun isEscalated(task: String, answers: JSONObject): Boolean? {
     return when (task) {
       "ticket", "multi" -> ticketParts(task, answers)?.second?.second
       "ugc" -> anyEscalate(answers) || qScore(answers, "q1", 1) >= 4

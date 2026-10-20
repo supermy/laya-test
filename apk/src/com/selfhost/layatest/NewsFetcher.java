@@ -41,15 +41,17 @@ public final class NewsFetcher {
         .replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").trim();
   }
 
-  /** 新浪财经:HTTP 拉取 → 入队;返回新增条数 */
-  public static int fetchSina(String url) throws Exception {
+  /** 新浪财经:HTTP 拉取 → 入队;返回新增条数。keyPrefix 隔离去重 key(多个自定义源同 id 不互吞) */
+  public static int fetchSina(String url) throws Exception { return fetchSina(url, "sina"); }
+
+  public static int fetchSina(String url, String keyPrefix) throws Exception {
     JSONObject o = getJson(url);
     JSONArray arr = o.optJSONObject("result").optJSONObject("data").optJSONObject("feed").optJSONArray("list");
     int fresh = 0;
     SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
     for (int i = 0; arr != null && i < arr.length(); i++) {
       JSONObject it = arr.optJSONObject(i); if (it == null) continue;
-      String key = "sina_" + it.optLong("id");
+      String key = keyPrefix + "_" + it.optLong("id");
       String text = it.optString("rich_text").trim();
       if (text.isEmpty() || !SEEN.add(key)) continue;
       JSONObject n = new JSONObject();
@@ -63,14 +65,16 @@ public final class NewsFetcher {
     return fresh;
   }
 
-  /** 华尔街见闻:HTTP 拉取 → 入队;返回新增条数 */
-  public static int fetchWsc(String url) throws Exception {
+  /** 华尔街见闻:HTTP 拉取 → 入队;返回新增条数。keyPrefix 隔离去重 key */
+  public static int fetchWsc(String url) throws Exception { return fetchWsc(url, "wsc"); }
+
+  public static int fetchWsc(String url, String keyPrefix) throws Exception {
     JSONObject o = getJson(url);
     JSONArray arr = o.optJSONObject("data").optJSONArray("items");
     int fresh = 0;
     for (int i = 0; arr != null && i < arr.length(); i++) {
       JSONObject it = arr.optJSONObject(i); if (it == null) continue;
-      String key = "wsc_" + it.optLong("id");
+      String key = keyPrefix + "_" + it.optLong("id");
       String text = stripHtml(it.optString("content_text", it.optString("content", "")));
       if (text.isEmpty() || !SEEN.add(key)) continue;
       JSONObject n = new JSONObject();

@@ -84,6 +84,20 @@ public class NewsAutoService extends Service {
             : "https://api-one-wscn.awtmt.com/apiv1/content/lives?channel=global-channel&limit=20";
         try { fresh += NewsFetcher.fetchWsc(url); } catch (Throwable t) { errs.append("wsc:").append(t.getMessage()).append("; "); }
       }
+      // 自定义源链接(cfg.news.custom,资讯 tab 维护):按 fmt 复用两种解析器;每轮重读 cfg,增删改下轮自动生效
+      org.json.JSONArray custom = nc.optJSONArray("custom");
+      for (int i = 0; custom != null && i < custom.length(); i++) {
+        JSONObject s = custom.optJSONObject(i);
+        if (s == null || s.optString("url").isEmpty()) continue;
+        if (!s.optBoolean("enabled", true)) continue; // 链接行「停用」后跳过
+        String fmt = s.optString("fmt", "sina");
+        // 去重 key 带上 url hash:多个同格式自定义源条目 id 相同不互吞
+        String kp = fmt + "#" + Integer.toHexString(s.optString("url").hashCode());
+        try {
+          fresh += "wsc".equals(fmt) ? NewsFetcher.fetchWsc(s.optString("url"), kp)
+                                     : NewsFetcher.fetchSina(s.optString("url"), kp);
+        } catch (Throwable t) { errs.append("custom").append(i).append(":").append(t.getMessage()).append("; "); }
+      }
       lastFetchAt = System.currentTimeMillis();
       lastError = errs.toString();
       if (fresh > 0) scorePending(ctx);

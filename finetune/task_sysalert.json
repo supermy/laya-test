@@ -1,0 +1,8 @@
+{
+  "state_key": "text",
+  "questions": [
+    {"qid": "q0", "type": "choice", "instructions": "这段系统资源告警文本的类别(手机端资源巡检分诊)", "criteria": ["正常波动", "内存压力", "存储紧张", "发热降频", "耗电异常", "可疑占用"], "from": "label"},
+    {"qid": "q1", "type": "score", "instructions": "资源紧张程度1-5(1平稳/5危急)", "criteria": ["平稳", "关注", "预警", "严重", "危急"], "from": "severity"},
+    {"qid": "q2", "type": "noul", "instructions": "是否需要人工处理(如持续高负载、疑似恶意占用、需立即清理或重启)", "from": "review"}
+  ]
+}

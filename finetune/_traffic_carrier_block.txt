@@ -1,0 +1,27 @@
+# ---------- 多运营商增强(移动/联通/电信 正确归属,勿串台) ----------
+CARR = {
+    "中国移动": {"attr": "移动", "svc": "10086", "app": "中国移动App", "codes": "CXTC/CXLL/CXHF"},
+    "中国联通": {"attr": "联通", "svc": "10010", "app": "中国联通App", "codes": "CXLL/CXYE"},
+    "中国电信": {"attr": "电信", "svc": "10001", "app": "电信营业厅App", "codes": "108"},
+}
+for _ in range(2200):
+    cn = rng.choice(list(CARR)); c = CARR[cn]
+    code0 = c["codes"].split("/")[0]
+    u = rng.choice(["1.8GB", "6.5GB", "14GB", "22GB", "35GB"])
+    p = rng.choice([10, 20, 30, 60, 100])
+    k = rng.random()
+    if k < 0.30:
+        t = f"{cn}:本月流量已用{u},套餐共{p}GB,余量充足,可发{code0}到{c['svc']}查询"
+        add(synth(t), "正常使用", 1, 0, "carrier")
+    elif k < 0.55:
+        t = f"{cn}提醒:本月流量已用{u}/{p}GB,超额按标准资费计费,回复{code0}到{c['svc']}或使用{c['app']}查询余量"
+        add(synth(t), "用量预警", 3, 0, "carrier")
+    elif k < 0.72:
+        t = f"【{cn}】流量超套计费中,已产生额外费用,请尽快通过{c['svc']}人工客服或{c['app']}核实,避免欠费停机"
+        add(synth(t), "超量风险", 5, 1, "carrier")
+    elif k < 0.88:
+        t = f"想办{cn}流量多点的套餐,{rng.choice(['在哪办理?','营业厅还是App?','保号套餐能加包吗?'])}"
+        add(synth(t), "套餐咨询", 2, 0, "carrier")
+    else:
+        t = f"【{cn}】推荐加购流量包,当月有效自动续订,回复1订购或前往{c['app']}办理"
+        add(synth(t), "加购推荐", 2, 0, "carrier")

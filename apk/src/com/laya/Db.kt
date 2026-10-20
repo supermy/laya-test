@@ -254,6 +254,52 @@ object Db {
     return db(ctx).insertWithOnConflict("decisions", null, v, SQLiteDatabase.CONFLICT_IGNORE)
   }
 
+  // ---- 网关入站(客服自动采集等;镜像 service/db.mjs insertInbound/linkInbound 语义) ----
+  /** 入站请求登记(status='pending'),返回 inbound.id;决策后经 linkInbound 回填 */
+  @JvmStatic
+  fun insertInbound(ctx: Context?, channel: String, topic: String, sender: String,
+                    subject: String, text: String, task: String): Long {
+    val v = ContentValues().apply {
+      put("ts", System.currentTimeMillis())
+      put("channel", channel)
+      put("topic", topic)
+      put("sender", sender)
+      put("subject", subject)
+      put("text", text)
+      put("task", task)
+      put("status", "pending")
+    }
+    return db(ctx).insert("inbound", null, v)
+  }
+
+  /** 回填决策结果与终态(status='done'|'failed'|'ignored') */
+  @JvmStatic
+  fun linkInbound(ctx: Context?, id: Long, decisionId: Long, status: String) {
+    if (id <= 0) return
+    val v = ContentValues().apply {
+      if (decisionId > 0) put("decision_id", decisionId)
+      put("status", status)
+    }
+    db(ctx).update("inbound", v, "id=?", arrayOf(id.toString()))
+  }
+
+  /** 入站持久统计(客服 tab 统计行;总数/今日/失败;COUNT(*) 恒有行,simpleQueryForLong 安全) */
+  @JvmStatic
+  fun inboundStats(ctx: Context? = null): JSONObject {
+    val d = db(ctx)
+    val midnight = java.util.Calendar.getInstance().apply {
+      set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+      set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+    }.timeInMillis
+    val today = d.compileStatement("SELECT COUNT(*) FROM inbound WHERE ts>=?")
+    today.bindLong(1, midnight)
+    val failed = d.compileStatement("SELECT COUNT(*) FROM inbound WHERE status='failed'")
+    return JSONObject()
+      .put("total", d.compileStatement("SELECT COUNT(*) FROM inbound").simpleQueryForLong())
+      .put("today", today.simpleQueryForLong())
+      .put("failed", failed.simpleQueryForLong())
+  }
+
   // ---- 统计(决策 API /stats) ----
   @JvmStatic
   fun stats(ctx: Context? = null): JSONObject {

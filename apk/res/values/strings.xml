@@ -95,6 +95,21 @@
     <string name="save_start_mqtt">保存并启动 MQTT 网关</string>
     <string name="test_mqtt_btn">测试 MQTT(连接+订阅+发布)</string>
     <string name="mqtt_testing">MQTT 测试中…</string>
+    <string name="cs_hint">客服自动采集:订阅客服主题 → 本地工单模型决策 → 发布回复主题(带回复模板);转人工/高紧急系统通知,入站入库。保存后自动重连生效</string>
+    <string name="cs_sub_hint">客服订阅主题</string>
+    <string name="cs_pub_hint">客服回复主题</string>
+    <string name="cs_task_hint">默认业务(task,如 ticket)</string>
+    <string name="cs_save">保存客服采集(启用并重连 MQTT)</string>
+    <string name="cs_enable">启用客服采集</string>
+    <string name="cs_disable">停用客服采集(下轮重连生效)</string>
+    <string name="cs_test">测试客服采集(发布样例工单→等回复)</string>
+    <string name="cs_testing">客服采集测试中…(等待回复)</string>
+    <string name="cs_stats">已处理 %1$d 条 · 转人工 %2$d 条</string>
+    <string name="cs_db_stats">入库 %1$d 条 · 今日 %2$d 条 · 失败 %3$d 条</string>
+    <string name="cs_last_err">最近错误: %1$s</string>
+    <string name="cs_test_none">❌ 10s 内未收到客服回复(确认 MQTT 已连接且客服采集已启用)</string>
+    <string name="cs_test_ok">✅ 客服回复 %1$dms: %2$s</string>
+    <string name="gw_cs_running">客服采集:%1$s</string>
     <string name="upload_hint">模型包上传(局域网):浏览器打开 %1$s 提交 zip+业务名;或 curl -X POST --data-binary @pkg.zip "%2$s/upload?task=名字"</string>
     <string name="test_upload_btn">测试上传服务</string>
     <string name="upload_testing">上传服务测试中…</string>
@@ -114,6 +129,7 @@
     <string name="stop_gw">停止全部网关</string>
     <string name="gw_mail">邮件</string>
     <string name="gw_mq">队列</string>
+    <string name="gw_cs">客服</string>
     <!-- 系统 -->
     <string name="upload_head">⬆ 手动上传模型包</string>
     <string name="pkg_path_hint">包路径(目录或 zip;可点下方按钮选择)</string>
@@ -360,6 +376,18 @@
     <string name="news_test_hint">自动采集→决策 链路测试:点击注入示例快讯,本地模型评分后写入决策日志</string>
     <string name="news_cfg_save">保存资讯采集</string>
     <string name="news_cfg_done">资讯采集配置已保存</string>
+    <string name="news_links_hint">资讯源链接列表:内置新浪/华尔街见闻(编辑 URL/启停/测试)+ 自定义链接(增加/编辑/删除);增删改后下轮拉取生效</string>
+    <string name="news_link_add">增加链接</string>
+    <string name="news_link_edit">编辑</string>
+    <string name="news_link_del">删除</string>
+    <string name="news_link_save">保存链接</string>
+    <string name="news_link_url_hint">链接 URL(需返回对应格式 JSON)</string>
+    <string name="news_link_fmt_sina">新浪格式</string>
+    <string name="news_link_fmt_wsc">华尔街见闻格式</string>
+    <string name="news_link_need_url">请先填写链接 URL</string>
+    <string name="news_link_bad_url">URL 格式错误:需 http(s):// 开头且含主机名</string>
+    <string name="news_link_done">链接已保存,下轮拉取生效</string>
+    <string name="news_link_none">暂无自定义链接</string>
     <string name="gw_news">资讯</string>
     <string name="gw_collect">采集</string>
     <string name="collect_hint">全业务数据采集维护:按模型包启停自动采集,样本轮询送决策(写决策日志,回复模板全链生效)。保存后无需重启网关。</string>
@@ -376,7 +404,7 @@
     <string name="collect_save">保存采集配置</string>
     <string name="collect_done">采集配置已保存并生效</string>
     <string name="collect_need_gateway">采集配置已保存;网关未启用,采集未启动</string>
-<string name="gw_tpl">模板</string>
+    <string name="gw_tpl">模板</string>
     <string name="tpl_hint">回复模板覆盖管理:DB 覆盖优先,内置默认兜底。选业务与语言,选段落 kind(括号内为键提示),填键与文案保存;删行=恢复默认。</string>
     <string name="tpl_key">键(如部门/紧急度,无键留空)</string>
     <string name="tpl_body">覆盖文案(支持 {占位符},如 {dept}、{severity})</string>

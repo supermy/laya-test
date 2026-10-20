@@ -1,0 +1,8 @@
+{
+  "state_key": "text",
+  "questions": [
+    {"qid": "q0", "type": "choice", "instructions": "这段癌症相关文本的类别(风险筛查/分流,非诊断)", "criteria": ["正常科普", "诊疗记录", "错误信息", "伪科学养生", "诈骗引流"], "from": "label"},
+    {"qid": "q1", "type": "score", "instructions": "文本风险严重度1-5", "criteria": ["无风险", "轻微", "一般", "较重", "严重"], "from": "severity"},
+    {"qid": "q2", "type": "noul", "instructions": "是否需要人工复核(如涉及延误治疗、就医误导、金钱损失风险)", "from": "review"}
+  ]
+}

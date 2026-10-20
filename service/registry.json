@@ -11,6 +11,10 @@
     "agent": { "label": "Agent 工作流路由", "port": 0 },
     "risk": { "label": "金融风控前置", "port": 0 },
     "sms": { "label": "垃圾短信判别", "port": 0 },
-    "stock": { "label": "股票资讯三问", "port": 0 }
+    "stock": { "label": "股票资讯三问", "port": 0 },
+    "cancer": { "label": "癌症文本风险筛查", "port": 0 },
+    "peritoneal": { "label": "腹膜癌文本风险筛查", "port": 0 },
+    "sec": { "label": "网络攻防告警分诊", "port": 0 },
+    "traffic": { "label": "手机流量预警与套餐推荐", "port": 0 }
   }
 }

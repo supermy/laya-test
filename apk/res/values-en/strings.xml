@@ -95,6 +95,21 @@
     <string name="save_start_mqtt">Save &amp; start MQTT gateway</string>
     <string name="test_mqtt_btn">Test MQTT (connect+subscribe+publish)</string>
     <string name="mqtt_testing">Testing MQTT…</string>
+    <string name="cs_hint">CS auto-collect: subscribe CS topic → local ticket model decision → publish reply (with reply template) to reply topic; system notification on escalation; inbound stored to DB. Reconnects on save</string>
+    <string name="cs_sub_hint">CS subscribe topic</string>
+    <string name="cs_pub_hint">CS reply topic</string>
+    <string name="cs_task_hint">Default task (e.g. ticket)</string>
+    <string name="cs_save">Save CS collect (enable &amp; reconnect MQTT)</string>
+    <string name="cs_enable">Enable CS collect</string>
+    <string name="cs_disable">Disable CS collect (applies on reconnect)</string>
+    <string name="cs_test">Test CS collect (publish sample → await reply)</string>
+    <string name="cs_testing">Testing CS collect… (awaiting reply)</string>
+    <string name="cs_stats">Processed %1$d · Escalated %2$d</string>
+    <string name="cs_db_stats">Stored %1$d · today %2$d · failed %3$d</string>
+    <string name="cs_last_err">Last error: %1$s</string>
+    <string name="cs_test_none">❌ No CS reply within 10s (check MQTT connected and CS collect enabled)</string>
+    <string name="cs_test_ok">✅ CS reply %1$dms: %2$s</string>
+    <string name="gw_cs_running">CS collect: %1$s</string>
     <string name="upload_hint">Model upload (LAN): open %1$s in a browser to submit zip+name; or curl -X POST --data-binary @pkg.zip "%2$s/upload?task=name"</string>
     <string name="test_upload_btn">Test upload service</string>
     <string name="upload_testing">Testing upload service…</string>
@@ -114,6 +129,7 @@
     <string name="stop_gw">Stop all gateways</string>
     <string name="gw_mail">Mail</string>
     <string name="gw_mq">MQ</string>
+    <string name="gw_cs">CS</string>
     <!-- System -->
     <string name="upload_head">⬆ Upload model pack</string>
     <string name="pkg_path_hint">Package path (dir or zip; or pick via button below)</string>
@@ -360,6 +376,18 @@
     <string name="news_test_hint">Collection→decision test:tap to inject a sample feed;scored locally and logged</string>
     <string name="news_cfg_save">Save news collection</string>
     <string name="news_cfg_done">News collection config saved</string>
+    <string name="news_links_hint">Source links: built-in Sina/WSCN (edit URL, toggle, test) + custom links (add/edit/delete); changes take effect on next fetch round</string>
+    <string name="news_link_add">Add link</string>
+    <string name="news_link_edit">Edit</string>
+    <string name="news_link_del">Del</string>
+    <string name="news_link_save">Save link</string>
+    <string name="news_link_url_hint">Link URL (must return matching JSON)</string>
+    <string name="news_link_fmt_sina">Sina format</string>
+    <string name="news_link_fmt_wsc">WSCN format</string>
+    <string name="news_link_need_url">Please enter the link URL first</string>
+    <string name="news_link_bad_url">Bad URL: must start with http(s):// and include a host</string>
+    <string name="news_link_done">Link saved; effective on next fetch round</string>
+    <string name="news_link_none">No custom links yet</string>
     <string name="gw_news">News</string>
     <string name="gw_collect">Collect</string>
     <string name="collect_hint">Data collection maintenance for all model packages: toggle per business, samples rotate through decisions (written to decision log, reply templates apply). No gateway restart needed after save.</string>
@@ -376,7 +404,7 @@
     <string name="collect_save">Save collection config</string>
     <string name="collect_done">Collection config saved and applied</string>
     <string name="collect_need_gateway">Collection config saved; gateway is off, collection not started</string>
-<string name="gw_tpl">Templates</string>
+    <string name="gw_tpl">Templates</string>
     <string name="tpl_hint">Reply template overrides: DB override first, builtin default as fallback. Pick task &amp; locale, choose segment kind (key hint in brackets), fill key &amp; body, save; delete row = restore default.</string>
     <string name="tpl_key">Key (e.g. dept/urgency; empty if none)</string>
     <string name="tpl_body">Override body (supports {placeholders} like {dept}, {severity})</string>

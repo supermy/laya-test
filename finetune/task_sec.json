@@ -1,0 +1,8 @@
+{
+  "state_key": "text",
+  "questions": [
+    {"qid": "q0", "type": "choice", "instructions": "这段网络安全相关文本的类别(防御性告警分诊,非攻击指导)", "criteria": ["正常业务", "侦察探测", "攻击威胁", "钓鱼欺诈", "防御处置"], "from": "label"},
+    {"qid": "q1", "type": "score", "instructions": "安全风险严重度1-5", "criteria": ["无风险", "轻微", "一般", "较重", "严重"], "from": "severity"},
+    {"qid": "q2", "type": "noul", "instructions": "是否需要人工研判(如疑似真实入侵、业务受影响、需要应急响应)", "from": "review"}
+  ]
+}

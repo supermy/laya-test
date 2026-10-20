@@ -1,0 +1,8 @@
+{
+  "state_key": "text",
+  "questions": [
+    {"qid": "q0", "type": "choice", "instructions": "这段手机语音(通话分钟)相关文本的类别(预警与推荐分诊)", "criteria": ["正常使用", "用量预警", "超量风险", "套餐咨询", "加购推荐"], "from": "label"},
+    {"qid": "q1", "type": "score", "instructions": "语音紧急度1-5(1充足/5已超量且持续计费)", "criteria": ["充足", "关注", "偏高", "预警", "紧急"], "from": "severity"},
+    {"qid": "q2", "type": "noul", "instructions": "是否需要人工跟进(如投诉、持续计费争议、大额超额费用)", "from": "review"}
+  ]
+}
